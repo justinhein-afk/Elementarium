@@ -1,0 +1,4 @@
+# Keep every text file with Unix line endings, as the game's files are written, whatever this
+# machine's Git does by default (Git for Windows converts to CRLF otherwise).
+* text=auto eol=lf
+*.mp3 binary

@@ -1,0 +1,599 @@
+# Elementarium
+
+A falling-sand alchemy lab. Every grain is simulated: heat diffuses, liquids settle by
+density, fire looks for fuel, current runs through metal, plants grow and fish swim.
+You start with 26 elements (including seven kinds of seed, humans, birds, ants and six kinds
+of weather). Experiment to fill the other 44 slots in the alchemy table.
+
+The **Periodic table** tab holds all 118 real elements, with real melting and boiling points and
+densities. Only hydrogen and helium are open at first; the rest are unlocked one at a time in the
+**Lab** (see below). State comes from temperature, so mercury pours,
+gallium melts if you warm it slightly, nitrogen liquefies at −196°C and xenon sinks while
+hydrogen rises. Alkali metals explode in water with their flame-test colours, halogens
+corrode, noble gases glow in their discharge colours when current runs through them,
+uranium and plutonium go critical in a big enough lump (cadmium, boron and gadolinium act
+as control rods), and the superheavy elements decay down a chain, giving off helium.
+
+Over the cells lies an **air field**, as in Powder Game and The Powder Toy. Blasts send a
+pressure wave rolling outward that throws sand, scatters smoke and fans flames; hot air over a
+fire rises and draws air in at its base, so smoke curls and embers lift. Every grain and drop
+also carries sideways momentum, so things thrown by a blast fly in arcs and skid to a stop,
+and a mass of water dropped from height lands as a surge that runs along the ground, rides
+over itself as a breaking crest and crashes up against whatever it meets. **Air** (or `V`)
+shows the field: red where the pressure is high, blue where it is low, with streaks along
+the wind.
+
+**Air pushes on every liquid by its density.** Where a liquid meets the air, the wind drags its
+surface and a difference in pressure pushes it from high to low, as a = −∇p / ρ: the same
+blast that dents a pond and sprays it shoves oil harder still, stirs bromine a little and leaves
+mercury almost flat. Molten metal, lava and liquefied gases follow their own densities too.
+Only a shock is strong enough to move a liquid; the gentle pressure of hot air rising off a
+fire doesn't stir a pond beside it.
+
+**Explosions go off like the real thing.** Each blast flashes in its own colour and leaves what
+its chemistry would:
+
+| Explosive | Flash and fire | Leaves |
+| --- | --- | --- |
+| Gunpowder (black powder) | orange | thick white smoke (half of what it makes is solid salts) |
+| Nitro (nitroglycerin) | a brief white flash | almost no smoke, mostly steam |
+| Hydrogen | faint pale blue | only steam |
+| Methane | blue | steam |
+| An alkali metal in water | its flame-test colour: lithium crimson, sodium yellow, potassium lilac, rubidium red-violet, caesium blue-violet | steam |
+| Uranium or plutonium going critical | blinding white | barium, krypton and radiation |
+
+Mix a metal into gunpowder and the blast takes the metal's colour, the way fireworks get
+theirs: strontium red, calcium orange, sodium yellow, barium green, copper blue-green,
+magnesium white.
+
+**Any fire does a flame test.** Sprinkle a flame-colouring element into a fire and the flames
+coming off the fuel around it burn in its colour, rising through the fire: copper and barium
+green, strontium red, calcium orange, lithium crimson, potassium lilac, boron green, indium
+indigo, thallium green. Sodium's yellow swamps every other colour, as it does in a real flame.
+The colour lasts while the fuel burns and goes when the fire does.
+
+**Phosphors glow under current or radiation**, with an afterglow that fades: europium red
+(the longest), terbium green, thulium blue, cerium yellow, zinc green and lutetium in brief
+violet-blue flashes. Wire one to a battery to light it, or mix radium into zinc and every
+alpha particle makes a spark of green light, as on an old luminous watch dial.
+
+**Contact chemistry** on the periodic table, all after the real reactions. Each one flashes a
+small burst of light in its colour where it happens (sized on screen, so a single grain still
+shows on a zoomed-out map), and gas rising through a liquid shows as bubbles, so zinc fizzing in
+acid or steam in a boiling pot is easy to see:
+
+| Mix | What happens |
+| --- | --- |
+| An alkali metal in a halogen | burns in its flame colour (sodium in chlorine: a yellow flash) to salt and white smoke |
+| A spark in hydrogen | sets it off; oxygen mixed in burns with it into steam and makes the bang bigger |
+| Acid on an active metal (zinc, iron, magnesium, aluminium…) | dissolves it with a fizz of hydrogen; copper, silver, gold and the platinum metals give none |
+| Molten gallium on aluminium | the aluminium crumbles |
+| Bromine on aluminium | bursts into flame, leaving salt |
+| Iodine with aluminium | nothing, until a drop of water: then it erupts in purple iodine vapour |
+| Gold in mercury | slowly dissolves (an amalgam: the mercury takes a gold tint); boil the mercury off and the gold is left |
+| Palladium in hydrogen | soaks it up, deep into the metal, and lets it go when warmed past 300°C |
+| Platinum in hydrogen or methane | warms up as they react on its surface, then lights them with no flame |
+| Burning magnesium | burns on in carbon dioxide, leaving carbon; water or steam on it turns to hydrogen and explodes |
+| Red-hot zirconium in steam | splits it into hydrogen (what blew the roofs off at Fukushima) |
+| White phosphorus | warms itself in open air until it bursts into flame; under water it is safe |
+| Chlorine on flowers | bleaches the petals white before it kills them |
+
+**Coloured glass.** Stir a pinch of metal into molten glass and the stain spreads through the melt
+and stays when it sets, through any number of remelts: cobalt blue, chromium emerald, copper
+turquoise, manganese amethyst, selenium red, silver amber, gold ruby, erbium rose, praseodymium
+yellow-green, neodymium violet. Uranium glass glows faintly green, and brightly when radiation hits it.
+
+**Electrical devices**, built from the periodic table:
+
+| Build | What it does |
+| --- | --- |
+| Tungsten (or molybdenum) between batteries, sealed in glass full of argon | a light bulb: the filament climbs to white heat (about 2,500°C) and stays. In open air it burns out |
+| Two carbon rods with a gap of one or two cells | a carbon arc lamp: a blinding thread of plasma jumps the gap and carries the current on |
+| Nickel and chromium touching, wired up | nichrome: glows red-hot and lights fuel laid on it, a toaster element or an igniter |
+| Zinc in saltwater or acid with copper in the same bath | a lemon battery: current from the zinc, which slowly dissolves |
+| Lead standing in acid | a car battery: lead resists the acid and makes current in it |
+| Silicon under open sky or beside a fire | a solar cell |
+| Tellurium or bismuth with heat on one side and cold on the other | a thermoelectric generator |
+| Tantalum in a circuit | a capacitor: it soaks up a dozen pulses, glowing bluer, then lets them all go in a crack of sparks |
+| Yttrium below −180°C (niobium, lead and mercury colder still) | a superconductor: current races through without heating it |
+
+**Burning metals throw sparks** that fly in arcs and light what they land on: red-hot iron filings
+(which burn to rust), titanium (sparklers), burning magnesium and zirconium (which burns brilliant
+white past 1,100°C), and cerium, a lighter flint, when it is dropped hard or caught in a blast.
+Aluminium dust hanging in the air flashes in a fire and sets off the cloud around it, though a heap
+of the powder never does.
+
+**Magnets.** Neodymium and samarium are permanent magnets, standing in for the neodymium-iron-boron
+and samarium-cobalt of real ones. They pull iron, cobalt and nickel toward them through anything
+in between, so a magnet held over a mix of iron filings and sand lifts out the iron and leaves the
+sand. Filings that reach the magnet cling to it, and to each other in chains along the field. Each
+metal is magnetic only below its real Curie temperature: neodymium 310°C, samarium 720°C, iron
+770°C, cobalt 1,115°C, nickel 358°C, gadolinium 19.5°C (just under room temperature, so chilled
+gadolinium jumps to a magnet and falls off again as it warms) and dysprosium −185°C. Heat a
+magnet past its Curie point and it drops everything. Iron, cobalt or nickel carrying current is an
+**electromagnet**: wire an iron bar to a battery and it lifts filings, and erasing the battery lets
+them fall. Liquid oxygen clings to a magnet too, and bismuth is pushed away from one. The field is
+worked out on a coarse grid every fourth tick, and only while there is a magnet or a current in
+iron somewhere, so a world without magnets costs nothing.
+
+**Nuclear extras.** Neutrons crossing water make it glow an eerie blue, as in a real reactor pool
+(Cherenkov light). Beryllium bounces neutrons back the way they came, a reflector that lets a far
+smaller lump of uranium go critical, and radiation striking beryllium knocks neutrons out of it, so
+polonium beside beryllium is a neutron source. Graphite slows the neutrons that cross it, and a
+slow neutron is three times as likely to split the next nucleus it meets: a lattice of uranium and
+graphite runs far hotter than uranium alone, as the first reactor did. Calcium fired fast into an
+actinide, or white-hot against one, fuses with it into a superheavy element, the way elements 112
+to 118 were really made: uranium gives copernicium, neptunium nihonium, plutonium flerovium,
+americium moscovium, curium livermorium, berkelium tennessine and californium oganesson. Each one
+lives a second or so before decaying down its chain, and the first time you make each, a note says
+so. Thorium glows brilliant white in a flame, like the mantle of a gas lamp, and hot curium against
+tellurium makes current, a nuclear battery.
+
+**Seven kinds of seed**, in the Plants group. Each sprouts where its plant really would and
+grows the plant's own shape; growing one for the first time discovers that plant.
+
+| Seed | Sprouts on | Grows into |
+| --- | --- | --- |
+| Seed | soil (mud is fastest) | a flowering plant that blooms and drops seeds |
+| Acorn | soil | an oak: a trunk with a thick foot, branches and a broad crown; it drops acorns of its own |
+| Grass seed | soil | short blades that creep over bare soil on runners |
+| Cactus seed | dry sand only | a fat column with arms and a pink flower; needs no water and rots if drowned |
+| Vine seed | soil | a climber that clings to walls, stone and trees, and trails along the ground otherwise |
+| Spores | damp or shaded soil, ash or wood | mushrooms, red-spotted or brown, that puff more spores and rot wood into soil |
+| Lily seed | the bottom of a pond (it sinks) | a stem up to the surface, floating pads and a pink flower |
+
+**Painting a plant plants it.** Drawing Plant, Flower, Grass, Cactus, Vine, Mushroom or Water lily
+doesn't stamp a block of leaves: each dab starts a plant or two on fitting ground under the brush,
+spaced so each has room, and they grow from there (a Flower is a short stem that blooms quickly,
+Grass carpets the soil). Painted over air, rock or the wrong ground, the brush scatters that
+plant's seed instead, and it falls and sprouts where it lands.
+
+**Plants live on water from their roots.** Each plant cell holds sap that climbs from roots in
+wet soil (mud best, then dirt; sand only suits cactus and a little grass), from water for
+water plants, or from the trunk for a tree's leaves. Cut a stem and everything above the cut
+yellows, dries and crumbles into dead leaves, which flutter down and rot into soil on damp
+ground. Plants on bare rock or in mid-air die the same way, frost kills them, a heatwave
+parches dry ground, and a thirsty plant stops growing.
+
+## The Lab
+
+The periodic table starts locked, with only hydrogen and helium open: the first two elements of
+the universe. An element becomes **ready to research** (a dashed brass border) when an element
+above, below, left or right of it on the table is unlocked, so research spreads in from both ends
+of the table. The lanthanides and actinides join it through the gap in group 3 (lanthanum beside
+barium and hafnium, actinium beside radium and rutherfordium).
+
+Open the **Lab** (in the panel's footer, or from the periodic tab) and it hands you a **mystery
+sample**: one of the ready elements, with three or four candidates it might be. Your master's
+handbook lists each candidate's properties roughly; you may run **three tests** on the sample, each
+in a test tube of its own (a separate little world with its own renderer, which never steps with
+the main one; the main world stays paused under the Lab):
+
+| Test | What it shows |
+| --- | --- |
+| Flame | the flame-test colour, or that it burns |
+| Water | explodes (alkali metals), fizzes (calcium, strontium, barium, radium), nothing, or bubbles out (a gas) |
+| Acid | fizzes hydrogen, is eaten slowly, or resists (gold, platinum, lead…) |
+| Heat | the melting and boiling points, up to 2,000°C, in a sealed capsule so nothing burns; a gas is cooled until it liquefies instead |
+| Weigh | the density in g/cm³, or in g/L for a gas against air |
+| Current | conducts, doesn't, glows in its discharge colour (a noble gas), glows and fades (a phosphor), or goes white-hot (a filament) |
+| Geiger | silent, clicks, or crackles |
+
+The bench gives the exact reading and the reason behind it. Name the sample right and the element
+unlocks with a card: when and by whom it was discovered, where its name comes from and what it is
+used for; the first of each family also brings that family's card. Name it wrong and the card says
+what it was and which test would have told the two apart; the element stays locked, and the next
+sample takes ten seconds to prepare. The first ten samples come with three candidates that one
+well-chosen test can settle; after that there are four, and about a third of the samples need two
+tests together. Every sample can be settled in three tests or fewer.
+
+If the world itself makes a locked element (radon decaying to polonium, uranium splitting into
+barium and krypton, calcium fusing into elements 112 to 118), that element is **found in the wild**
+and unlocks at once (not in sandbox mode). Scenes built from periodic elements (Reactor, Gas lamps,
+Chemistry lab, Electric workshop, Magnet lab) open once every element in them is unlocked. Sandbox
+mode still opens everything, and Reset discoveries locks the table again.
+
+### Try it
+
+Every element you unlock comes with one real experiment to do in your own world, shown on its
+card in the Lab and under its name when you select it. Do it and the element's cell on the table
+gets a gold star (a faint one marks an experiment still waiting). They follow what each element
+really does: sprinkle copper into a wood fire and the flames turn blue-green, drop sodium into
+water, stir cobalt into molten glass, heat iron filings until they throw sparks, cool nitrogen
+until it pours, light neon with a battery, melt gallium at 29.8°C, dissolve gold in mercury,
+paint radium onto zinc, pile up uranium until it goes critical, watch radon decay into polonium,
+seal calcium with uranium and heat them past 3,000°C to make copernicium. Some are things to
+build from two or three parts, the way they are built for real: nichrome (nickel touching chromium,
+wired up until it glows red-hot), a light bulb (tungsten between batteries, sealed in glass full of
+argon, past 1,500°C, the heat at which a bare filament burns out in air), a lemon battery, a car battery (lead standing in acid), a thermoelectric generator (a
+bismuth or tellurium bar hot at one end and cold at the other), a neutron source (polonium or
+americium mixed into beryllium), a samarium magnet still holding iron at 350°C, a reactor (cadmium
+or hafnium rods through 400 grains of uranium, held below critical for ten seconds; pause while you
+build it, or the uranium may go critical first; while cadmium or hafnium is selected, the panel counts
+the grains and the seconds) and a beryllium reflector that makes a lump too small
+to go critical by itself (under 300 grains) go critical. When an experiment needs another element as
+well, the card says so.
+
+A watcher looks over the world a few times a second for each waiting experiment: a cell of the
+element in the right state (melted, boiled, frozen, carrying current, white-hot, touching the
+right thing), what it leaves behind (a fire in its colour, its sparks, stained glass, what it
+decays into) or what it sets off (a blast in its colour, a chain reaction, a fusion). Only
+unlocked elements count, and whatever a scene or a chapter set up in the world is set aside there,
+so the Electric workshop's light bulb or the Gas lamps' neon earn nothing: the experiment has to be
+your own. Reset discoveries clears the stars too.
+
+### Element Groups
+
+Earn every one of the 118 Try it stars and the book beside the Lab button on the Periodic table tab
+opens (until then it is grey, with a padlock, and says how many stars are left). Inside is every
+element sorted by what it does, 25 groups in five parts: the colours they give a flame, molten glass,
+a tube of gas, a spark or a blast; conductors and insulators, superconductors, what makes its own
+current, the devices to build, and magnetism; how they react in water and acid, what burns,
+corrosion, poison and contact reactions; radioactivity, decay chains, fission, neutrons and fusion;
+and state, melting point, density and family. It is all read from the game's own element data, so it
+always matches what happens when you play. Click an element to pick it up.
+
+## Search
+
+The box above the Alchemy, Periodic table and Weapons tabs (or press `/`) searches everything. A
+number shows the periodic element with that atomic number (26 is iron). Words find elements,
+weapons and tools by name, symbol, family or group, what they do, the colours they give ("lilac",
+"blue flame", "orange-red"), their story ("Davy", "France") and their Try it experiment ("lemon
+battery"), each with the words that matched highlighted, sorted into categories with the best
+match's category first. A name spelt one letter wrong still finds it ("potasium"). One or two
+letters only match symbols and the starts of names. Alchemy elements you haven't discovered stay
+out of the results. Click a result to pick it up (a locked periodic element ready to research opens
+the Lab); clear the box, press Esc or click a tab to go back.
+
+## Cast metal
+
+Periodic-table solids are loose grains. Melt one past its melting point and let it cool, and it
+sets into a **solid block** that stands where it is, the way molten metal is cast for real. The first
+time you cast each one it is discovered and joins the **Solids** on the Alchemy tab (so you need its
+metal unlocked in the Lab first). Twenty-three metals cast: magnesium, aluminium, silicon, titanium,
+chromium, iron, cobalt, nickel, copper, zinc, gallium, zirconium, molybdenum, silver, tin,
+neodymium, samarium, tungsten, platinum, gold, lead, bismuth and uranium (there aren't type slots
+for every element). Melt the ones above 1,000°C on a floor of Wall, which never melts, since stone
+turns to lava first. Three have a catch, as in real foundries: magnesium catches fire at 600°C, just
+before it melts at 650°C, so it has to be packed into a sealed capsule with no room for air; and
+tungsten and molybdenum burn away in open air long before they melt, so they are melted sealed in
+argon. Powder that never melted stays powder.
+
+A solid block does what its metal does: it conducts, a neodymium or samarium block is a magnet that
+holds still, iron, cobalt and nickel blocks become electromagnets with current, a tungsten block
+glows as a filament, silicon makes solar current, bismuth thermoelectric current, and a uranium
+block still splits. Heat one past its melting point and it runs as liquid metal again, and sets
+again as it cools.
+
+## Weapons
+
+The **Weapons** tab holds eleven catastrophes. Pick one and click the map to set it off; the
+brush size sets how big it is (an earthquake takes a magnitude instead), the cursor shows its
+reach, and undo takes it back. Each is made of the same physics as everything else rather than
+painted on:
+
+| Weapon | What happens |
+| --- | --- |
+| Tsunami | A wall of sea water rises at the nearer edge and rolls in, driving the whole sea inland ahead of it: it breaks over the shore, floods the land and sweeps sand and people along. Then the backwash runs out over the edges and the sea settles back to its old level (water left in hollows stays). It roars with a real recording of heavy surf (see Credits). |
+| Earthquake | Set its magnitude in the box at the top of the tab (2.0 to 9.5, typed or on the slider), then click. The magnitude decides everything, as in reality (see below): how hard the ground shakes, how far, for how long, and so what breaks. Its rumble (a recording, see Credits) starts with the shaking, roars louder the bigger the quake and stops when it does, and you hear the rock crack as it breaks. |
+| Tornado | A funnel of rising, whirling air drops from a storm cloud and travels along the ground, tearing up plants and timber, scouring a trench through loose ground and whirling sand, water, people and animals up and out of its top. Like real wind it is invisible, seen only by what it carries; the Air view (`V`) shows the funnel itself. Hold the button to steer it. |
+| Volcano | Magma rises slowly from the bottom of the map under the cursor, melting a glowing pipe up through the rock. How far it can rise grows with the brush size (a third of the map at the smallest, all of it at the largest; the cursor's dotted line shows how far): if it runs out underground it stays there as a pocket of lava, and if it reaches open air or water it erupts, with a lava fountain that cools into a cone of new stone, glowing bombs and a column of ash, none of it higher than its reach. Over open ground it erupts straight from the bottom, to that height and no higher. |
+| Meteor | A burning rock streaks in at a slant and digs a crater, throwing out rubble and melting the rim, with its iron left glowing at the bottom. Two fragments follow it down. |
+| Lightning storm | Storm clouds roll in and call down bolt after bolt, with a downpour. |
+| Ice age | A front of cold spreads out to −100°C and below: water and lava freeze, fires go out, plants die of frost and people freeze solid. |
+| Acid rain | A dark cloud bank rains acid that eats into what it lands on. |
+| Nuke | A fireball that vaporises everything near it, a blast wave, a heat flash that sets fire to whatever burns in sight, radiation, and a mushroom cloud (the air turns over in a ring under the cap, as in a real one). |
+| Hydrogen bomb | Dropped from high above where you click, it falls nose down, faster and faster until the air holds it to a steady speed, with a falling whistle that drops in pitch as it comes. It goes off the moment it touches anything below, and its blast takes two-thirds of the whole map wherever it lands (the cursor shows the line it will fall down, where it will land and how far the blast will reach): the fireball vaporises the heart of it, everything out to the edge of the blast is blown apart, burnt or melted, and beyond it a heat flash sets fire to whatever burns, the blast wave runs out to the edges of the map, radiation falls out and a mushroom cloud climbs to the top of the sky. Its explosion is far bigger than any other blast's, a crack, a roar sweeping down for seconds, a second boom as the blast wave arrives and a long rumble after, and its light whites out the screen. Only Wall, Clone and Void come through it. |
+| Black hole | Pulls everything in the ring into a whirling disc and swallows it, then evaporates in a flash. Only Wall, Clone and Void resist it. |
+
+**An earthquake follows its magnitude.** The magnitude sets the intensity of shaking at the
+epicentre on the Mercalli scale (Gutenberg and Richter's I₀ = 1.5 (M − 1) for a shallow quake:
+VI at magnitude 5, IX at 7, XII at 9), which dies away with distance from a source that grows
+with the magnitude. Stronger quakes shake longer, from about 2½ seconds at magnitude 5 to 13 at
+9. The ground's acceleration doubles with each step of intensity, so loose heaps slump and ponds
+slosh more and more violently, and packed soil lets go once the shaking reaches VII, so tunnels
+and cliffs cave in. From magnitude 6 the fault ruptures the surface, a crack that grows longer
+and wider with the magnitude and branches from 8; it splits rock, soil and masonry, and timber
+and steel in its way buckle instead. From intensity VIII soaked soil under water liquefies into
+mud. Each solid gives way at the intensity it does in real quakes, and the cliff face or the top
+of a wall a step before the same stuff held in on every side:
+
+| Magnitude (intensity at the epicentre) | What breaks near the epicentre |
+| --- | --- |
+| below 4 (IV and under) | nothing |
+| 5 (VI) | a few windows and some ice |
+| 6 (VII–VIII) | most glass, clay and some brick; cliffs start to shed rock; the ground ruptures |
+| 7 (IX) | brick walls, and the rock itself starts to break up; soaked ground liquefies |
+| 8 (X–XI) | stone near the epicentre, and timber starts to go |
+| 9 (XII) | all but total: only steel (which buckles but seldom snaps) and diamond hold |
+
+**Solids break like the real thing.** Hardness alone doesn't decide it, toughness does too: glass
+is harder than iron but shatters where iron bends, and wood is soft but its fibres hold it
+together. A black hole's pull tears every solid apart into powder that falls in, the nearest and
+weakest first:
+
+| Solid | Breaks into | Earthquake starts to break it at | Black hole |
+| --- | --- | --- | --- |
+| Ice, Glass | Snow, Sand | V | gone almost at once |
+| Clay, Brick | Dirt, Rubble | VI–VII (sooner at a free face) | torn apart quickly |
+| Coal, Obsidian, Stone | Carbon, Rubble, Rubble | VII (cliffs sooner, bedrock at X and over) | soon after |
+| Wood | Splinters | IX: it is soft but fibrous, so it bends | slower |
+| Metal | Iron | XI, and it seldom snaps even then: softer than glass but ductile | last of all |
+| Diamond | Carbon | never: it is the hardest thing there is | last of all |
+| Plants | Dead leaves | never: they sway | tear easily |
+
+## The Apprentice's Journey
+
+A story mode on top of the lab. Your master has left the Elementarium to find out why the
+valley's elements are falling out of balance, leaving you a letter and a half-filled table.
+Each chapter is a problem in a real place, solved with alchemy and a limited pouch: you can
+only use what you carry, undo is off, and Restart refills the pouch. Every chapter has one goal
+that wins it and two more for stars, and ends with a page from your master's journal.
+Open it with **Journey** in the panel (or **Begin the journey** on the welcome card).
+
+| Chapter | Place | The problem | Pouch |
+| --- | --- | --- | --- |
+| I · The Dry Season | Millbrook | No rain since spring; seeds won't take in dry dirt, only mud | Heat, Fire, Seed |
+| II · Wildfire | Hollow End | Lightning in a dry forest; the rain comes at 0:30 and the chapter ends the moment no fire is left | Erase, Water |
+| III · The Broken Bridge | The canyon road | Travellers stranded by a gorge; fill it with water and freeze an ice bridge | Water, Cool |
+| IV · The Flooded Mine | Under the foothills | A spring floods the gallery; freeze its crack shut (draining only buys time) | Cool, Erase, Sand |
+| V · The Waking Mountain | Ashford | An eruption heads for the village; quench the crater or turn the flow | Water, Erase |
+| VI · The Dark City | Gaslight | The lamps are out; place a battery and mend four breaks in the line | Battery, Metal |
+| VII · The Heart | Beneath the mountain | A natural reactor waking; rod its channels with gadolinium before they close | Gadolinium, Water, Cool |
+
+Discoveries made during a chapter count toward the table, and leaving a chapter hands the lab
+back exactly as it was (world, selection and undo history).
+
+## Play
+
+Open `index.html` in a browser. No build step and no server needed (fonts load from
+Google Fonts when online, with system fallbacks otherwise).
+
+Or serve it locally at http://localhost:8767:
+
+```bash
+python tools/serve.py
+```
+
+`serve.py` is Python's built-in file server plus one header (`Cache-Control: no-cache`), so the
+browser checks for a newer copy of every file on each load and never runs a stale script after
+an edit. Saved discoveries and worlds belong to the address, so stick to the one port.
+
+| Input | Action |
+| --- | --- |
+| Drag | Paint the selected element |
+| Right-drag | Erase |
+| Scroll | Zoom in and out around the cursor |
+| Middle-drag, Alt+drag, `WASD` / arrows | Move around the map |
+| `+` `-` `0` | Zoom in, zoom out, show the whole map |
+| Ctrl+Scroll, `[` `]` | Brush size |
+| Ctrl+Z / Ctrl+Shift+Z (or Ctrl+Y) | Undo / redo |
+| Middle-click | Pick up the element under the cursor |
+| `Space` / `.` | Pause / step one tick |
+| `T` | Thermal view |
+| `V` | Air view: pressure in red and blue, wind as streaks (the readout adds wind and pressure) |
+| `L` | Magnifying lens (3× zoom under the cursor) |
+| `M` | Sound on/off |
+| `E` `H` `C` `G` | Erase / Heat / Cool / Magnet tools |
+| Magnetic switch (beside the Magnet) | On: the Magnet picks up only what a real magnet would (iron, cobalt, nickel, neodymium, cold gadolinium, liquid oxygen…) and drops what is heated past its Curie point. Off: it carries any loose matter |
+| Magnet: hold and drag | Carry what is inside the ring; while the button is down it keeps pulling in every grain and drop that comes inside. It hangs from the cursor on a spring, so it trails, swings and sloshes; flick as you let go to throw it |
+| `1`–`7` | Brush shape: circle, square, pen, spray, line (drag), box (drag), fill (paint bucket) |
+| Shift while dragging a Line or Box | Keep it straight, as in a slides or drawing app: a Line snaps to flat, upright or a true diagonal, and a Box becomes a square |
+| Weapons tab: click the map | Set off the selected catastrophe there; the brush size sets how big (an earthquake's magnitude is set in the box at the top of the tab). Hold the button to steer a tornado toward the cursor |
+| Drag the divider between the map and the panel | Give the panel more room (wider beside the map, taller under it on narrow screens); double-click resets it |
+
+**Weather** sets the air temperature and wind, and picks the sky: Natural (clouds only form
+from vapour rising off warm water), Clear, Cloudy, Rain, Thunderstorm, Snow, Blizzard, Fog or
+Heatwave. Rain turns to snow below 0°C, cool storms drop hail, storms throw lightning, wind
+carries clouds and fog across the map, and open water evaporates faster the warmer it is.
+
+**Map** chooses the map size (fit to screen, 256×256, 384×256 or 512×320) and holds the
+save slot. Undo keeps the last few dozen changes (strokes, scenes, clears, loads).
+
+Discoveries are saved in the browser, along with one world slot.
+**Scenes** offers thirteen starting worlds: Island, Canyon, Volcano (a magma chamber kept molten by the hot world floor), Forest, Caves, Workshop, Village (people, huts, a farm, birds and an anthill), Reactor (pull the cadmium rods out), Gas lamps, Chemistry lab (phosphors lit by batteries, radium paint, sodium burning in a jar of chlorine and six campfires coloured by copper, strontium, sodium, potassium and barium), Electric workshop (a stained-glass window, a light bulb, a carbon arc lamp, an electric sparkler, and neon signs run off a lemon battery and a solar panel), Magnet lab (a magnet sorting iron from sand, an electromagnet, chilled gadolinium and bismuth) and an empty bench. **Hint** names something you can make with what you already have. The **Codex** lists
+everything found so far, with recipes and the temperatures where each element changes.
+Clone unlocks after 8 discoveries and Void after 16. Sandbox mode in the Codex unlocks
+everything at once.
+
+## How it works
+
+| File | Role |
+| --- | --- |
+| `js/elements.js` | Every alchemy element and creature as data: physics, heat, burning, phase changes, colours, recipe and hint |
+| `js/periodic.js` | The 118 periodic elements: real melting/boiling points, densities, families and chemistry flags, and the solid forms 23 of them cast into |
+| `js/facts.js` | What the Lab teaches: each element's discovery, name and uses, each family's card, and the reason behind each test result |
+| `js/lab.js` | The Lab's rules (no DOM): what is unlocked and ready, what each test shows, building a solvable sample, the test-tube worlds |
+| `js/tryit.js` | Try it (no DOM): each element's experiment, and the watcher that spots it being done in the world |
+| `js/search.js` | Search (no DOM): the index of everything, atomic numbers, ranking and highlighting |
+| `js/groups.js` | Element Groups (no DOM): every element sorted by what it does, built from the element data |
+| `js/sim.js` | The cellular automaton (typed arrays, no DOM): movement and momentum, the air field, heat diffusion, combustion, electricity, lightning, explosions, life, contact reactions |
+| `js/render.js` | Writes cells to an `ImageData`, plus a light buffer blurred into two bloom layers, and the thermal and air views |
+| `js/audio.js` | All sound synthesised with WebAudio, driven by per-frame simulation events |
+| `js/ui.js` | The element table, discovery toasts and the fly-to-slot animation, codex, hints |
+| `js/scenes.js` | Starting worlds, built only from starter elements |
+| `js/story.js` | The journey's chapters as data: world builders, pouches, scripted events, goals and journal text (no DOM) |
+| `js/journey.js` | The journey on screen: map, journal pages, the goals card and the pouch, and running a chapter in its own world |
+| `js/labview.js` | The Lab on screen: the sample, the test tube with its own renderer and loop, the handbook, and the cards |
+| `js/main.js` | Boot, fixed-timestep loop (60 ticks/s), pointer and keyboard input |
+
+A few rules that shape what you can discover:
+
+- **Temperature is real.** Each cell has a temperature, a conductivity and a heat
+  capacity. Water boils at 100°C, stone melts at 1100°C, sand vitrifies at 1300°C.
+- **Fire needs air.** Wood heated *without* an air gap chars into coal instead of
+  burning. Sealed coal at 2500°C becomes diamond — and diamond, being carbon, burns in air
+  above 900°C. Smoke leaves carbon dioxide, which sinks, smothers flames and suffocates;
+  plants breathe it in and give back oxygen.
+- **Real temperatures.** Quartz sand melts at 1700°C, glass sets below 800°C, mud dries to
+  clay at 100°C and clay fires to brick past 800°C, sea water freezes at −2°C, iron melts at
+  1538°C, dry ice sublimes at −78.5°C.
+- **Current is a wave.** A pulse travels through conductors (metal, water, acid) with a
+  refractory period, so it moves as a visible front.
+- **Air has pressure.** The air field is a coarse grid (one cell per 4×4 sim cells) of wind
+  and pressure. Wind runs down pressure gradients, piles pressure up where it converges,
+  diffuses and carries itself along, which curls it into swirls; solid walls stop it, and
+  powders slow it and liquids all but stop it. Blasts and heat push it; it pushes gases along
+  outright, drags on grains, light ones (ash, snow, embers) far more than heavy ones, and presses
+  on liquids in inverse proportion to their density.
+- **Things keep moving.** Each cell has a sideways and a vertical speed. Flung grains fly in
+  arcs and pass their push to the heap they hit; a landing column of water turns its fall
+  into a sideways surge toward open ground, shares it with the water ahead, rides over slower
+  water as a crest, sweeps loose sand along and splashes up walls.
+- **Wind leans flames**, so a grass fire runs downwind. **Dry grass** (story only) catches at
+  200°C and smoulders on under ash; water greens it back into ordinary grass.
+- **Life is emergent.** Seeds sprout on soil, plants drink through their roots and wilt
+  without them, bloom and drop seeds, oaks drop acorns,
+  grass spreads, mushrooms puff spores and rot dead wood into soil, fish eat water plants
+  and multiply, worms compost ash back into dirt.
+- **People and animals.** Humans are two cells (body and head). They walk, climb ledges,
+  avoid cliffs, swim for the surface when water closes over them (and drown if they can't reach it), plant seeds, start families and flee
+  fire, lava, acid and radiation. Birds fly at a comfortable height and perch in trees.
+  Ants dig down into packed soil and haul the spoil up into anthills.
+- **Neutrons are rays.** A fissile cell that splits fires two or three neutrons in
+  straight lines through matter. Whether they hit another fissile nucleus before escaping
+  or being absorbed decides whether the reaction dies out or runs away, so critical mass
+  emerges on its own.
+
+## Tests
+
+```bash
+node tools/simtest.js
+node tools/periodictest.js
+node tools/stormtest.js
+node tools/weathertest.js
+node tools/storytest.js
+node tools/airtest.js
+node tools/blasttest.js
+node tools/planttest.js
+node tools/weapontest.js
+node tools/chemtest.js
+node tools/devicetest.js
+node tools/magnettest.js
+node tools/nucleartest.js
+node tools/labtest.js
+node tools/tryittest.js
+node tools/searchtest.js
+node tools/groupstest.js
+node tools/casttest.js
+```
+
+`simtest` runs the simulation headless and checks that every discovery is reachable from the
+starter elements (33 scenarios), then reports the cost of a tick on a busy 320×200 world (about 4–8 ms).
+`periodictest` checks the periodic table and the creatures (sodium in water, gold sinking in
+mercury, criticality, control rods, decay chains, neon lamps, people fleeing fire, ants tunnelling).
+`stormtest` checks that a player can brew a thunderstorm by boiling water.
+`weathertest` checks the weather (rain, snow, hail, fog, lightning, wind, evaporation into
+clouds) and the newest elements, plus undo snapshots and that saves survive new elements.
+`storytest` plays each chapter headless on three seeded maps: doing nothing must not win, and
+the intended solutions must (heating the pond; a firebreak, early or late; soaking the meadow).
+`airtest` checks the air field and momentum against what the engine did before them: a bomb
+throws a heap of sand sideways, a blast blows a ring of smoke outward, a dropped column of water
+travels much further along the floor and splashes up a wall, a blast's pressure pushes oil,
+water, bromine and mercury in order of their density while a fire's gentle pressure leaves a
+pond still, poured water and the air both settle afterwards, hot air rises, and undo snapshots
+and saves keep the motion (older saves load at rest).
+`blasttest` sets off each explosive and checks the colour of its fire and flash and what it
+leaves (white smoke from gunpowder, almost none from nitro, steam from hydrogen and methane), that
+alkali metals in water flash in their flame-test colours, and that strontium, barium and copper
+mixed into gunpowder make red, green and blue-green fireworks.
+`planttest` sows each kind of seed and checks it grows its plant: an oak with a trunk and
+crown, grass covering bare soil, cactus in sand but never in soil (and rotting once flooded),
+a vine climbing a wall but only trailing in the open, mushrooms in a damp cave but not on dry
+open ground, and water lilies floating pads and flowering. It checks that painting a plant
+plants a few real plants (and drops seed when painted in the air), that a rooted stem lives
+while one on bare rock, a block in mid-air or a stem cut from its roots dries and crumbles,
+that frost kills plants, that dead leaves rot into soil, and that the forest scene's trees stay
+alive. `--show` prints each world as text.
+`weapontest` sets off each weapon and checks it does what its card says: the tsunami floods far
+inland, the earthquake slumps a heap, caves in a tunnel and cracks rock, the tornado lifts sand
+and people and tears up grass, the volcano builds a cone, the meteor digs a crater and leaves
+iron, the storm strikes again and again, the ice age freezes a pond and puts out a fire, acid
+rain eats stone, the nuke kills, craters and raises a mushroom cloud, the hydrogen bomb falls
+(whistling until it lands), goes off once and takes two-thirds of the map while the rock beyond
+it stands, and the black hole swallows a heap and evaporates. It checks that solids break in the order of their real brittleness, in a
+quake and in a black hole's pull, that what a quake breaks follows its magnitude (nothing at 4,
+glass at 5.5, brick at 6.5, stone at 7, timber at 8, steel barely and diamond never at 9), that
+undo stops a disaster, and reports the slowest tick.
+`chemtest` checks the flame tests (copper and strontium colour a wood fire, a plain one stays
+orange, sodium swamps copper), the phosphors (europium lit by a battery with an afterglow, radium
+making zinc glow) and each contact reaction in the table above, including the ones that must not
+happen: copper in acid, iodine on dry aluminium, phosphorus under water.
+`devicetest` checks coloured glass (cobalt stains a melt blue and it stays blue through a remelt and a
+quench, uranium glass glows under radiation), each electrical device against a control that must stay
+dark (a filament burns out in air but not in argon, plain nickel never glows, zinc without copper makes
+no current, a roofed solar panel stays off), and the sparks (iron filings but not in argon, titanium,
+magnesium, a dropped flint lighting gunpowder, an aluminium dust cloud flashing while a heap doesn't).
+`magnettest` checks that a magnet lifts iron but not the sand it is mixed with or copper, that it
+drops the iron past 310°C and can't pull iron past 770°C, gadolinium warm and cold, an electromagnet
+with and without current, bismuth pushed away, liquid oxygen held, and the Magnet tool switched to
+Magnetic taking only iron (and letting go of iron heated past its Curie point).
+`nucleartest` checks that a beryllium reflector and a graphite moderator each multiply fissions,
+that water round a neutron source glows, that polonium makes neutrons with beryllium and none
+without, that hot or fast calcium fuses into flerovium and oganesson while cold calcium doesn't,
+and that curium and tellurium make a nuclear battery.
+`labtest` checks the Lab: only hydrogen and helium open at first with lithium and neon ready, research
+through neighbours reaching all 118, progress saved and reset, a fact card for every element, every
+element making a sample that three tests can settle, a whole playthrough (gentle first samples, later
+ones often needing two tests), each kind of test tube (sodium exploding in water, copper colouring a
+flame, neon glowing, the Geiger counter at uranium, phosphorus melting in its capsule without burning,
+nitrogen liquefying), that a test tube never changes the main world, radon decaying into polonium
+unlocking it, and the scenes that need periodic elements.
+`tryittest` does every element's Try it experiment the way a player would (the Heat and Cool tools,
+batteries, a fire, a beaker, molten glass, a big lump of uranium, calcium sealed in a crucible) and
+checks each earns its star, trying again in a fresh world when chance is against it (a decay, a
+fusion); and that nothing earns one by just sitting there, a small lump of uranium never goes
+critical, the near misses of the things to build earn nothing (bismuth or tellurium on a battery
+instead of heat, lead on a battery out of acid, a filament in open air, rods through a lump too small
+to matter, beryllium round a pile that goes critical anyway), a scene's own set-up earns nothing, a
+locked element earns nothing, and stars are saved.
+`searchtest` checks that every atomic number and every element's name and symbol find it first, that
+accents, capitals and hyphens don't matter, that colours, stories and experiments are searchable, that a
+misspelt name still finds its element, that undiscovered alchemy stays hidden, and that the category
+with the best match comes first.
+`groupstest` checks that the Element Groups book builds every group, shows every element, has a colour
+for every swatch and a group for every jump link, and that nothing in it comes out blank.
+`casttest` melts each of the 23 castable metals the way its hint says and checks it sets solid and is
+discovered as it does; that magnesium in open air and tungsten in air don't cast; that powder that
+never melted stays powder; that a block stands in mid-air, melts back into liquid metal and sets again;
+and that a neodymium block lifts iron, a silicon slab makes solar current and a uranium block splits.
+
+<details>
+<summary>Spoilers: every recipe</summary>
+
+Steam (heat water) · Ice (cool water) · Smoke, Ash, Ember (burn wood) · Lava (heat stone) ·
+Obsidian (lava + water) · Molten glass, Glass (heat sand, let it cool) · Mud (dirt + water) ·
+Brick (heat mud) · Plant, Flower (seed on soil) · Saltwater (salt + water) ·
+Rust (metal in water) · Molten metal (heat metal past 1500°C) · Snow (freeze steam) ·
+Gunpowder (ash + salt) · Acid (smoke drifting into a cooled cloud) ·
+Methane (plants in mud) · Coal (wood heated with no air) · Diamond (sealed coal at 2500°C) ·
+Battery (acid on metal) · Electricity (battery on metal) · Lightning (a big, dense steam
+cloud high up) · Plasma (lightning) · Fish (lightning into saltwater) ·
+Worm (lightning into mud) · Firefly (electricity on a flower) · Thermite (rust + gunpowder) ·
+Napalm (oil + gunpowder) · Cryo (snow cooled below −150°C) · Nitro (oil + acid; also detonates when dropped) ·
+Moss (a plant against damp stone) · Clay (dry mud) · Carbon dioxide (smoke settling) ·
+Dry ice (freeze carbon dioxide below −78.5°C) · Soap (ash + oil) · Foam (soap + water)
+
+</details>
+
+## Credits
+
+The tsunami's roar (`sounds/tsunami.mp3`) is made from a field recording of real surf:
+["Waves crashing on a rocky shore - Reunion Island"](https://freesound.org/people/nyoz/sounds/615750/)
+by nyoz on Freesound, big waves at the Anse des Cascades with the wind howling, released under
+CC0 (public domain). Three 40-second takes from it, 4 seconds apart, are layered so each crash
+fills the lull after another, then evened out and given a little more low end, so it comes
+through as one sustained roar, the way a tsunami sounds, rather than as separate sets of waves.
+
+The rumble (`sounds/quake.mp3`), which plays whenever the ground shakes the screen (an
+earthquake, a volcano, a tsunami, a black hole; not a blast, which brings its own sound), is made
+from "Cinematic Rumble" by freesound_community (supplied as
+`freesound_community-cinematic-rumble-106063.mp3`, the name Pixabay gives the sounds it carries
+from the Freesound community). Its steady middle is overlapped with itself into about 16 seconds
+of unbroken roar, between the recording's own build-in and its dying away, so it lasts out the
+longest quake, and it is mastered loud (about −8 LUFS) so it carries over everything else going on.
+Shaking that outlasts it (a long volcano or black hole) doesn't loop it from the top: a second copy comes
+in at the steady middle and the two crossfade over a second, so the roar never dips. The tsunami's surf
+carries on the same way.
+Every other sound, the rock cracking under a quake and the hydrogen bomb's whistle and explosion
+among them, is synthesised in `js/audio.js`.

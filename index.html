@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Elementarium</title>
+  <meta name="description" content="A falling-sand alchemy lab. Paint elements, mix them, and fill the table.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IM+Fell+English:ital@0;1&family=IM+Fell+English+SC&family=Barlow+Semi+Condensed:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="app">
+    <main id="stage">
+      <canvas id="view" aria-label="Simulation. Drag to paint the selected element."></canvas>
+
+      <div id="readout" aria-live="off"></div>
+
+      <section id="quest" hidden aria-label="Chapter goals">
+        <header>
+          <span class="q-num" id="q-num"></span>
+          <div>
+            <div class="q-place" id="q-place"></div>
+            <div class="q-title" id="q-title"></div>
+            <div class="q-mini" id="q-mini"></div>
+          </div>
+          <button id="q-min" class="q-min" type="button" title="Minimize" aria-label="Minimize the goals" aria-expanded="true">–</button>
+        </header>
+        <ul class="q-goals" id="q-goals"></ul>
+        <div class="q-btns">
+          <button id="q-hint" type="button">Hint</button>
+          <button id="q-restart" type="button">Restart</button>
+          <button id="q-leave" type="button">Leave</button>
+        </div>
+      </section>
+      <div id="toasts" aria-live="polite"></div>
+
+      <div id="toolbar" role="toolbar" aria-label="Simulation controls">
+        <button id="btn-play" class="tb" title="Pause / resume (Space)" aria-label="Pause"><span class="ico">❚❚</span></button>
+        <button id="btn-step" class="tb" title="Advance one tick (.)" aria-label="Step one tick"><span class="ico">▸|</span></button>
+        <button id="btn-speed" class="tb mono" title="Simulation speed">1×</button>
+        <span class="sep"></span>
+        <button id="btn-undo" class="tb lab-only" title="Undo (Ctrl+Z)" aria-label="Undo"><span class="ico">↶</span></button>
+        <button id="btn-redo" class="tb lab-only" title="Redo (Ctrl+Shift+Z)" aria-label="Redo"><span class="ico">↷</span></button>
+        <span class="sep lab-only"></span>
+        <button id="btn-zoom-out" class="tb" title="Zoom out (− or scroll)" aria-label="Zoom out"><span class="ico">−</span></button>
+        <button id="btn-zoom" class="tb mono zoom" title="Show the whole map (0)">100%</button>
+        <button id="btn-zoom-in" class="tb" title="Zoom in (+ or scroll)" aria-label="Zoom in"><span class="ico">+</span></button>
+        <span class="sep"></span>
+        <button id="btn-thermal" class="tb" title="Thermal view (T)" aria-pressed="false">Thermal</button>
+        <button id="btn-air" class="tb" title="Air view: wind and pressure (V)" aria-pressed="false">Air</button>
+        <button id="btn-lens" class="tb" title="Magnifying lens (L)" aria-pressed="false">Lens</button>
+        <button id="btn-sound" class="tb" title="Sound (M)" aria-pressed="true">Sound</button>
+        <span class="sep lab-only"></span>
+        <button id="btn-weather" class="tb lab-only" title="Weather and air temperature">Weather <span id="weather-label" class="mono dim"></span></button>
+        <button id="btn-scenes" class="tb lab-only" title="Start from a scene">Scenes</button>
+        <button id="btn-world" class="tb lab-only" title="Map size, save and load">Map</button>
+      </div>
+
+      <div id="weather-menu" class="menu wide" hidden>
+        <div class="menu-title">Weather</div>
+        <div class="presets">
+          <button data-weather="natural" title="No weather is forced: clouds only form from vapour rising off water">Natural</button>
+          <button data-weather="clear">Clear</button>
+          <button data-weather="cloudy">Cloudy</button>
+          <button data-weather="rain">Rain</button>
+          <button data-weather="storm">Thunderstorm</button>
+          <button data-weather="snow">Snow</button>
+          <button data-weather="blizzard">Blizzard</button>
+          <button data-weather="fog">Fog</button>
+          <button data-weather="heatwave">Heatwave</button>
+        </div>
+        <label class="slider"><span>Air temperature</span><input id="ambient" type="range" min="-40" max="50" step="1"><output id="ambient-out" class="mono"></output></label>
+        <label class="slider"><span>Wind</span><input id="wind" type="range" min="-3" max="3" step="0.5"><output id="wind-out" class="mono"></output></label>
+        <p class="menu-note">Rain turns to snow below 0°C. Warm air evaporates open water; the vapour rises and gathers into new clouds.</p>
+      </div>
+
+      <div id="world-menu" class="menu" hidden>
+        <div class="menu-title">Map size</div>
+        <button data-size="fit">Fit the screen <small>about four pixels per cell</small></button>
+        <button data-size="256x256">256 × 256 <small>square, like a small WorldBox map</small></button>
+        <button data-size="384x256">384 × 256 <small>wide</small></button>
+        <button data-size="512x320">512 × 320 <small>large — slower on older machines</small></button>
+        <div class="menu-sep"></div>
+        <button id="btn-save">Save world <small>one slot, kept in this browser</small></button>
+        <button id="btn-load">Load saved world</button>
+        <button id="btn-clear">Clear the map</button>
+      </div>
+
+      <div id="scene-menu" class="menu" hidden>
+        <button data-scene="island">Island <small>sea, sand and a garden</small></button>
+        <button data-scene="canyon">Canyon <small>rock, a reservoir and a wooden bridge</small></button>
+        <button data-scene="volcano">Volcano <small>a sealed magma chamber under the mountain</small></button>
+        <button data-scene="forest">Forest <small>trees, a pond and seeds, ready to burn</small></button>
+        <button data-scene="caves">Caves <small>tunnels with water, oil and metal veins</small></button>
+        <button data-scene="workshop">Workshop <small>bins of every starter material</small></button>
+        <button data-scene="village">Village <small>people, farms, birds and an anthill</small></button>
+        <button data-scene="reactor">Reactor <small>a uranium core held back by cadmium rods</small></button>
+        <button data-scene="lamps">Gas lamps <small>noble gases lit by batteries</small></button>
+        <button data-scene="chemistry">Chemistry lab <small>coloured flames, glowing phosphors, sodium in chlorine</small></button>
+        <button data-scene="electrics">Electric workshop <small>a light bulb, an arc lamp, a sparkler, neon run off a lemon battery and the sun</small></button>
+        <button data-scene="magnets">Magnet lab <small>magnets sort iron from sand, an electromagnet, gadolinium and bismuth</small></button>
+        <button data-scene="empty">Empty bench <small>nothing at all</small></button>
+      </div>
+    </main>
+
+    <div id="splitter" role="separator" tabindex="0" aria-controls="panel"
+      aria-label="Resize the panel" title="Drag to resize the panel · double-click to reset"></div>
+
+    <aside id="panel">
+      <header class="brand" id="brand">
+        <h1>Elementarium</h1>
+        <div class="progress">
+          <div class="progress-text"><span id="found-count">0</span> of <span id="found-total">0</span> elements found</div>
+          <div class="bar"><i id="found-bar"></i></div>
+        </div>
+        <button id="brand-min" class="brand-min" type="button" aria-controls="brand"></button>
+      </header>
+
+      <section class="tools" id="tools" aria-label="Tools">
+        <div class="tool-row">
+          <button class="tool" data-tool="erase" title="Erase (E, or right-drag)"><span class="glyph">⌫</span>Erase</button>
+          <button class="tool" data-tool="heat" title="Heat (H)"><span class="glyph heat">▲</span>Heat</button>
+          <button class="tool" data-tool="cool" title="Cool (C)"><span class="glyph cool">▼</span>Cool</button>
+          <button class="tool" data-tool="magnet" title="Magnet (G): pull loose matter and people to the cursor, let go to throw"><span class="glyph magnet"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M3 2h3.5v6.2a1.5 1.5 0 003 0V2H13v6.2a5 5 0 01-10 0z" fill="currentColor"/><path d="M3 2h3.5v2.2H3zM9.5 2H13v2.2H9.5z" fill="#ece5d3"/></svg></span>Magnet</button>
+          <button class="mag-switch" id="magnet-mode" type="button" role="switch" aria-checked="false"
+            title="Magnetic: when on, the Magnet picks up only what a real magnet would (iron, cobalt, nickel, neodymium, liquid oxygen…), and drops it once it is heated past its Curie point. When off, it carries any loose matter.">
+            <span class="track"><span class="knob"></span></span><span class="lbl">Magnetic</span>
+          </button>
+        </div>
+        <div class="shape-row" role="group" aria-label="Brush shape">
+          <button class="shape" data-shape="circle" title="Circle brush (1)" aria-label="Circle brush"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><circle cx="8" cy="8" r="5.2" fill="currentColor"/></svg></button>
+          <button class="shape" data-shape="square" title="Square brush (2)" aria-label="Square brush"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><rect x="3" y="3" width="10" height="10" fill="currentColor"/></svg></button>
+          <button class="shape" data-shape="pen" title="Pen: one cell at a time, for fine lines (3)" aria-label="Pen"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M2.5 13.5l.9-3.2 7.4-7.4 2.3 2.3-7.4 7.4z" fill="currentColor"/><path d="M2.5 13.5l.9-3.2 2.3 2.3z" fill="#0e1c1c"/></svg></button>
+          <button class="shape" data-shape="spray" title="Spray: a light scatter (4)" aria-label="Spray"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><g fill="currentColor"><circle cx="4" cy="5" r="1.2"/><circle cx="9" cy="3.5" r="1.2"/><circle cx="12.5" cy="7" r="1.2"/><circle cx="6.5" cy="9" r="1.2"/><circle cx="3.5" cy="12" r="1.2"/><circle cx="10" cy="12" r="1.2"/></g></svg></button>
+          <button class="shape" data-shape="line" title="Line: drag from end to end; hold Shift to keep it straight (5)" aria-label="Line"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M3 13L13 3" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg></button>
+          <button class="shape" data-shape="box" title="Box: drag out a rectangle; hold Shift for a square (6)" aria-label="Box"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><rect x="2.5" y="4" width="11" height="8" fill="currentColor" fill-opacity=".35" stroke="currentColor" stroke-width="1.4"/></svg></button>
+          <button class="shape" data-shape="fill" title="Fill: pour into everything connected, like a paint bucket (7)" aria-label="Fill"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M2.5 7.5L7 3l5 5-4.5 4.5z" fill="currentColor" fill-opacity=".35" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M13.3 10.2c.6 1 .9 1.6.9 2.1a.9.9 0 01-1.8 0c0-.5.3-1.1.9-2.1z" fill="currentColor"/></svg></button>
+        </div>
+        <label class="brush">
+          <span>Brush</span>
+          <input id="brush-size" type="range" min="0" max="24" value="4" aria-label="Brush size">
+          <output id="brush-out" class="mono">4</output>
+        </label>
+        <label class="check"><input id="replace" type="checkbox"> Paint over existing matter</label>
+      </section>
+      <div class="grip" id="grip-tools" role="separator" tabindex="0" aria-orientation="horizontal" aria-controls="tools"
+        aria-label="Resize the tools" title="Drag to resize the tools · double-click to reset"></div>
+
+      <section id="pouch" hidden aria-label="Your pouch">
+        <div class="group-label">Your pouch</div>
+        <div class="pouch-grid" id="pouch-grid"></div>
+        <p class="pouch-note">You can only use what you carry. Your master always said a good alchemist works with what is to hand.</p>
+      </section>
+
+      <div class="search" role="search">
+        <svg class="search-icon" viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><circle cx="6.8" cy="6.8" r="4.6" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M10.3 10.3L14 14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        <input id="search" type="search" placeholder="Search: a name, an atomic number, “blue flame”…" autocomplete="off" spellcheck="false"
+          aria-label="Search elements, weapons and tools" aria-controls="search-results" title="Search (/)">
+        <button id="search-clear" class="search-clear" type="button" aria-label="Clear the search" hidden>×</button>
+      </div>
+      <div class="tabs" role="tablist" aria-label="Element sets">
+        <button role="tab" id="tab-alchemy" aria-selected="true" aria-controls="table">Alchemy</button>
+        <button role="tab" id="tab-periodic" aria-selected="false" aria-controls="ptable">Periodic table</button>
+        <button role="tab" id="tab-weapons" aria-selected="false" aria-controls="weapons">Weapons</button>
+      </div>
+      <section id="table" role="tabpanel" aria-label="Alchemy elements"></section>
+      <section id="ptable" role="tabpanel" aria-label="Periodic table" hidden>
+        <div class="plab">
+          <span id="plab-text"></span>
+          <div class="plab-btns">
+            <button id="btn-groups" class="pill book" type="button" aria-label="Element Groups"><svg viewBox="0 0 16 16" width="17" height="17" aria-hidden="true"><path d="M8 3.6C6.5 2.6 4.4 2.2 1.8 2.4v10.2c2.6-.2 4.7.2 6.2 1.2 1.5-1 3.6-1.4 6.2-1.2V2.4c-2.6-.2-4.7.2-6.2 1.2z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M8 3.6v10.2" stroke="currentColor" stroke-width="1.3"/></svg><svg class="book-lock" viewBox="0 0 10 10" width="9" height="9" aria-hidden="true"><rect x="1.5" y="4.3" width="7" height="5.2" rx="1" fill="currentColor"/><path d="M3.2 4.4V3a1.8 1.8 0 013.6 0v1.4" fill="none" stroke="currentColor" stroke-width="1.2"/></svg></button>
+            <button id="btn-plab" class="pill lab" type="button">Open the Lab</button>
+          </div>
+        </div>
+        <div id="pgrid"></div>
+        <div id="plegend"></div>
+      </section>
+      <section id="weapons" role="tabpanel" aria-label="Weapons" hidden></section>
+      <section id="search-results" aria-label="Search results" hidden></section>
+
+      <div class="grip" id="grip-info" role="separator" tabindex="0" aria-orientation="horizontal" aria-controls="inspect"
+        aria-label="Resize the description" title="Drag to resize the description · double-click to reset"></div>
+      <footer class="panel-foot">
+        <div id="inspect"></div>
+        <div class="foot-btns">
+          <button id="btn-journey" class="pill journey">Journey</button>
+          <button id="btn-lab" class="pill lab" title="Unlock periodic elements by identifying mystery samples">Lab</button>
+          <button id="btn-codex" class="pill">Codex</button>
+          <button id="btn-hint" class="pill">Hint</button>
+          <button id="btn-help" class="pill" aria-label="Help">?</button>
+        </div>
+      </footer>
+    </aside>
+  </div>
+
+  <div id="codex" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="codex-title">
+    <div class="modal-card wide">
+      <header>
+        <h2 id="codex-title">Codex</h2>
+        <button class="close" data-close aria-label="Close">×</button>
+      </header>
+      <div class="codex-body">
+        <div id="codex-grid"></div>
+        <article id="codex-detail"></article>
+      </div>
+      <footer class="codex-foot">
+        <label class="check"><input id="sandbox" type="checkbox"> Sandbox mode — unlock every element</label>
+        <button id="btn-reset" class="pill danger">Reset discoveries</button>
+      </footer>
+    </div>
+  </div>
+
+  <div id="lab" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="lab-title">
+    <div class="modal-card wide lab-card">
+      <header>
+        <div>
+          <div class="eyebrow" id="lab-eyebrow">The Lab</div>
+          <h2 id="lab-title">Mystery sample</h2>
+        </div>
+        <button class="close" data-close aria-label="Close">×</button>
+      </header>
+      <div class="lab-body" id="lab-body"></div>
+      <footer class="lab-foot">
+        <span id="lab-progress"></span>
+        <div class="lab-actions" id="lab-actions"></div>
+      </footer>
+    </div>
+  </div>
+
+  <div id="groups" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="groups-title">
+    <div class="modal-card wide groups-card">
+      <header>
+        <div>
+          <div class="eyebrow">For the alchemist who has tried every element</div>
+          <h2 id="groups-title">Element Groups</h2>
+        </div>
+        <button class="close" data-close aria-label="Close">×</button>
+      </header>
+      <div class="groups-body" id="groups-body"></div>
+    </div>
+  </div>
+
+  <div id="welcome" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="welcome-title">
+    <div class="modal-card">
+      <h2 id="welcome-title">Elementarium</h2>
+      <p class="lede">Every grain here is simulated: heat spreads, liquids settle by weight, fire looks for fuel, current runs through metal. You start with 26 elements, seven of them seeds. The rest of the table is waiting to be found.</p>
+      <ul class="keys">
+        <li><kbd>Drag</kbd> paint the selected element · <kbd>Right-drag</kbd> erase</li>
+        <li><kbd>Scroll</kbd> zoom · <kbd>Middle-drag</kbd> or <kbd>WASD</kbd> move the map</li>
+        <li><kbd>Ctrl</kbd> + <kbd>Scroll</kbd> or <kbd>[</kbd> <kbd>]</kbd> brush size · <kbd>1</kbd>–<kbd>7</kbd> brush shape · <kbd>G</kbd> magnet</li>
+        <li><kbd>Ctrl</kbd> + <kbd>Z</kbd> undo · <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>Z</kbd> redo</li>
+        <li><kbd>Middle-click</kbd> pick up the element under the cursor</li>
+        <li><strong>Periodic table</strong> tab: it starts with hydrogen and helium; unlock the rest one by one in the <strong>Lab</strong> by identifying mystery samples</li>
+        <li><strong>Weapons</strong> tab: click the map to set off a tsunami, earthquake, tornado, hydrogen bomb and more · the brush size sets how big, an earthquake's magnitude sets its strength</li>
+        <li><kbd>Space</kbd> pause · <kbd>T</kbd> thermal view · <kbd>V</kbd> air view · <kbd>L</kbd> magnifying lens · <kbd>M</kbd> sound</li>
+      </ul>
+      <p class="lede small">Stuck? <strong>Hint</strong> points at something within reach. A good first experiment: pour water onto fire.</p>
+      <div class="welcome-btns">
+        <button class="pill primary" id="btn-begin-journey">Begin the journey</button>
+        <button class="pill" data-close>Experiment freely</button>
+      </div>
+      <p class="lede small welcome-note">The journey is a story told in chapters, each a problem to solve with alchemy. The lab is open whenever you want it.</p>
+    </div>
+  </div>
+
+  <div id="journey" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="journey-title">
+    <div class="modal-card wide journey-card">
+      <header>
+        <div>
+          <div class="eyebrow">A story in seven chapters</div>
+          <h2 id="journey-title">The Apprentice’s Journey</h2>
+        </div>
+        <button class="close" data-close aria-label="Close">×</button>
+      </header>
+      <ol class="chapters" id="chapter-list"></ol>
+      <footer class="journey-foot">
+        <button class="pill" id="btn-letter">Read the master’s letter</button>
+        <button class="pill" data-close>Back to the lab</button>
+      </footer>
+    </div>
+  </div>
+
+  <div id="journal" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="journal-title">
+    <article class="page">
+      <div class="page-eyebrow" id="journal-eyebrow"></div>
+      <h2 id="journal-title"></h2>
+      <div class="page-stars" id="journal-stars" hidden></div>
+      <div class="page-body" id="journal-body"></div>
+      <div class="page-actions" id="journal-actions"></div>
+    </article>
+  </div>
+
+  <script src="js/elements.js"></script>
+  <script src="js/periodic.js"></script>
+  <script src="js/sim.js"></script>
+  <script src="js/facts.js"></script>
+  <script src="js/lab.js"></script>
+  <script src="js/tryit.js"></script>
+  <script src="js/search.js"></script>
+  <script src="js/groups.js"></script>
+  <script src="js/render.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/scenes.js"></script>
+  <script src="js/story.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/journey.js"></script>
+  <script src="js/labview.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>

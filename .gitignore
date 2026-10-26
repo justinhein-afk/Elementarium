@@ -1,0 +1,8 @@
+# Python's cache from running tools/serve.py
+__pycache__/
+*.pyc
+
+# operating-system clutter
+.DS_Store
+Thumbs.db
+desktop.ini
