@@ -9,7 +9,7 @@ const path = require('path');
 const vm = require('vm');
 
 const root = path.join(__dirname, '..', 'js');
-for (const f of ['elements.js', 'periodic.js', 'sim.js']) {
+for (const f of ['elements.js', 'periodic.js', 'materials.js', 'sim.js']) {
   vm.runInThisContext(fs.readFileSync(path.join(root, f), 'utf8'), { filename: f });
 }
 const { ELEM, Sim } = globalThis;

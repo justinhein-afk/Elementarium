@@ -15,7 +15,7 @@ Math.random = () => {
   return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
 };
 
-for (const f of ['elements.js', 'periodic.js', 'sim.js', 'scenes.js', 'story.js']) {
+for (const f of ['elements.js', 'periodic.js', 'materials.js', 'sim.js', 'scenes.js', 'story.js']) {
   vm.runInThisContext(fs.readFileSync(path.join(__dirname, '..', 'js', f), 'utf8'), { filename: f });
 }
 const { ELEM, Sim, Story } = globalThis;

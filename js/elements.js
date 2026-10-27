@@ -13,10 +13,10 @@
     SPARK: 9, DIAMOND: 10, CLONE: 11, VOID: 12, MOLTEN: 13, EMBER: 14, BATTERY: 15, GAS: 16,
     WOOD: 17, PLANT: 18, FISH: 19, WALL: 20, METAL: 21, HUMAN: 22, HEAD: 23, BIRD: 24, PERIODIC: 25, RAD: 26,
     GLASS: 27, ICE: 28, CLOUD: 29, FOG: 30, FOAM: 31, SPARKLE: 32, CO2: 33,
-    GRASS: 34, CACTUS: 35, VINE: 36, MUSHROOM: 37, LILY: 38, MSPARK: 39,
+    GRASS: 34, CACTUS: 35, VINE: 36, MUSHROOM: 37, LILY: 38, MSPARK: 39, LIGHT: 40,
   };
 
-  const GROUPS = ['Solids', 'Powders', 'Liquids', 'Gases', 'Weather', 'Energy', 'Plants', 'Life', 'Special'];
+  const GROUPS = ['Solids', 'Powders', 'Liquids', 'Gases', 'Energy', 'Plants', 'Life', 'Special'];
 
   // hi / lo: [temperature, becomes, probability per tick]
   // burnInto: [[element, weight], ...]
@@ -47,13 +47,13 @@
       desc: 'Freezes, boils, conducts. Most discoveries start here.',
     },
     {
-      key: 'stone', name: 'Stone', group: 'Solids', cat: CAT.STATIC, starter: true,
+      key: 'stone', name: 'Stone', group: 'Solids', cat: CAT.STATIC, density: 26, starter: true,
       colors: ['#6e7177', '#64676d', '#787b81', '#5d6066'], cond: 0.18, hi: [1100, 'lava', 0.02],
       acidRes: 0.5, blastRes: 0.55,
       desc: 'Solid rock. Melts into lava at 1100°C.',
     },
     {
-      key: 'wood', name: 'Wood', group: 'Solids', cat: CAT.STATIC, render: R.WOOD, starter: true,
+      key: 'wood', name: 'Wood', group: 'Solids', cat: CAT.STATIC, density: 6, render: R.WOOD, starter: true,
       colors: ['#7d5231', '#8a5c37', '#714a2c', '#93653d'], cond: 0.06,
       flam: 0.25, ign: 300, burn: [260, 420], burnTemp: 850, fireEmit: 0.25,
       burnInto: [['ash', 6], ['ember', 2], ['empty', 2]], hi: [350, 'coal', 0.01], blastRes: 0.3,
@@ -69,56 +69,56 @@
       key: 'dirt', name: 'Dirt', group: 'Powders', cat: CAT.POWDER, starter: true,
       colors: ['#6a4a2e', '#5d4128', '#765336', '#553a22'], density: 15, cond: 0.07, slide: 0.35,
       hi: [1300, 'lava', 0.01],
-      desc: 'Soil. Seeds sprout in it; water makes it mud.',
+      desc: 'Loose soil. Plants root in it; water makes it mud.',
     },
     {
-      key: 'seed', name: 'Seed', group: 'Plants', cat: CAT.POWDER, starter: true,
+      key: 'seed', name: 'Seed', group: 'Plants', cat: CAT.POWDER, starter: true, hidden: true,
       colors: ['#cdb57a', '#bba062', '#dbc58f'], density: 8, flam: 0.5, ign: 250, burn: [8, 16],
       burnTemp: 600, fireEmit: 0.2, burnInto: [['ash', 1]], slide: 0.5,
-      desc: 'Sprouts on soil, fastest in mud. Grows a flowering plant.',
+      desc: 'Sprouts on soil, fastest in mud.',
     },
     // the other kinds of seed: each sprouts where its plant really would (see sprout() in sim.js)
     {
-      key: 'acorn', name: 'Acorn', group: 'Plants', cat: CAT.POWDER, starter: true,
+      key: 'acorn', name: 'Acorn', group: 'Plants', cat: CAT.POWDER, starter: true, hidden: true,
       colors: ['#8a5a2b', '#9b6a35', '#7a4e24', '#a8783e'], density: 9, flam: 0.4, ign: 260, burn: [10, 18],
       burnTemp: 600, fireEmit: 0.2, burnInto: [['ash', 1]], slide: 0.4,
       desc: 'Plant it in soil to grow an oak.',
     },
     {
-      key: 'grassseed', name: 'Grass seed', group: 'Plants', cat: CAT.POWDER, starter: true,
+      key: 'grassseed', name: 'Grass seed', group: 'Plants', cat: CAT.POWDER, starter: true, hidden: true,
       colors: ['#cfc77a', '#bdb465', '#ddd690'], density: 6, flam: 0.6, ign: 240, burn: [6, 12],
       burnTemp: 550, fireEmit: 0.2, burnInto: [['ash', 1]], slide: 0.6,
       desc: 'Sow on soil; grass creeps across bare ground.',
     },
     {
-      key: 'cactusseed', name: 'Cactus seed', group: 'Plants', cat: CAT.POWDER, starter: true,
+      key: 'cactusseed', name: 'Cactus seed', group: 'Plants', cat: CAT.POWDER, starter: true, hidden: true,
       colors: ['#2e2622', '#3a2f28', '#241e1a'], density: 9, flam: 0.3, ign: 280, burn: [8, 14],
       burnTemp: 550, fireEmit: 0.15, burnInto: [['ash', 1]], slide: 0.5,
       desc: 'Sprouts only in dry sand. Rots in water.',
     },
     {
-      key: 'vineseed', name: 'Vine seed', group: 'Plants', cat: CAT.POWDER, starter: true,
+      key: 'vineseed', name: 'Vine seed', group: 'Plants', cat: CAT.POWDER, starter: true, hidden: true,
       colors: ['#6a5030', '#7a5c38', '#5c4428'], density: 8, flam: 0.5, ign: 250, burn: [8, 16],
       burnTemp: 600, fireEmit: 0.2, burnInto: [['ash', 1]], slide: 0.5,
       desc: 'Sow at the foot of a wall or tree and it climbs.',
     },
     {
-      key: 'spores', name: 'Spores', group: 'Plants', cat: CAT.POWDER, starter: true,
+      key: 'spores', name: 'Spores', group: 'Plants', cat: CAT.POWDER, starter: true, hidden: true,
       colors: ['#d9c9ad', '#c9b596', '#e8dcc6', '#bfa888'], density: 2, flam: 0.3, ign: 250, burn: [2, 4],
       burnTemp: 400, burnInto: [['empty', 1]], slide: 0.8, life: [1200, 2400],
       desc: 'Sprouts mushrooms where it is damp or shaded.',
     },
     {
-      key: 'lilyseed', name: 'Lily seed', group: 'Plants', cat: CAT.POWDER, starter: true,
+      key: 'lilyseed', name: 'Lily seed', group: 'Plants', cat: CAT.POWDER, starter: true, hidden: true,
       colors: ['#4a5a30', '#566838', '#3e4c28'], density: 12, flam: 0.4, ign: 250, burn: [8, 16],
       burnTemp: 600, fireEmit: 0.2, burnInto: [['ash', 1]], slide: 0.5,
       desc: 'Drop it in a pond; it grows up to the surface.',
     },
     {
-      key: 'sapling', name: 'Sapling', group: 'Plants', cat: CAT.STATIC, render: R.WOOD, hidden: true,
-      colors: ['#6f8a3a', '#7a9844', '#647c34'], cond: 0.06, flam: 0.3, ign: 300, burn: [60, 120],
+      key: 'sapling', name: 'Oak', group: 'Plants', cat: CAT.STATIC, render: R.WOOD, starter: true,
+      colors: ['#6f8a3a', '#7a9844', '#647c34'], density: 7, cond: 0.06, flam: 0.3, ign: 300, burn: [60, 120],
       burnTemp: 750, fireEmit: 0.25, burnInto: [['ash', 2], ['ember', 1], ['empty', 1]], blastRes: 0.3,
-      desc: 'The growing tip of a young tree.',
+      desc: 'A broad oak with a low, spreading crown. Grows in soil and drops acorns.',
     },
     {
       key: 'litter', name: 'Dead leaves', group: 'Plants', cat: CAT.POWDER, hidden: true,
@@ -140,7 +140,7 @@
       desc: 'Floats on water and burns, even on a lake.',
     },
     {
-      key: 'metal', name: 'Metal', group: 'Solids', cat: CAT.STATIC, render: R.METAL, starter: true,
+      key: 'metal', name: 'Metal', group: 'Solids', cat: CAT.STATIC, density: 79, render: R.METAL, starter: true,
       colors: ['#8e98a3', '#9aa4af', '#838d98', '#a6b0ba'], cond: 0.9, hi: [1538, 'mmetal', 0.03],
       conduct: true, blastRes: 0.8, acidRes: 0.5,
       desc: 'Conducts heat and electricity. Rusts when wet.',
@@ -155,7 +155,7 @@
       recipe: 'Water heated past 100°C', hint: 'What does fire do to water?', from: ['water', 'fire'],
     },
     {
-      key: 'ice', name: 'Ice', group: 'Solids', cat: CAT.STATIC, render: R.ICE,
+      key: 'ice', name: 'Ice', group: 'Solids', cat: CAT.STATIC, density: 9.2, render: R.ICE,
       colors: ['#bfe6f5', '#cdeefa', '#b2ddf0'], alpha: 0.8, cond: 0.4, cap: 2, temp: -25,
       hi: [1, 'water', 0.02], acidRes: 0.6, blastRes: 0.3,
       desc: 'Frozen water. Salt melts it.',
@@ -175,7 +175,7 @@
       recipe: 'Burnt wood, plants or coal', hint: 'Burn some wood and wait.', from: ['wood', 'fire'],
     },
     {
-      key: 'ember', name: 'Ember', group: 'Energy', cat: CAT.POWDER, render: R.EMBER,
+      key: 'ember', name: 'Ember', group: 'Energy', cat: CAT.POWDER, render: R.EMBER, hidden: true,
       colors: ['#ff9a3a', '#ff7a24', '#e8561a'], density: 6, temp: 800, life: [140, 320], emit: 0.9,
       slide: 0.7, cond: 0.2,
       desc: 'A glowing scrap from a long fire. Lights what it lands on.',
@@ -190,7 +190,7 @@
       recipe: 'Stone heated past 1100°C', hint: 'Stone is lava that cooled. Reverse it with the Heat tool.', from: ['stone'],
     },
     {
-      key: 'obsidian', name: 'Obsidian', group: 'Solids', cat: CAT.STATIC,
+      key: 'obsidian', name: 'Obsidian', group: 'Solids', cat: CAT.STATIC, density: 24,
       colors: ['#1c1424', '#16101d', '#241a30', '#120d18'], cond: 0.12, hi: [1100, 'lava', 0.02],
       acidRes: 0.97, blastRes: 0.85,
       desc: 'Volcanic glass. Shrugs off acid and blasts.',
@@ -204,7 +204,7 @@
       recipe: 'Sand heated past 1700°C', hint: 'Sand melts — if you can get it far hotter than lava.', from: ['sand'],
     },
     {
-      key: 'glass', name: 'Glass', group: 'Solids', cat: CAT.STATIC, render: R.GLASS,
+      key: 'glass', name: 'Glass', group: 'Solids', cat: CAT.STATIC, density: 25, render: R.GLASS,
       colors: ['#e6f6fa', '#d8f0f6', '#f2fbfd'], alpha: 0.12, cond: 0.15, hi: [1400, 'mglass', 0.02],
       acidRes: 1, blastRes: 0.15,
       desc: 'Clear and acid-proof: the perfect beaker.',
@@ -218,66 +218,59 @@
       recipe: 'Dirt + Water', hint: 'Get some soil wet.', from: ['dirt', 'water'],
     },
     {
-      key: 'brick', name: 'Brick', group: 'Solids', cat: CAT.STATIC, render: R.BRICK,
+      key: 'brick', name: 'Brick', group: 'Solids', cat: CAT.STATIC, density: 19, render: R.BRICK,
       colors: ['#a3442c', '#963d27', '#b04e33'], cond: 0.1, hi: [2000, 'lava', 0.01],
       acidRes: 0.9, blastRes: 0.65,
       desc: 'Fired clay. Tough and acid-resistant.',
       recipe: 'Clay fired above 800°C', hint: 'Fire some clay in a hot kiln.', from: ['clay', 'fire'],
     },
     {
-      key: 'plant', name: 'Plant', group: 'Plants', cat: CAT.STATIC, render: R.PLANT,
-      colors: ['#3a9a35', '#43a83d', '#33892f', '#4cb545'], cond: 0.06,
+      key: 'plant', name: 'Plant', group: 'Plants', cat: CAT.STATIC, render: R.PLANT, starter: true,
+      colors: ['#3a9a35', '#43a83d', '#33892f', '#4cb545'], density: 6, cond: 0.06,
       flam: 0.5, ign: 250, burn: [14, 30], burnTemp: 650, fireEmit: 0.3,
       burnInto: [['ash', 3], ['empty', 4], ['fire', 3]], blastRes: 0.1,
-      desc: 'Grows from roots in soil. Cut off, it withers.',
-      recipe: 'A seed resting on soil', hint: 'Plant a seed in dirt.', from: ['seed', 'dirt'],
+      desc: 'A leafy green plant. Grows from roots in soil; off the ground it dies in seconds.',
     },
     {
-      key: 'flower', name: 'Flower', group: 'Plants', cat: CAT.STATIC, render: R.FLOWER,
-      colors: ['#ff5fa2'], cond: 0.06, flam: 0.55, ign: 220, burn: [10, 20], burnTemp: 600,
+      key: 'flower', name: 'Flower', group: 'Plants', cat: CAT.STATIC, render: R.FLOWER, starter: true,
+      colors: ['#ff5fa2'], density: 6, cond: 0.06, flam: 0.55, ign: 220, burn: [10, 20], burnTemp: 600,
       fireEmit: 0.3, burnInto: [['ash', 1], ['fire', 1]], blastRes: 0.1,
-      desc: 'A plant in bloom. Drops seeds.',
-      recipe: 'A plant that reached full height', hint: 'Give a plant room to grow.', from: ['plant'],
+      desc: 'A plant in bloom. Drops seeds that grow more flowers.',
     },
     {
-      key: 'grass', name: 'Grass', group: 'Plants', cat: CAT.STATIC, render: R.GRASS,
+      key: 'grass', name: 'Grass', group: 'Plants', cat: CAT.STATIC, density: 4, render: R.GRASS, starter: true,
       colors: ['#5aa83a', '#68b844', '#4e9832', '#76c24e'], cond: 0.06,
       flam: 0.6, ign: 220, burn: [8, 16], burnTemp: 600, fireEmit: 0.3,
       burnInto: [['ash', 2], ['empty', 3], ['fire', 1]], blastRes: 0.05,
       desc: 'Creeps over bare soil. Burns fast.',
-      recipe: 'A grass seed on soil', hint: 'Sow grass seed on dirt.', from: ['grassseed', 'dirt'],
     },
     {
-      key: 'cactus', name: 'Cactus', group: 'Plants', cat: CAT.STATIC, render: R.CACTUS,
+      key: 'cactus', name: 'Cactus', group: 'Plants', cat: CAT.STATIC, density: 9, render: R.CACTUS, starter: true,
       colors: ['#3f8a4a', '#479653', '#377a40', '#4fa05b'], cond: 0.08, cap: 3,
       flam: 0.08, ign: 420, burn: [80, 140], burnTemp: 600, fireEmit: 0.15,
       burnInto: [['steam', 2], ['ash', 1]], blastRes: 0.15,
       desc: 'Grows in dry sand. Burns slowly; rots if drowned.',
-      recipe: 'A cactus seed in dry sand', hint: 'Not every seed wants soil. Try somewhere dry.', from: ['cactusseed', 'sand'],
     },
     {
-      key: 'vine', name: 'Vine', group: 'Plants', cat: CAT.STATIC, render: R.VINE,
+      key: 'vine', name: 'Vine', group: 'Plants', cat: CAT.STATIC, density: 5, render: R.VINE, starter: true,
       colors: ['#2f7a2c', '#38883a', '#2a6c28', '#44963e'], cond: 0.06,
       flam: 0.45, ign: 240, burn: [12, 24], burnTemp: 620, fireEmit: 0.3,
       burnInto: [['ash', 2], ['empty', 3], ['fire', 1]], blastRes: 0.1,
       desc: 'Climbs walls, stone and trees; trails on the ground.',
-      recipe: 'A vine seed sown in soil', hint: 'Vines need something to climb. Sow one by a wall.', from: ['vineseed', 'dirt'],
     },
     {
-      key: 'mushroom', name: 'Mushroom', group: 'Plants', cat: CAT.STATIC, render: R.MUSHROOM,
+      key: 'mushroom', name: 'Mushroom', group: 'Plants', cat: CAT.STATIC, density: 4, render: R.MUSHROOM, starter: true,
       colors: ['#c8402e', '#d4523a', '#b8382a', '#cc4a34'], cond: 0.05,
       flam: 0.2, ign: 260, burn: [20, 40], burnTemp: 550, fireEmit: 0.15,
       burnInto: [['ash', 1], ['empty', 1]], blastRes: 0.05,
       desc: 'Feeds on rot. Puffs spores and turns wood to soil.',
-      recipe: 'Spores on damp or shaded ground', hint: 'Fungi like it damp and dark.', from: ['spores', 'dirt'],
     },
     {
-      key: 'lily', name: 'Water lily', group: 'Plants', cat: CAT.STATIC, render: R.LILY,
+      key: 'lily', name: 'Water lily', group: 'Plants', cat: CAT.STATIC, density: 5, render: R.LILY, starter: true,
       colors: ['#3f9a4a', '#48a855', '#378a42'], cond: 0.08,
       flam: 0.2, ign: 280, burn: [12, 24], burnTemp: 550, fireEmit: 0.2,
       burnInto: [['ash', 1], ['empty', 2]], blastRes: 0.1,
       desc: 'Roots on a pond bed and floats its pads on top.',
-      recipe: 'A lily seed on the bottom of a pond', hint: 'Some seeds sink.', from: ['lilyseed', 'water'],
     },
     {
       key: 'saltwater', name: 'Saltwater', group: 'Liquids', cat: CAT.LIQUID, render: R.LIQUID,
@@ -331,7 +324,7 @@
       recipe: 'Plants rotting in mud', hint: 'Swamps breathe something flammable.', from: ['plant', 'mud'],
     },
     {
-      key: 'coal', name: 'Coal', group: 'Solids', cat: CAT.STATIC,
+      key: 'coal', name: 'Coal', group: 'Solids', cat: CAT.STATIC, density: 14,
       colors: ['#262626', '#1e1e1e', '#2f2f2f', '#191919'], cond: 0.1, flam: 0.08, ign: 450,
       burn: [700, 1100], burnTemp: 1150, fireEmit: 0.2, burnInto: [['ash', 3], ['ember', 1]],
       hi: [2500, 'diamond', 0.01], blastRes: 0.35,
@@ -339,14 +332,14 @@
       recipe: 'Wood heated above 350°C with no air', hint: 'Bury wood and heat it — don\'t let it breathe.', from: ['wood'],
     },
     {
-      key: 'diamond', name: 'Diamond', group: 'Solids', cat: CAT.STATIC, render: R.DIAMOND,
+      key: 'diamond', name: 'Diamond', group: 'Solids', cat: CAT.STATIC, density: 35, render: R.DIAMOND,
       colors: ['#dff8ff', '#eefcff', '#cdf2fb', '#f7feff'], alpha: 0.55, cond: 1, cap: 0.6, acidRes: 1, blastRes: 0.98,
       flam: 0.03, ign: 900, burn: [200, 400], burnTemp: 1000, fireEmit: 0.1, burnInto: [['co2', 1]],
       desc: 'The hardest thing here. Acid-proof, but burns above 900°C.',
       recipe: 'Coal sealed away from air at 2500°C', hint: 'Crush carbon with unbearable heat, sealed away from air.', from: ['coal'],
     },
     {
-      key: 'battery', name: 'Battery', group: 'Energy', cat: CAT.STATIC, render: R.BATTERY,
+      key: 'battery', name: 'Battery', group: 'Energy', cat: CAT.STATIC, density: 30, render: R.BATTERY,
       colors: ['#d9c22a', '#2a2a2e'], cond: 0.3, hi: [1500, 'mmetal', 0.02], acidRes: 0.5, blastRes: 0.5,
       desc: 'Pulses electricity into conductors it touches.',
       recipe: 'Acid eating into metal', hint: 'Pour something corrosive onto metal.', from: ['acid', 'metal'],
@@ -435,7 +428,7 @@
       recipe: 'Oil + Acid', hint: 'Treat oil with something corrosive.', from: ['oil', 'acid'],
     },
     {
-      key: 'moss', name: 'Moss', group: 'Plants', cat: CAT.STATIC, render: R.PAL,
+      key: 'moss', name: 'Moss', group: 'Plants', cat: CAT.STATIC, density: 3, render: R.PAL,
       colors: ['#4f7a35', '#5a8a3c', '#456b2e', '#668f45'], cond: 0.06, flam: 0.3, ign: 200,
       burn: [20, 40], burnTemp: 600, fireEmit: 0.2, burnInto: [['ash', 1], ['empty', 1]], blastRes: 0.2,
       desc: 'Creeps across damp stone.',
@@ -476,39 +469,39 @@
       acidRes: 1, blastRes: 0,
     },
 
-    // ───────────────────────── weather ─────────────────────────
+    // ───────────────────────── weather: clouds and fog are gases, hail a powder ─────────────────────────
     {
-      key: 'cloud', name: 'Cloud', group: 'Weather', cat: CAT.GAS, render: R.CLOUD, starter: true,
+      key: 'cloud', name: 'Cloud', group: 'Gases', cat: CAT.GAS, render: R.CLOUD, starter: true,
       colors: ['#eef2f6', '#e2e8ee', '#f6f8fa'], alpha: 0.85, density: 0.45, cond: 0.02, cap: 0.6, loss: 0.01, temp: 5,
       acidRes: 1, blastRes: 0,
       desc: 'Drifts with the wind. Packed tight, it brings rain.',
     },
     {
-      key: 'raincloud', name: 'Rain cloud', group: 'Weather', cat: CAT.GAS, render: R.CLOUD, starter: true,
+      key: 'raincloud', name: 'Rain cloud', group: 'Gases', cat: CAT.GAS, render: R.CLOUD, starter: true,
       colors: ['#8e99a5', '#7f8a96', '#9ba5af'], alpha: 0.9, density: 0.45, cond: 0.02, cap: 0.6, loss: 0.01, temp: 5,
       acidRes: 1, blastRes: 0,
       desc: 'Rains until wrung out; snows below freezing.',
     },
     {
-      key: 'stormcloud', name: 'Storm cloud', group: 'Weather', cat: CAT.GAS, render: R.CLOUD, starter: true,
+      key: 'stormcloud', name: 'Storm cloud', group: 'Gases', cat: CAT.GAS, render: R.CLOUD, starter: true,
       colors: ['#454d5a', '#3a414d', '#525a66'], alpha: 0.95, density: 0.45, cond: 0.02, cap: 0.6, loss: 0.01, temp: 5,
       acidRes: 1, blastRes: 0,
       desc: 'Heavy rain, hail and lightning.',
     },
     {
-      key: 'snowcloud', name: 'Snow cloud', group: 'Weather', cat: CAT.GAS, render: R.CLOUD, starter: true,
+      key: 'snowcloud', name: 'Snow cloud', group: 'Gases', cat: CAT.GAS, render: R.CLOUD, starter: true,
       colors: ['#c6cfda', '#bac4d0', '#d2dae4'], alpha: 0.9, density: 0.45, cond: 0.02, cap: 0.6, loss: 0.01, temp: -12,
       acidRes: 1, blastRes: 0,
       desc: 'Sifts snow onto everything below.',
     },
     {
-      key: 'fog', name: 'Fog', group: 'Weather', cat: CAT.GAS, render: R.FOG, starter: true,
+      key: 'fog', name: 'Fog', group: 'Gases', cat: CAT.GAS, render: R.FOG, starter: true,
       colors: ['#dfe5ea', '#d3dae0', '#e8edf1'], alpha: 0.32, density: 0.6, cond: 0.02, cap: 0.6, loss: 0.01, temp: 6,
       life: [700, 1800], acidRes: 1, blastRes: 0,
       desc: 'A cloud on the ground. Burns off as it warms.',
     },
     {
-      key: 'hail', name: 'Hail', group: 'Weather', cat: CAT.POWDER, render: R.SPARKLE, starter: true,
+      key: 'hail', name: 'Hail', group: 'Powders', cat: CAT.POWDER, render: R.SPARKLE, starter: true,
       colors: ['#e9f4fb', '#d6e8f3', '#f6fbfe'], density: 9, cond: 0.4, cap: 2, temp: -5,
       hi: [1, 'water', 0.03], slide: 0.8, blastRes: 0.2,
       desc: 'Ice pellets from storms. Melts above 0°C.',
@@ -530,7 +523,7 @@
       recipe: 'Carbon dioxide frozen below −78.5°C', hint: 'Freeze what burning breathes out.', from: ['co2'],
     },
     {
-      key: 'clay', name: 'Clay', group: 'Solids', cat: CAT.STATIC,
+      key: 'clay', name: 'Clay', group: 'Solids', cat: CAT.STATIC, density: 17,
       colors: ['#b98a62', '#c39670', '#ad7f58', '#b58660'], cond: 0.1, hi: [800, 'brick', 0.02], acidRes: 0.6, blastRes: 0.3,
       desc: 'Dried mud. Fire it past 800°C for brick.',
       recipe: 'Mud dried above 100°C', hint: 'Dry some mud out.', from: ['mud'],
@@ -551,7 +544,7 @@
 
     // ───────────────────────── story-only ─────────────────────────
     {
-      key: 'drygrass', name: 'Dry grass', group: 'Plants', cat: CAT.STATIC, hidden: true,
+      key: 'drygrass', name: 'Dry grass', group: 'Plants', cat: CAT.STATIC, density: 3, hidden: true,
       colors: ['#c9a85a', '#b8954a', '#d6b86a', '#a8863f'], cond: 0.08,
       flam: 0.9, ign: 200, burn: [40, 80], burnTemp: 750, fireEmit: 0.35, needAir: false,
       burnInto: [['ash', 4], ['empty', 4], ['fire', 2]], blastRes: 0.05,

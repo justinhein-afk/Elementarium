@@ -121,6 +121,7 @@
   const isWeapon = () => game.selected.kind === 'weapon';
   const weaponSize = () => 0.5 + game.brush / 8; // the brush slider sizes a disaster: 1 at its default
 
+  const CLOUDY = new Set([ID.CLOUD, ID.RAINCLOUD, ID.STORMCLOUD, ID.SNOWCLOUD, ID.FOG]);
   function densityFor(t) {
     const d = list[t];
     if (t === ID.HUMAN) return 0.006;
@@ -129,11 +130,12 @@
     if (t === ID.SEED || t === ID.ACORN || t === ID.CACTUSSEED || t === ID.VINESEED || t === ID.LILYSEED) return 0.06;
     if (t === ID.GRASSSEED || t === ID.SPORES) return 0.12;
     if (t === ID.SPARK) return 1;
+    if (t === ID.LIGHT) return 0.2;
     if (t === ID.HAIL) return 0.15;
     switch (d.cat) {
       case CAT.POWDER: return 0.35;
       case CAT.LIQUID: return 0.45;
-      case CAT.GAS: return t === ID.FIRE ? 0.5 : d.group === 'Weather' ? 0.6 : 0.3;
+      case CAT.GAS: return t === ID.FIRE ? 0.5 : CLOUDY.has(t) ? 0.6 : 0.3;
       default: return 1;
     }
   }
@@ -168,15 +170,47 @@
       return;
     }
     if (t === ID.SPARK) { w.sparkPaint(x, y, r); return; }
+    if (t === ID.EXPLOSION) { // a blast in the brush's shape; dragged, one every few ticks
+      if (pointer.boomCd <= 0 || dragged()) { use(sel, () => w.blastPaint(x, y, r, Tints.tintFor(t))); pointer.boomCd = 6; }
+      return;
+    }
+    if (t === ID.PAINT) { use(sel, () => w.tintPaint(x, y, r, UI.paintColor(t))); return; }
+    if (t === ID.IMAGE) { // the picture goes down once, where you click
+      const p = pictureAt();
+      if (!p) { UI.note('No picture yet', 'Click the Image tile to choose one.'); pointer.down = false; return; }
+      if (pointer.placed) return;
+      pointer.placed = true;
+      use(sel, () => w.placeImage(x, y, p.w, p.h, p.px));
+      AudioFX.pour('solid');
+      return;
+    }
     // shaped strokes lay matter down solid (the spray scatters it by itself); sparse things like
     // people and seeds keep their own spacing
     const solid = game.shape !== 'circle' && game.shape !== 'square' && densityFor(t) >= 0.3;
     const replace = game.replace || game.shape === 'fill';
-    const n = use(sel, (max) => w.paint(x, y, r, t, solid ? 1 : densityFor(t), replace, max, Tints.tintFor(t))); // glass and fire in their colour
+    const n = use(sel, (max) => w.paint(x, y, r, t, solid ? 1 : densityFor(t), replace, max, Tints.tintFor(t), UI.paintColor(t))); // glass and fire, and concrete, in their colour
     if (!n) return;
     const c = list[t].cat;
     AudioFX.pour(c === CAT.LIQUID ? 'liquid' : c === CAT.GAS ? 'gas' : c === CAT.POWDER ? 'powder' : 'solid');
   }
+
+  // The Image tool's picture at the brush's size: w × h cells, one pixel each (made once per size).
+  function pictureAt() {
+    const p = UI.picture();
+    if (!p) return null;
+    const W = game.world.W, H = game.world.H, ar = p.img.naturalHeight / Math.max(1, p.img.naturalWidth);
+    let w = Math.min(W, 6 + game.brush * 6), h = Math.max(1, Math.round(w * ar));
+    if (h > H) { h = H; w = Math.max(1, Math.round(h / ar)); }
+    if (p.sized && p.sized.w === w && p.sized.h === h) return p.sized;
+    const c = document.createElement('canvas');
+    c.width = w; c.height = h;
+    const x = c.getContext('2d');
+    x.imageSmoothingQuality = 'high';
+    x.drawImage(p.img, 0, 0, w, h);
+    p.sized = { canvas: c, w, h, px: x.getImageData(0, 0, w, h).data };
+    return p.sized;
+  }
+  const isImage = () => game.selected.kind === 'element' && game.selected.t === ID.IMAGE;
 
   // Paint every point between the last brush position and this one so fast strokes leave no gaps.
   function stroke() {
@@ -268,7 +302,7 @@
     pointer.down = true;
     pointer.button = e.button;
     pointer.lastX = pointer.x; pointer.lastY = pointer.y;
-    pointer.boltCd = 0;
+    pointer.boltCd = 0; pointer.boomCd = 0; pointer.placed = false;
     if (isMagnet() && e.button === 0) { // pick up what is within reach, and keep pulling while held
       hand.trail = [];
       game.world.grab(pointer.x, pointer.y, magnetReach(), game.magnetOnly);
@@ -607,6 +641,7 @@
     game.world.step();
     Journey.afterTick();
     if (pointer.boltCd > 0) pointer.boltCd--;
+    if (pointer.boomCd > 0) pointer.boomCd--;
   }
 
   const fusedSeen = new Set(); // superheavy elements made by fusion this session
@@ -665,7 +700,8 @@
     b.visible = pointer.inside && !pointer.panning;
     const end = dragEnd(); // a Line or Box being dragged shows where it will end (straightened with Shift)
     b.x = end.x; b.y = end.y;
-    b.shape = isMagnet() ? 'magnet' : isWeapon() ? 'weapon' : game.shape;
+    b.shape = isMagnet() ? 'magnet' : isWeapon() ? 'weapon' : isImage() ? 'image' : game.shape;
+    b.image = isImage() ? pictureAt() : null;
     const drop = isWeapon() && sel.name === 'hbomb' ? game.world.dropPoint(pointer.x) : null; // where a bomb would land
     b.r = isMagnet() ? game.brush + 8 : drop ? drop.r : isWeapon() ? game.world.weaponReach(sel.name, weaponSize(), game.magnitude) : radius();
     b.ty = drop ? drop.y : 0;
@@ -678,7 +714,8 @@
     b.color = sel.kind === 'weapon' ? UI.weaponColor(sel.name)
       : sel.kind === 'tool'
         ? sel.name === 'heat' ? '#ff7a3d' : sel.name === 'cool' ? '#8fd4ff' : sel.name === 'magnet' ? '#d08cff' : '#ece5d3'
-        : `rgb(${list[sel.t].rgb[0].join(',')})`;
+        : sel.t === ID.PAINT && UI.paintColor(sel.t) ? `#${UI.paintColor(sel.t).toString(16).padStart(6, '0')}`
+          : `rgb(${list[sel.t].rgb[0].join(',')})`;
 
     const w = game.world;
     renderer.draw(w.tick, {

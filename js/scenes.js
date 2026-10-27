@@ -89,6 +89,7 @@
         for (let y = g - h; y < g; y++) { w.place(w.idx(tx, y), ID.WOOD); w.place(w.idx(tx + 1, y), ID.WOOD); }
         blob(w, tx, g - h - 3, 7 + ((Math.random() * 4) | 0), 6, ID.PLANT, true);
       }
+      w.livenTrees(); // their trunks carry water up to the leaves
     },
 
     // People living on gentle hills: wooden huts, a farm, a pond, trees, birds and an anthill.
@@ -130,6 +131,7 @@
         for (let y = g - h; y < g; y++) w.place(w.idx(tx, y), ID.WOOD);
         blob(w, tx, g - h - 3, 6, 5, ID.PLANT, true);
       }
+      w.livenTrees();
       // villagers, birds and an ant colony
       for (let k = 0; k < 14; k++) {
         const x = 4 + ((Math.random() * (W - 8)) | 0);

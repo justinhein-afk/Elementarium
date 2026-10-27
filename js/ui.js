@@ -17,6 +17,8 @@
     co2: 'CO₂', dryice: 'Dr', clay: 'Kl', soap: 'Sp', foam: 'Fm',
     acorn: 'Qu', grassseed: 'Gs', cactusseed: 'Cs', vineseed: 'Vs', spores: 'Sv', lilyseed: 'Ls',
     grass: 'Gr', cactus: 'Ct', vine: 'Vi', mushroom: 'Mu', lily: 'Ny',
+    soil: 'So', concrete: 'Cc', cement: 'Cm', alcohol: 'Et', vinegar: 'Vg', explosion: 'Ex', light: 'Lx',
+    sapling: 'Qr', pine: 'Pi', palm: 'Pm', willow: 'Sx', pinecone: 'Pc', coconut: 'Cn', catkin: 'Ck', paint: 'Pa', image: 'Im',
   };
 
   for (const d of list) if (d.castOf !== undefined) SYM[d.key] = list[d.castOf].sym; // a solid metal shows its metal's symbol
@@ -31,6 +33,9 @@
   const $ = (s) => document.querySelector(s);
   const tableOrder = [];
   for (const g of GROUPS) for (const d of list) if (!d.hidden && d.group === g) tableOrder.push(d);
+  // the Oak's tile sits with the other trees rather than at the head of the plants (its element is older)
+  tableOrder.splice(tableOrder.indexOf(ELEM.byKey.sapling), 1);
+  tableOrder.splice(tableOrder.indexOf(ELEM.byKey.pine), 0, ELEM.byKey.sapling);
   const number = new Map(tableOrder.map((d, k) => [d.id, k + 1]));
   const tiles = new Map();
   const swatches = new Map();
@@ -96,10 +101,117 @@
     const c = cloneCanvas(swatchFor(d.id));
     b.append(c);
     b.insertAdjacentHTML('beforeend', `<span class="num">${number.get(d.id)}</span><span class="sym"></span><span class="nm"></span>`);
-    if (!opts.codex) b.addEventListener('click', () => select({ kind: 'element', t: d.id }));
-    if (!opts.codex && Tints.kindOf(d.id)) b.append(tintBadge(d.id)); // Glass and Fire: the colour they paint in
+    if (!opts.codex) b.addEventListener('click', () => { select({ kind: 'element', t: d.id }); if (d.key === 'image' && unlocked(d.id)) pickPicture(); });
+    if (!opts.codex && Tints.kindOf(d.id)) b.append(tintBadge(d.id)); // Glass, Fire and Explosion: the colour they paint in
+    if (!opts.codex && d.key in paints) b.append(colorBadge(d.key)); // Concrete and Paint: any colour at all
     return b;
   }
+
+  // ───── any colour: Concrete and the Paint tool ─────
+  // Concrete can be laid in any colour, and the Paint tool recolours whatever it touches. The dot on
+  // their tiles picks the colour, from a palette or from the full colour picker.
+  const PALETTE = ['#ece8de', '#9a9a94', '#3a3a3e', '#111111', '#c0392b', '#e67e22', '#f1c40f', '#7dbb3a',
+    '#1e8449', '#36a3c9', '#2e5cb8', '#6c3fb5', '#d35e9b', '#8a5a34', '#f5cba7', '#ffffff'];
+  const paints = { concrete: null, paint: '#c0392b' };
+  Object.assign(paints, store.get('paints', {}));
+  const paintRGB = (key) => (paints[key] ? parseInt(paints[key].slice(1), 16) : 0);
+  function colorBadge(key) {
+    const s = document.createElement('span');
+    s.className = 'tint-badge';
+    s.setAttribute('role', 'button');
+    s.tabIndex = 0;
+    const open = (e) => { e.preventDefault(); e.stopPropagation(); openColorMenu(key, s); };
+    s.addEventListener('click', open);
+    s.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') open(e); });
+    return s;
+  }
+  function paintColorBadge(s, key, shown) {
+    s.hidden = !shown;
+    s.classList.toggle('set', !!paints[key]);
+    s.style.setProperty('--c', paints[key] || 'transparent');
+    const label = key === 'concrete' ? (paints.concrete ? `Concrete colour: ${paints.concrete}. Click to change.` : 'Concrete colour: plain grey. Click to choose a colour.')
+      : paints.paint ? `Paint colour: ${paints.paint}. Click to change.` : 'Paint: washing paint off. Click to choose a colour.';
+    s.title = label;
+    s.setAttribute('aria-label', label);
+  }
+  function openColorMenu(key, anchor) {
+    const again = tintMenu && tintMenu.dataset.kind === key;
+    closeTintMenu();
+    if (again) return;
+    const noun = key === 'concrete' ? 'Concrete' : 'Paint';
+    const m = document.createElement('div');
+    m.className = 'tint-menu';
+    m.dataset.kind = key;
+    m.setAttribute('role', 'dialog');
+    m.setAttribute('aria-label', `${noun} colour`);
+    m.innerHTML = `<div class="tint-head"><b>${noun} colour</b><span>${paints[key] || (key === 'concrete' ? 'plain' : 'wash off')}</span></div>`;
+    const choose = (hex) => {
+      paints[key] = hex;
+      store.set('paints', paints);
+      closeTintMenu();
+      select({ kind: 'element', t: ELEM.byKey[key].id }); // and pick it up to paint with
+      refreshTable();
+    };
+    const grid = document.createElement('div');
+    grid.className = 'tint-grid swatches';
+    const plain = document.createElement('button');
+    plain.type = 'button';
+    plain.className = `tint-opt${paints[key] ? '' : ' on'}`;
+    plain.innerHTML = '<span class="tint-dot"></span><span class="tint-name"></span>';
+    plain.querySelector('.tint-name').textContent = key === 'concrete' ? 'Plain' : 'Wash off';
+    plain.title = key === 'concrete' ? 'Plain grey concrete' : 'Take paint off whatever the brush touches';
+    plain.addEventListener('click', () => choose(null));
+    grid.append(plain);
+    for (const hex of PALETTE) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = `tint-chip${paints[key] === hex ? ' on' : ''}`;
+      b.style.setProperty('--c', hex);
+      b.title = hex;
+      b.setAttribute('aria-label', hex);
+      b.addEventListener('click', () => choose(hex));
+      grid.append(b);
+    }
+    const any = document.createElement('label');
+    any.className = 'tint-any';
+    any.innerHTML = '<input type="color"><span>Any colour…</span>';
+    const input = any.querySelector('input');
+    input.value = paints[key] || '#9a9a94';
+    input.addEventListener('change', () => choose(input.value));
+    const foot = document.createElement('p');
+    foot.className = 'tint-note';
+    foot.textContent = key === 'concrete' ? 'Concrete is laid in this colour. Pictures from the Image tool are built of concrete too.'
+      : 'Paint recolours anything under the brush: stone, water, plants, even people. The bucket shape paints a whole area.';
+    m.append(grid, any, foot);
+    m.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeTintMenu(); anchor.focus(); } });
+    document.body.append(m);
+    const r = anchor.getBoundingClientRect(), w = m.offsetWidth, h = m.offsetHeight;
+    m.style.left = `${Math.max(8, Math.min(innerWidth - w - 8, r.right - w))}px`;
+    m.style.top = `${r.bottom + 6 + h < innerHeight ? r.bottom + 6 : Math.max(8, r.top - h - 6)}px`;
+    tintMenu = m;
+    document.addEventListener('pointerdown', outsideTint, true);
+    (m.querySelector('.on') || plain).focus();
+  }
+
+  // ───── the Image tool ─────
+  // A picture from a file, chosen when the Image tile is clicked; main.js builds it in concrete.
+  let picture = null; // { img, name, sized }
+  const filePick = document.createElement('input');
+  filePick.type = 'file'; filePick.accept = 'image/*'; filePick.hidden = true;
+  filePick.addEventListener('change', () => {
+    const f = filePick.files && filePick.files[0];
+    filePick.value = '';
+    if (!f) return;
+    const url = URL.createObjectURL(f), img = new Image();
+    img.onload = () => {
+      picture = { img, name: f.name, sized: null };
+      note('Picture ready', 'Click the map to build it in concrete. The brush size sets how big.');
+      renderInspect();
+    };
+    img.onerror = () => note('That file isn’t a picture', 'Pick a PNG, JPEG, GIF or WebP image.');
+    img.src = url;
+  });
+  function pickPicture() { filePick.click(); }
 
   // ───── colours for glass and fire ─────
   // The dot in the corner of the Glass and Fire tiles: the colour they paint in (tints.js keeps
@@ -109,7 +221,7 @@
     s.className = 'tint-badge';
     s.setAttribute('role', 'button');
     s.tabIndex = 0;
-    const open = (e) => { e.preventDefault(); e.stopPropagation(); openTintMenu(Tints.kindOf(t), s); };
+    const open = (e) => { e.preventDefault(); e.stopPropagation(); openTintMenu(Tints.kindOf(t), s, t); };
     s.addEventListener('click', open);
     s.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') open(e); });
     return s;
@@ -120,7 +232,7 @@
     s.classList.toggle('none', !made);
     s.classList.toggle('set', !!pick);
     s.style.setProperty('--c', pick ? pick.color : 'transparent');
-    const noun = kind === 'glass' ? 'Glass' : 'Fire';
+    const noun = list[t].name;
     const label = pick ? `${noun} colour: ${pick.name} (${pick.d.name.toLowerCase()}). Click to change.`
       : made ? `${noun} colours: ${made} made. Click to choose one.`
         : kind === 'glass' ? 'Glass colours: stir a metal into molten glass to make the first.' : 'Fire colours: colour a flame with an element to make the first.';
@@ -136,7 +248,7 @@
     document.removeEventListener('pointerdown', outsideTint, true);
   }
   const outsideTint = (e) => { if (tintMenu && !tintMenu.contains(e.target) && !e.target.closest('.tint-badge')) closeTintMenu(); };
-  function openTintMenu(kind, anchor) {
+  function openTintMenu(kind, anchor, t = Tints.base(kind)) {
     const again = tintMenu && tintMenu.dataset.kind === kind;
     closeTintMenu();
     if (again) return; // a second click on the dot closes it
@@ -169,7 +281,7 @@
         if (o && !o.open) { note(o.d.name, b.title + '.'); return; }
         Tints.choose(kind, o ? o.t : 0);
         closeTintMenu();
-        select({ kind: 'element', t: Tints.base(kind) }); // and pick up the glass or fire to paint with
+        select({ kind: 'element', t }); // and pick up the glass, fire or explosion to paint with
       });
       return b;
     };
@@ -215,7 +327,7 @@
     b.title = title;
     b.setAttribute('aria-label', isOpen ? d.name : 'Undiscovered element');
     const badge = b.querySelector('.tint-badge');
-    if (badge) paintBadge(badge, d.id, isOpen);
+    if (badge) { if (d.key in paints) paintColorBadge(badge, d.key, isOpen); else paintBadge(badge, d.id, isOpen); }
   }
 
   function buildTable() {
@@ -437,12 +549,11 @@
         if (Lab.has(d.id)) el.append(tryLine(d));
       }
       const tint = Tints.kindOf(d.id) && Tints.chosen(Tints.kindOf(d.id));
-      if (tint) { // painting glass or fire in a colour
-        const line = document.createElement('div');
-        line.className = 'try done';
-        line.textContent = `Painting in ${tint.name}, from ${tint.d.name.toLowerCase()}.`;
-        el.append(line);
-      }
+      const line = (text, done) => { const l = document.createElement('div'); l.className = done ? 'try done' : 'try'; l.textContent = text; el.append(l); };
+      if (tint) line(`Painting in ${tint.name}, from ${tint.d.name.toLowerCase()}.`, true); // glass, fire or an explosion in a colour
+      if (d.key === 'concrete' && paints.concrete) line(`Laying it in ${paints.concrete}.`, true);
+      if (d.key === 'paint') line(paints.paint ? `Painting in ${paints.paint}.` : 'Washing paint off.', true);
+      if (d.key === 'image') line(picture ? `Picture: ${picture.name}. Click the map to build it; click the tile for another.` : 'Click the Image tile to choose a picture.', !!picture);
     }
   }
 
@@ -943,6 +1054,7 @@ ${tried ? '★ Done' : 'Try it'}: ${TryIt.text(d.id)}` : ''}`
       m.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !m.dataset.sticky) closeModal(m); });
     });
     if (!store.get('welcomed', false)) openModal('#welcome');
+    document.body.append(filePick);
   }
 
   G.UI = {
@@ -954,5 +1066,8 @@ ${tried ? '★ Done' : 'Try it'}: ${TryIt.text(d.id)}` : ''}`
     swatch: (t, w, h) => cloneCanvas(swatchFor(t, w, h)),
     toolName: (name) => TOOL_INFO[name][0],
     weaponColor: (name) => WEAPON_INFO[name][3],
+    // the colour Concrete is laid in, or the Paint tool paints in (0xrrggbb, 0 for none)
+    paintColor: (t) => (list[t].key in paints ? paintRGB(list[t].key) : 0),
+    picture: () => picture,
   };
 })(globalThis);

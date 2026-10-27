@@ -24,7 +24,7 @@
       options: P.filter((d) => d.flameColor).map((d) => ({ t: d.id, d, color: d.flameColor, name: Lab.result('flame', d).band })),
     },
   };
-  const kindOf = (t) => (t === ID.GLASS ? 'glass' : t === ID.FIRE ? 'fire' : null);
+  const kindOf = (t) => (t === ID.GLASS ? 'glass' : t === ID.FIRE || t === ID.EXPLOSION ? 'fire' : null); // an explosion burns in fire's colours
   const optionOf = (kind, t) => KINDS[kind].options.find((o) => o.t === t) || null;
 
   // ───── what is open, and what is chosen ─────

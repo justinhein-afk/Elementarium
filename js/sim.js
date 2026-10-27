@@ -20,6 +20,7 @@
     CLOUD, RAINCLOUD, STORMCLOUD, SNOWCLOUD, FOG, HAIL, CO2, DRYICE, CLAY, SOAP, FOAM, DRYGRASS,
     ACORN, GRASSSEED, CACTUSSEED, VINESEED, SPORES, LILYSEED, SAPLING, GRASS, CACTUS, VINE, MUSHROOM, LILY,
     LITTER, BRICK, RUBBLE, SPLINTERS, SHARDS,
+    SOIL, CONCRETE, CEMENT, ALCOHOL, VINEGAR, LIGHT, PINE, PINECONE, PALM, COCONUT, WILLOW, CATKIN,
   } = ID;
 
   const BOUND = 255; // invisible border cell, so neighbour lookups never need bounds checks
@@ -169,14 +170,36 @@
   }
   for (const t of [GUNPOWDER, METHANE, OIL, NAPALM, THERMITE, NITRO, EL_H]) P_VOLATILE[t] = 1;
   for (const t of [FISH, WORM, FIREFLY, PLANT, FLOWER, SEED, MOSS, HUMAN, HEAD, BIRD, ANT,
-    ACORN, GRASSSEED, CACTUSSEED, VINESEED, SPORES, LILYSEED, SAPLING, GRASS, CACTUS, VINE, MUSHROOM, LILY]) P_LIVING[t] = 1;
+    ACORN, GRASSSEED, CACTUSSEED, VINESEED, SPORES, LILYSEED, SAPLING, GRASS, CACTUS, VINE, MUSHROOM, LILY,
+    PINE, PINECONE, PALM, COCONUT, WILLOW, CATKIN]) P_LIVING[t] = 1;
   // living plant tissue, which needs water from its roots (see thirst())
   const P_SAP = new Uint8Array(NT);
-  for (const t of [PLANT, FLOWER, GRASS, CACTUS, VINE, MUSHROOM, LILY, SAPLING]) P_SAP[t] = 1;
+  for (const t of [PLANT, FLOWER, GRASS, CACTUS, VINE, MUSHROOM, LILY, SAPLING, PINE, PALM, WILLOW]) P_SAP[t] = 1;
+  // the growing tips of trees (the Oak, Pine, Palm and Willow tiles); see tree growth in createWorld
+  const TREE = new Uint8Array(NT);
+  for (const t of [SAPLING, PINE, PALM, WILLOW]) TREE[t] = 1;
   // painting one of these plants it (see sow()); over bare ground it drops this seed instead
   const SEED_OF = new Int16Array(NT);
   SEED_OF[PLANT] = SEED; SEED_OF[FLOWER] = SEED; SEED_OF[GRASS] = GRASSSEED; SEED_OF[CACTUS] = CACTUSSEED;
   SEED_OF[VINE] = VINESEED; SEED_OF[MUSHROOM] = SPORES; SEED_OF[LILY] = LILYSEED;
+  SEED_OF[SAPLING] = ACORN; SEED_OF[PINE] = PINECONE; SEED_OF[PALM] = COCONUT; SEED_OF[WILLOW] = CATKIN;
+  // things that kill a plant they touch (alcohol dries it out, vinegar is a weedkiller)
+  const PLANTISH = [PLANT, FLOWER, GRASS, VINE, MOSS, MUSHROOM, LILY, CACTUS, DRYGRASS];
+  // vinegar, a weak acid, on metals: how fast it fizzes hydrogen off each (magnesium hard, zinc and
+  // iron slowly, copper, silver and gold not at all); alkali metals take it as they take water
+  const P_VINEGAR = new Float32Array(NT);
+  for (const [sym, v] of [['Mg', 0.08], ['Ca', 0.06], ['Sr', 0.06], ['Ba', 0.06], ['Ra', 0.06], ['Zn', 0.035], ['Mn', 0.03],
+    ['Fe', 0.012], ['Cd', 0.012], ['Co', 0.008], ['Pb', 0.008], ['Ni', 0.006], ['Sn', 0.006], ['Al', 0.004], ['Cr', 0.004], ['Be', 0.004]]) {
+    if (ID['EL_' + sym.toUpperCase()] !== undefined) P_VINEGAR[ID['EL_' + sym.toUpperCase()]] = v;
+  }
+  for (const d of list) if (d.periodic && d.fam === 'ln' && d.chem && d.chem.acidH && !P_VINEGAR[d.id]) P_VINEGAR[d.id] = 0.02;
+  // a painted colour (the col array): 0x1000000 | rgb, and 0x2000000 more for a picture's exact pixel
+  const PAINTED = 0x1000000, EXACT = 0x2000000;
+  const rgbOf = (hex) => PAINTED | parseInt(hex.slice(1), 16);
+  const VERDIGRIS = rgbOf('#3fa98a'), TINCTURE = rgbOf('#8a4a1c');
+  // light through stained glass takes its colour
+  const GLASS_RGB = new Uint32Array(NT);
+  for (const d of list) if (d.glassColor) GLASS_RGB[d.id] = rgbOf(d.glassColor);
   for (const t of [METAL, MMETAL, BATTERY]) P_METALLIC[t] = 1;
   // gases that sink or hover rather than always rising
   P_BUOY[CO2] = -0.5; P_GDENS[CO2] = 0.65;   // 1.98 g/L: pools on the floor
@@ -290,6 +313,11 @@
   rx(HAIL, LAVA, 0.5, WATER, KEEP, EV_SIZZLE);
   rx(DRYICE, LAVA, 0.5, CO2, KEEP, EV_SIZZLE);
   rx(DRYGRASS, WATER, 0.05, PLANT, EMPTY);     // a soaking greens parched grass again
+  rx(FIRE, VINEGAR, 0.5, STEAM, KEEP, EV_SIZZLE);
+  rx(VINEGAR, LAVA, 0.25, STEAM, OBSIDIAN, EV_SIZZLE);
+  rx(METAL, VINEGAR, 0.004, RUST, KEEP);        // iron soaked in vinegar rusts fast
+  rx(CEMENT, LAVA, 0.2, CONCRETE, KEEP);        // baked hard at once
+  for (const t of PLANTISH) { rx(ALCOHOL, t, 0.04, KEEP, LITTER); rx(VINEGAR, t, 0.05, KEEP, LITTER); }
 
   // ───────────── world ─────────────
   function createWorld(W, H) {
@@ -305,6 +333,7 @@
     const vy = new Float32Array(N);
     const vx = new Float32Array(N);
     const sap = new Uint8Array(N); // water reaching each living plant cell (see thirst())
+    const col = new Uint32Array(N); // a colour painted on the cell (PAINTED | rgb), or 0 for its own
 
     // the air field (see AS above). avx[a] is the flow across the right-hand face of air cell a
     // and avy[a] across its bottom face; positive means rightward / downward.
@@ -364,7 +393,7 @@
 
     function clear() {
       type.fill(EMPTY); flags.fill(0); charge.fill(0); aux.fill(0); stamp.fill(0);
-      data.fill(0); temp.fill(ambient); vy.fill(0); vx.fill(0); sap.fill(0);
+      data.fill(0); temp.fill(ambient); vy.fill(0); vx.fill(0); sap.fill(0); col.fill(0);
       avx.fill(0); avy.fill(0); ap.fill(0);
       disasters.length = 0;
       for (let x = 0; x < SW; x++) { type[x] = BOUND; type[(SH - 1) * SW + x] = BOUND; }
@@ -385,7 +414,7 @@
 
     // Change a cell's element in place, keeping its temperature. Counts as a discovery.
     function transform(i, t) {
-      type[i] = t; flags[i] = 0; aux[i] = 0; charge[i] = 0; vy[i] = 0; vx[i] = 0;
+      type[i] = t; flags[i] = 0; aux[i] = 0; charge[i] = 0; vy[i] = 0; vx[i] = 0; col[i] = 0;
       data[i] = initData(t); stamp[i] = now; sap[i] = P_SAP[t] ? 160 : 0;
       if (t === FIRE) { if (temp[i] < 700) temp[i] = 700 + rnd() * 250; }
       else if (t === PLASMA) { if (temp[i] < 3000) temp[i] = 3000 + rnd() * 1500; }
@@ -395,7 +424,7 @@
 
     // Put a fresh element at its default temperature (painting, scenes). Never a discovery.
     function place(i, t) {
-      type[i] = t; flags[i] = 0; aux[i] = 0; charge[i] = 0; vy[i] = 0; vx[i] = 0; stamp[i] = 0;
+      type[i] = t; flags[i] = 0; aux[i] = 0; charge[i] = 0; vy[i] = 0; vx[i] = 0; stamp[i] = 0; col[i] = 0;
       data[i] = initData(t); temp[i] = P_TEMP[t]; shade[i] = (rnd() * 256) | 0; sap[i] = P_SAP[t] ? 200 : 0;
       if (t === FISH || t === FIREFLY || t === BIRD) aux[i] = rnd() < 0.5 ? 1 : 0;
       else if (t === HUMAN) aux[i] = (((rnd() * 127) | 0) << 1) | (rnd() < 0.5 ? 1 : 0);
@@ -412,6 +441,7 @@
       v = temp[a]; temp[a] = temp[b]; temp[b] = v;
       v = vy[a]; vy[a] = vy[b]; vy[b] = v;
       v = vx[a]; vx[a] = vx[b]; vx[b] = v;
+      v = col[a]; col[a] = col[b]; col[b] = v;
       stamp[a] = now; stamp[b] = now;
     }
 
@@ -549,12 +579,17 @@
     function fling(j, dx, dy, d, r, power) {
       let s = power * (2.2 + 3.4 * Math.max(0, 1 - (d - r) / r)) * (0.6 + 0.8 * rnd());
       if (catOf(j) === C_LIQUID) s *= Math.max(0.1, Math.min(1.4, 10 / densOf(j)));
+      else s *= heft(j); // a heavy grain (gold, lead) is thrown less far than ash
       const k = d > 0 ? s / d : 0, kick = d > 0 ? 0 : s;
       let ux = vx[j] + dx * k, uy = vy[j] + dy * k - power - kick;
       vx[j] = ux > MAXV ? MAXV : ux < -MAXV ? -MAXV : ux;
       vy[j] = uy > MAXV ? MAXV : uy < -MAXV ? -MAXV : uy;
       flags[j] &= ~SETTLED;
     }
+
+    // How readily a shove moves this cell, from its density: about 1 for sand, more for ash and snow,
+    // less for heavy metal grains. Blasts, tornadoes, earthquakes and black holes all go by it.
+    function heft(j) { return Math.max(0.45, Math.min(1.5, Math.sqrt(15 / Math.max(0.1, densOf(j))))); }
 
     // The flame-colouring element most common in the heart of a blast, or 0. Metal salts packed
     // into black powder are how fireworks get their colours (strontium red, barium green, copper
@@ -920,6 +955,7 @@
       }
     }
 
+    // A stem's aux is the colour its flower will be, or 0 for a plain plant that never blooms.
     function growPlant(i) {
       const b = data[i];
       if (b <= 0 || sap[i] < 100 || rnd() > 0.07) return;
@@ -933,13 +969,13 @@
           if (type[s] === EMPTY) { transform(s, PLANT); flags[s] = LEAF; }
         }
         if (b > 10 && rnd() < 0.07) {
-          const s = j + (rnd() < 0.5 ? -2 : 2);
+          const s = j - SW + (rnd() < 0.5 ? -1 : 1); // a side shoot, joined to the stem at a corner
           if (type[s] === EMPTY) { transform(s, PLANT); data[s] = (b * 0.55) | 0; aux[s] = hue; }
         }
-        if (b - 1 <= 0) bloom(j, hue);
+        if (b - 1 <= 0 && hue) bloom(j, hue);
       } else {
         data[i] = b - 1;
-        if (b - 1 <= 0 && rnd() < 0.5) bloom(i, aux[i]);
+        if (b - 1 <= 0 && aux[i] && rnd() < 0.5) bloom(i, aux[i]);
       }
     }
 
@@ -947,14 +983,16 @@
 
     // ───── the other plants ─────
     // Soil a root can take hold in: mud always, dirt unless a story chapter has parched it.
-    function soil(t) { return t === MUD || (t === DIRT && !rules.drySoil); }
+    function soil(t) { return t === MUD || ((t === DIRT || t === SOIL) && !rules.drySoil); }
     function wetBeside(i) {
       for (let k = 0; k < 8; k++) { const t = type[i + N8[k]]; if (isWater(t) || t === MUD) return true; }
       return false;
     }
-    // Water or mud within two cells.
-    function damp(i) {
-      for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) {
+    // Water or mud within two cells (or within r).
+    function damp(i, r = 2) {
+      const x0 = cx(i), y0 = cy(i);
+      for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+        if (x0 + dx < 0 || x0 + dx >= W || y0 + dy < 0 || y0 + dy >= H) continue;
         const t = type[i + dy * SW + dx];
         if (isWater(t) || t === MUD) return true;
       }
@@ -1004,11 +1042,23 @@
           if (!isWater(type[i - SW]) || !pondFloor(i) || rnd() > 0.01) return false;
           startPlant(i, LILY);
           return true;
+        case PINECONE:
+          if (!open || !soil(below) || rnd() > (mud ? 0.008 : 0.003)) return false;
+          startPlant(i, PINE);
+          return true;
+        case COCONUT: // washed up on a beach, or dropped on soil
+          if (!open || !(below === SAND || soil(below)) || rnd() > 0.004) return false;
+          startPlant(i, PALM);
+          return true;
+        case CATKIN:
+          if (!open || !soil(below) || !damp(i, 5) || rnd() > 0.01) return false;
+          startPlant(i, WILLOW);
+          return true;
       }
       return false;
     }
 
-    function fungusBed(t) { return t === DIRT || t === MUD || t === WOOD || t === ASH || t === MOSS; }
+    function fungusBed(t) { return t === DIRT || t === SOIL || t === MUD || t === WOOD || t === ASH || t === MOSS; }
     // A firm bottom under i for a water lily to root in (mud best, but any will do).
     function pondFloor(i) {
       const b = type[i + SW];
@@ -1020,9 +1070,12 @@
     // The first cell of a plant of kind t, growing at i: what a seed sprouts into.
     function startPlant(i, t) {
       switch (t) {
-        case PLANT: transform(i, PLANT); data[i] = 16 + ((rnd() * 36) | 0); aux[i] = (rnd() * 256) | 0; return;
-        case FLOWER: transform(i, PLANT); data[i] = 3 + ((rnd() * 6) | 0); aux[i] = (rnd() * 256) | 0; return; // a short stem that blooms soon
+        case PLANT: transform(i, PLANT); data[i] = 16 + ((rnd() * 36) | 0); aux[i] = 0; return; // leafy, never flowers
+        case FLOWER: transform(i, PLANT); data[i] = 3 + ((rnd() * 6) | 0); aux[i] = 1 + ((rnd() * 255) | 0); return; // a short stem that blooms soon
         case SAPLING: transform(i, SAPLING); data[i] = 10 + ((rnd() * 14) | 0); aux[i] = 0; return;
+        case PINE: transform(i, PINE); data[i] = 28 + ((rnd() * 16) | 0); aux[i] = 0; return;
+        case PALM: transform(i, PALM); data[i] = 15 + ((rnd() * 12) | 0); aux[i] = 0; if (rnd() < 0.5) flags[i] = PETAL; return; // PETAL: it leans right
+        case WILLOW: transform(i, WILLOW); data[i] = 16 + ((rnd() * 6) | 0); aux[i] = 0; return;
         case GRASS: transform(i, GRASS); data[i] = 1 + ((rnd() * 2) | 0); return;
         case CACTUS: transform(i, CACTUS); data[i] = 7 + ((rnd() * 10) | 0); aux[i] = 0; return;
         case VINE: transform(i, VINE); data[i] = 28 + ((rnd() * 30) | 0); return;
@@ -1036,12 +1089,13 @@
       if (t === LILY) return isWater(type[i]) && isWater(type[i - SW]) && pondFloor(i);
       if (type[i] !== EMPTY) return false;
       if (t === CACTUS) return below === SAND;
+      if (t === PALM) return below === SAND || soil(below);
       if (t === MUSHROOM) return fungusBed(below);
       return soil(below);
     }
     // Another plant too close to start one here?
     function crowded(i, t) {
-      const R = t === CACTUS ? 4 : 3, x0 = cx(i);
+      const R = t === CACTUS ? 4 : t === PINE ? 5 : TREE[t] ? 7 : 3, x0 = cx(i);
       for (let dy = -3; dy <= 1; dy++) {
         for (let dx = -R; dx <= R; dx++) {
           if (x0 + dx < 0 || x0 + dx >= W) continue;
@@ -1056,9 +1110,51 @@
     // Every living plant cell holds some sap (0–255): the water reaching it. Cells touching wet
     // soil (or water, for water plants; a trunk, for leaves) are topped up; the rest take what
     // their neighbours have, a little less with each cell, so water climbs a plant from its roots.
-    // A plant cut off from its roots, set on bare rock, frozen or scorched dries out: it yellows,
-    // stops growing, then dies and crumbles into dead leaves. Each cell is checked every 8 ticks.
-    const SAP_LOSS = 3, SAP_DRY = 2;
+    // A plant set on bare rock, frozen or scorched dries out: it yellows, stops growing, then dies and
+    // crumbles into dead leaves. Each cell is checked every 8 ticks. A tree's trunk carries water too
+    // while it lives (wood with LEAF; see trunk()), losing less on the way up. A plant (or a tree)
+    // that no longer touches the ground at all, left hanging in the air, dies in about three seconds:
+    // see rootPass().
+    const SAP_LOSS = 3, SAP_DRY = 2, CUT_DRY = 16;
+    // Which living cells still reach the ground (anything solid, loose or liquid that is not part of
+    // a plant, or the world's edge) through the plant they belong to. Worked out every 16 ticks.
+    const rooted = new Uint8Array(N);
+    let rootQ = new Int32Array(4096), rootsKnown = false;
+    function alive(i) { const t = type[i]; return P_SAP[t] === 1 || (t === WOOD && (flags[i] & LEAF) !== 0); }
+    // A living trunk's roots reach down past a one-cell gap (mud that flowed out from under it, soil
+    // washed away): the cell two below it, if that is ground, or -1.
+    function rootReach(i) {
+      if (type[i] !== WOOD || type[i + SW] !== EMPTY) return -1;
+      return holdsUp(i + 2 * SW) ? i + 2 * SW : -1;
+    }
+    // Is n ground a plant can stand on? Anything solid, loose or liquid, or the world's edge; but not
+    // a plant's own debris: dead leaves, seeds, a dead tree's wood (PETAL alone), nor living plant.
+    function holdsUp(n) {
+      const nt = type[n];
+      if (nt === BOUND) return true;
+      if (nt === EMPTY || alive(n) || nt === LITTER || P_LIVING[nt] || (nt === WOOD && (flags[n] & PETAL))) return false;
+      const c = catOf(n);
+      return c === C_STATIC || c === C_POWDER || c === C_LIQUID;
+    }
+    function rootPass() {
+      rooted.fill(0);
+      let tail = 0;
+      const push = (i) => {
+        rooted[i] = 1;
+        if (tail === rootQ.length) { const q = new Int32Array(tail * 2); q.set(rootQ); rootQ = q; }
+        rootQ[tail++] = i;
+      };
+      for (let i = SW + 1; i < N - SW - 1; i++) {
+        if (!alive(i)) continue;
+        for (let k = 0; k < 8; k++) if (holdsUp(i + N8[k])) { push(i); break; }
+        if (!rooted[i] && rootReach(i) >= 0) push(i);
+      }
+      for (let head = 0; head < tail; head++) {
+        const i = rootQ[head];
+        for (let k = 0; k < 8; k++) { const n = i + N8[k]; if (!rooted[n] && alive(n)) push(n); }
+      }
+      rootsKnown = true;
+    }
     // How much water a plant cell of kind t draws from a neighbouring cell of kind n.
     function drink(t, n) {
       const parch = ambient > 30 ? (ambient - 30) * 8 : 0; // a heatwave dries out the ground
@@ -1066,23 +1162,28 @@
         case WATER: return 255;
         case SALTWATER: return t === LILY ? 170 : 90;
         case MUD: return 255;
-        case DIRT: return rules.drySoil ? 70 : 235 - parch;
+        case DIRT: case SOIL: return rules.drySoil ? 70 : 235 - parch;
         case ASH: return 170 - parch;
-        case SAND: return (t === CACTUS ? 235 : t === GRASS ? 110 : 60) - (t === CACTUS ? 0 : parch);
-        case WOOD: return t === PLANT || t === SAPLING || t === MUSHROOM ? 230 : 0; // leaves on a trunk
+        case SAND: return (t === CACTUS || t === PALM ? 235 : t === GRASS ? 110 : 60) - (t === CACTUS || t === PALM ? 0 : parch);
+        case WOOD: return t === MUSHROOM ? 230 : 0; // dead wood feeds only a fungus (a living trunk: see thirst())
         case MOSS: return t === MUSHROOM ? 200 : 0;
         case CLAY: return 40;
       }
       return 0;
     }
     function thirst(i, t) {
+      const isTrunk = t === WOOD, roots = isTrunk ? (flags[i] & PETAL ? PALM : SAPLING) : t;
       let best = 0, open = false;
       for (let k = 0; k < 8; k++) {
         const n = i + N8[k], nt = type[n];
-        const v = P_SAP[nt] ? sap[n] - SAP_LOSS : drink(t, nt);
+        let v;
+        if (nt === WOOD && (flags[n] & LEAF)) v = sap[n] - (isTrunk ? 1 : SAP_LOSS); // up the trunk, out to the leaves
+        else if (P_SAP[nt]) v = isTrunk ? 0 : sap[n] - SAP_LOSS; // a trunk draws only from the ground
+        else v = drink(roots, nt);
         if (v > best) best = v;
         if (nt === EMPTY) open = true;
       }
+      if (isTrunk) { const j = rootReach(i); if (j >= 0) { const v = drink(roots, type[j]); if (v > best) best = v; } }
       let s = sap[i];
       let T = temp[i];
       if (open && ambient < T) T = ambient; // out in the open a plant is as cold as the air
@@ -1091,7 +1192,9 @@
         s = best >= s ? best : s - SAP_DRY; // fills at once, dries slowly
         if (T > 50) s -= (T - 50) * 0.25; // scorched by nearby heat
       }
+      if (rootsKnown && !rooted[i] && stamp[i] !== now) s -= CUT_DRY; // hanging in the air: it dies fast
       if (s <= 0) {
+        if (isTrunk) { flags[i] = (flags[i] & BURN) | PETAL; sap[i] = 0; return false; } // a dead tree's wood stays (PETAL marks it)
         if (t === MUSHROOM) transform(i, DIRT); // a fungus rots
         else transform(i, LITTER); // dried out, it crumbles into dead leaves
         return true;
@@ -1105,27 +1208,70 @@
     }
 
 
-    function leaf(j) { transform(j, PLANT); flags[j] = LEAF; data[j] = 0; }
+    // ───── trees ─────
+    // A tree is a growing tip (the Oak, Pine, Palm and Willow tiles) that climbs, leaving living
+    // trunk behind it, then spreads its crown. Living trunk is wood with LEAF (and PETAL too for a
+    // palm's, which drinks from sand); leaves are plant cells with LEAF, and aux says whose they are,
+    // for their colour.
+    const OAK_LEAF = 0, PINE_LEAF = 1, PALM_LEAF = 2, WILLOW_LEAF = 3;
+    function trunk(j, palm) { transform(j, WOOD); flags[j] = palm ? LEAF | PETAL : LEAF; sap[j] = 220; }
+    function leaf(j, kind = OAK_LEAF) { transform(j, PLANT); flags[j] = LEAF; data[j] = 0; aux[j] = kind; }
     // Does j touch the tree: a leaf, its wood or its growing tip?
     function onTree(j) {
-      for (let k = 0; k < 4; k++) { const t = type[j + N4[k]]; if (t === PLANT || t === WOOD || t === SAPLING) return true; }
+      for (let k = 0; k < 4; k++) { const t = type[j + N4[k]]; if (t === PLANT || t === WOOD || TREE[t]) return true; }
       return false;
     }
+    // Seeds dropped round a tree, onto whatever lies under the crown.
+    function dropSeeds(x0, y0, R, seed, n) {
+      for (let k = 0; k < n; k++) {
+        const x = x0 + ((rnd() * (2 * R + 1)) | 0) - R;
+        if (x < 0 || x >= W) continue;
+        let y = y0;
+        while (y < H - 1 && type[idx(x, y)] !== EMPTY) y++;
+        if (y < H - 1) place(idx(x, y), seed);
+      }
+    }
+    // One step of a young tree's climb: the tip moves up (or up and aside, for a leaning palm) and
+    // leaves trunk behind, `foot` cells wide at the bottom. Returns false once the trunk is done.
+    function climb(i, t, lean, foot) {
+      const b = data[i], grown = aux[i], up = i - SW + lean;
+      if (b <= 0 || type[up] !== EMPTY || cy(i) <= 8) return false;
+      const f = flags[i] & PETAL;
+      transform(up, t); data[up] = b - 1; aux[up] = grown < 255 ? grown + 1 : 255; flags[up] = f; sap[up] = sap[i];
+      trunk(i, t === PALM);
+      if (grown < foot && type[i + 1] === EMPTY) trunk(i + 1, t === PALM);
+      return true;
+    }
+    // A broad crown of leaves round (x0, y0): radius R, flattened by `flat`. Puts out up to five
+    // leaves a call, from the budget in data[i]; returns true while there is more to put out.
+    function crown(i, R, flat, kind, tries = 5) {
+      const x0 = cx(i), y0 = cy(i);
+      for (let k = 0; k < tries && data[i] > 0; k++) {
+        const dx = ((rnd() * (2 * R + 1)) | 0) - R, dy = ((rnd() * (R + 3)) | 0) - R + 2;
+        if (dx * dx + dy * dy * flat > R * R) continue;
+        const x = x0 + dx, y = y0 + dy;
+        if (x < 0 || x >= W || y < 0 || y >= H) continue;
+        const j = idx(x, y);
+        if (type[j] === EMPTY && onTree(j)) { leaf(j, kind); data[i]--; }
+        else if (rnd() < 0.1) data[i]--; // a crowded crown gives up sooner
+      }
+      return data[i] > 0;
+    }
     // A short limb angling up and out of the trunk, with a tuft of leaves at its end.
-    function branch(i, dir) {
+    function branch(i, dir, kind = OAK_LEAF) {
       let j = i;
       const len = 3 + ((rnd() * 4) | 0);
       for (let s = 0; s < len; s++) {
         const n = j + dir - (s & 1 ? SW : 0);
         if (type[n] !== EMPTY) break;
-        transform(n, WOOD); j = n;
+        trunk(n); j = n;
       }
       if (j === i) return;
       const x0 = cx(j);
       for (let dy = -2; dy <= 1; dy++) for (let dx = -2; dx <= 2; dx++) {
         if (dx * dx + dy * dy > 5 || rnd() < 0.3 || x0 + dx < 0 || x0 + dx >= W) continue;
         const n = j + dy * SW + dx;
-        if (type[n] === EMPTY) leaf(n);
+        if (type[n] === EMPTY) leaf(n, kind);
       }
     }
     // The growing tip of an oak. It climbs, leaving trunk behind (two cells wide at the foot),
@@ -1137,36 +1283,104 @@
       if (!(flags[i] & CENTER)) {
         const up = i - SW, b = data[i], grown = aux[i];
         if (b > 0 && type[up] === EMPTY && cy(i) > 8) {
-          transform(up, SAPLING); data[up] = b - 1; aux[up] = grown < 255 ? grown + 1 : 255;
-          transform(i, WOOD);
-          if (grown < 5 && type[i + 1] === EMPTY) transform(i + 1, WOOD);
+          transform(up, SAPLING); data[up] = b - 1; aux[up] = grown < 255 ? grown + 1 : 255; sap[up] = sap[i];
+          trunk(i);
+          if (grown < 5 && type[i + 1] === EMPTY) trunk(i + 1);
           else if (grown > 4 && b > 2 && rnd() < 0.25) branch(i, rnd() < 0.5 ? -1 : 1);
           return;
         }
         flags[i] |= CENTER; data[i] = 110 + ((rnd() * 60) | 0);
         return;
       }
-      const R = 9, x0 = cx(i), y0 = cy(i); // an oak's crown is broad and low
-      for (let k = 0; k < 5 && data[i] > 0; k++) {
-        const dx = ((rnd() * (2 * R + 1)) | 0) - R, dy = ((rnd() * (R + 3)) | 0) - R + 2;
-        if (dx * dx + dy * dy * 2.4 > R * R) continue;
-        const x = x0 + dx, y = y0 + dy;
+      if (crown(i, 9, 2.4, OAK_LEAF)) return; // an oak's crown is broad and low
+      const x0 = cx(i), y0 = cy(i);
+      trunk(i);
+      if (counts[SAPLING] < 24) dropSeeds(x0, y0, 9, ACORN, 2);
+    }
+
+    // Pine: a tall, straight trunk, then a cone of needles in tiers, narrow at the top and widest at
+    // the bottom, put out from the top down. data: trunk left to grow, then needles left to put out;
+    // aux: trunk grown so far.
+    function pine(i) {
+      if ((flags[i] & BURN) || sap[i] < 100 || rnd() > 0.09) return;
+      if (!(flags[i] & CENTER)) {
+        if (climb(i, PINE, 0, 2)) return;
+        const depth = Math.max(8, Math.round(aux[i] * 0.78));
+        flags[i] |= CENTER; data[i] = Math.round(depth * 3 + depth * depth * 0.38); // about as many needles as the cone holds
+        return;
+      }
+      const x0 = cx(i), y0 = cy(i), depth = Math.max(8, Math.round(aux[i] * 0.78));
+      for (let k = 0; k < 8 && data[i] > 0; k++) {
+        const dy = (rnd() * depth) | 0, hw = 1 + dy * 0.4 - (dy % 4 === 3 ? 1.6 : 0); // tiers: a notch every fourth row
+        if (hw < 0.5) continue;
+        const dx = Math.round((rnd() * 2 - 1) * hw), x = x0 + dx, y = y0 - 1 + dy;
         if (x < 0 || x >= W || y < 0 || y >= H) continue;
         const j = idx(x, y);
-        if (type[j] === EMPTY && onTree(j)) { leaf(j); data[i]--; }
-        else if (rnd() < 0.1) data[i]--; // a crowded crown gives up sooner
+        if (type[j] === EMPTY && onTree(j)) { leaf(j, PINE_LEAF); data[i]--; }
+        else if (rnd() < 0.08) data[i]--;
       }
       if (data[i] > 0) return;
-      transform(i, WOOD);
-      if (counts[SAPLING] < 24) {
-        for (let n = 0; n < 2; n++) {
-          const x = x0 + ((rnd() * (2 * R + 1)) | 0) - R;
-          if (x < 0 || x >= W) continue;
-          let y = y0;
-          while (y < H - 1 && type[idx(x, y)] !== EMPTY) y++;
-          if (y < H - 1) place(idx(x, y), ACORN);
+      leaf(i, PINE_LEAF); // the very top is needles
+      if (counts[PINECONE] < 30) dropSeeds(x0, y0, Math.round(depth * 0.4) + 1, PINECONE, 3);
+    }
+
+    // Palm: a bare trunk, leaning a little more as it climbs, then a crown of fronds that arch out
+    // and droop under their own weight, all at once. Coconuts fall from it now and then (see the
+    // PLANT case). flags PETAL: it leans right.
+    function palm(i) {
+      if ((flags[i] & BURN) || sap[i] < 100 || rnd() > 0.08) return;
+      if (!(flags[i] & CENTER)) {
+        const lean = aux[i] > 4 && rnd() < 0.2 ? (flags[i] & PETAL ? 1 : -1) : 0;
+        if (climb(i, PALM, lean, 1)) return;
+        flags[i] |= CENTER;
+        return;
+      }
+      const x0 = cx(i), y0 = cy(i);
+      for (let f = 0; f < 8; f++) {
+        const a = -Math.PI * (0.04 + f * 0.131) + (rnd() - 0.5) * 0.2; // fanned from right round to left
+        let fx = 0, fy = 0, ux = Math.cos(a), uy = Math.sin(a) * 0.8;
+        const len = 6 + ((rnd() * 5) | 0);
+        for (let s = 0; s < len; s++) {
+          fx += ux; fy += uy; uy += 0.17; // each frond bends down further along
+          const x = x0 + Math.round(fx), y = y0 + Math.round(fy);
+          if (x < 0 || x >= W || y < 0 || y >= H) break;
+          const j = idx(x, y);
+          if (type[j] === EMPTY) leaf(j, PALM_LEAF);
+          else if (type[j] !== PLANT) break;
         }
       }
+      trunk(i, true); // the crown's heart
+      if (counts[COCONUT] < 20) dropSeeds(x0, y0 + 1, 2, COCONUT, 2);
+    }
+
+    // Willow: a short, stout trunk with spreading limbs, a broad crown, and then long curtains of
+    // leaves hanging straight down from its underside.
+    function willow(i) {
+      if ((flags[i] & BURN) || sap[i] < 100 || rnd() > 0.08) return;
+      if (!(flags[i] & CENTER)) {
+        const grown = aux[i], b = data[i];
+        if (climb(i, WILLOW, 0, 3)) {
+          if (grown > 3 && b > 1 && rnd() < 0.4) branch(i, rnd() < 0.5 ? -1 : 1, WILLOW_LEAF);
+          return;
+        }
+        flags[i] |= CENTER; data[i] = 150 + ((rnd() * 50) | 0);
+        return;
+      }
+      if (crown(i, 11, 3.2, WILLOW_LEAF, 9)) return; // a big crown: more tries at a time
+      const x0 = cx(i), y0 = cy(i);
+      trunk(i);
+      for (let x = Math.max(0, x0 - 12); x <= Math.min(W - 1, x0 + 12); x++) {
+        if (rnd() < 0.35) continue;
+        let low = -1; // the lowest leaf of the crown in this column
+        for (let y = Math.max(0, y0 - 10); y <= Math.min(H - 1, y0 + 4); y++) {
+          const j = idx(x, y);
+          if (type[j] === PLANT && aux[j] === WILLOW_LEAF) low = j;
+        }
+        if (low < 0) continue;
+        const len = 4 + ((rnd() * 10) | 0);
+        for (let s = 1, j = low + SW; s <= len && type[j] === EMPTY; s++, j += SW) leaf(j, WILLOW_LEAF);
+      }
+      if (counts[CATKIN] < 40) dropSeeds(x0, y0, 10, CATKIN, 2);
     }
 
     // Grass: blades a cell to three tall that creep over bare soil on runners.
@@ -1444,7 +1658,7 @@
       return true;
     }
 
-    const ELECTROLYTE = (u) => u === SALTWATER || u === ACID;
+    const ELECTROLYTE = (u) => u === SALTWATER || u === ACID || u === VINEGAR; // a vinegar battery works too
     // light enough to drive a solar cell: open sky straight above (through glass, not cloud), or a
     // flame, lava or something glowing hot within two cells
     function lit(i) {
@@ -1459,7 +1673,7 @@
       for (let y = Math.max(0, y0 - 2); y <= Math.min(H - 1, y0 + 2); y++) {
         for (let x = Math.max(0, x0 - 2), j = idx(x, y); x <= Math.min(W - 1, x0 + 2); x++, j++) {
           const u = type[j];
-          if (u === FIRE || u === PLASMA || u === LAVA || u === EMBER || u === MSPARK || (flags[j] & BURN) || (u !== EMPTY && temp[j] > 900)) return true;
+          if (u === FIRE || u === PLASMA || u === LAVA || u === EMBER || u === MSPARK || u === LIGHT || (flags[j] & BURN) || (u !== EMPTY && temp[j] > 900)) return true;
         }
       }
       return false;
@@ -1615,8 +1829,26 @@
       }
       if (metalTricks(i, t, n, nt)) return true;
 
-      // alkali metals and water
-      if (P_WR_P[t] && isWater(nt) && rnd() < P_WR_P[t]) {
+      // alcohol: an alkali metal (or calcium) fizzes hydrogen off it gently and dissolves, without the
+      // bang that water brings
+      if (nt === ALCOHOL && (P_WR_P[t] || P_FIZZ[t]) && rnd() < 0.03) {
+        transform(n, EL_H); temp[i] += 30; events.fizz++; flashRx(n, EL_H);
+        if (rnd() < 0.25) { transform(i, ALCOHOL); return true; }
+        return false;
+      }
+      if (nt === VINEGAR) {
+        // vinegar is a weak acid: magnesium fizzes hard in it, zinc and iron slowly, and the metal is
+        // eaten away; copper only goes green with verdigris, and silver and gold never mind it
+        const v = P_VINEGAR[t];
+        if (v && rnd() < v) {
+          transform(n, EL_H); events.fizz++; flashRx(n, EL_H);
+          if (rnd() < 0.2) { transform(i, rnd() < 0.5 ? VINEGAR : EMPTY); return true; }
+          return false;
+        }
+        if (t === EL_CU && col[i] !== VERDIGRIS && rnd() < 0.004) { col[i] = VERDIGRIS; flashRx(i, EL_CU); }
+      }
+      // alkali metals and water (and vinegar, which is mostly water)
+      if (P_WR_P[t] && (isWater(nt) || nt === VINEGAR) && rnd() < P_WR_P[t]) {
         transform(n, rnd() < 0.5 ? EL_H : STEAM);
         temp[n] = 300;
         transform(i, FIRE); aux[i] = t; temp[i] = 1200;
@@ -1752,6 +1984,65 @@
       if (rnd() < 0.08) explode(cx(i), cy(i), 3, 0.8, t);
     }
 
+    // ───── light ─────
+    // A ray of light runs straight on, three cells a tick, until it fades or leaves the map. Clear
+    // things let it through (air and gases, water, ice, glass, diamond), and stained glass colours
+    // it on the way; metal bounces it off; whatever else it meets soaks it up: a phosphor or
+    // uranium glass glows, a solar cell makes current (see lit()), a plant drinks it in, and the
+    // rest warms a little. aux: its direction (0–7, clockwise from east); col: its colour, if any.
+    const RAY = new Int32Array([1, SW + 1, SW, SW - 1, -1, -SW - 1, -SW, -SW + 1]);
+    const RDX = [1, 1, 0, -1, -1, -1, 0, 1], RDY = [0, 1, 1, 1, 0, -1, -1, -1];
+    function rayDir(dx, dy) {
+      if (!dx && !dy) return (rnd() * 8) | 0;
+      return (Math.round(Math.atan2(dy, dx) / (Math.PI / 4)) + 8) & 7;
+    }
+    function seeThrough(j) {
+      const t = type[j];
+      if (t === GLASS || t === ICE || t === DIAMOND || isWater(t) || t === ALCOHOL || t === VINEGAR || t === CRYO) return true;
+      return t !== EMPTY && t !== BOUND && t !== SMOKE && t !== FOG && !IS_CLOUD[t] && catOf(j) === C_GAS;
+    }
+    const shiny = (t) => t === METAL || t === MMETAL || P_SOLID[t] === 1 || (P_PERIODIC[t] === 1 && P_METALLIC[t] === 1);
+    function unlight(i) { type[i] = EMPTY; flags[i] = 0; aux[i] = 0; data[i] = 0; col[i] = 0; charge[i] = 0; }
+    function shine(j) {
+      const t = type[j];
+      if (t === BOUND) return;
+      if (P_PHOS[t]) aux[j] = P_PHOS[t];
+      else if (t === GLASS && aux[j] === EL_U) data[j] = 120;
+      else if (P_SAP[t]) { if (sap[j] < 250) sap[j] += 5; if (t === PLANT && data[j] > 0 && rnd() < 0.3) growPlant(j); }
+      temp[j] += 4;
+    }
+    function ray(i) {
+      if (stamp[i] === now) return; // it moved here this tick
+      if (--data[i] <= 0) { unlight(i); return; }
+      let j = i;
+      for (let s = 0; s < 3; s++) {
+        const d = aux[j], n = j + RAY[d], nt = type[n];
+        if (nt === EMPTY || nt === LIGHT) { swap(j, n); j = n; continue; }
+        if (nt === BOUND) { unlight(j); return; }
+        if (seeThrough(n)) {
+          // through to the far side, taking stained glass's colour on the way
+          let m = n, k = 0;
+          for (; k < 48 && type[m] !== BOUND && seeThrough(m); k++, m += RAY[d]) if (type[m] === GLASS && GLASS_RGB[aux[m]]) col[j] = GLASS_RGB[aux[m]];
+          if (type[m] === EMPTY) { swap(j, m); j = m; continue; }
+          if (type[m] !== BOUND && k < 48) shine(m);
+          unlight(j); return;
+        }
+        if (shiny(nt)) {
+          // a bounce: off a flat face it flips the way the face looks; head on, straight back
+          const dx = RDX[d], dy = RDY[d];
+          let ndx = -dx, ndy = -dy;
+          if (dx && dy) {
+            const hb = type[j + dx] !== EMPTY, vb = type[j + dy * SW] !== EMPTY;
+            if (hb !== vb) { ndx = hb ? -dx : dx; ndy = vb ? -dy : dy; }
+          }
+          for (let q = 0; q < 8; q++) if (RDX[q] === ndx && RDY[q] === ndy) { aux[j] = q; break; }
+          continue;
+        }
+        shine(n); unlight(j); return;
+      }
+      stamp[j] = now;
+    }
+
     // ───── people and animals ─────
     function open(j) { const t = type[j]; return t === EMPTY || (t !== BOUND && catOf(j) === C_GAS); }
     function hazardAt(j) {
@@ -1830,9 +2121,9 @@
 
       if (panic <= 0) {
         const bt = type[i + SW];
-        if (rules.farming && rnd() < 0.0006 && (bt === DIRT || bt === MUD) && counts[PLANT] < 3000) {
+        if (rules.farming && rnd() < 0.0006 && (bt === DIRT || bt === SOIL || bt === MUD) && counts[PLANT] < 3000) {
           const s = i + (aux[i] & 1 ? -1 : 1);
-          if (type[s] === EMPTY) transform(s, SEED);
+          if (type[s] === EMPTY) { transform(s, SEED); aux[s] = 1; } // crops: plain plants
         }
         if (rnd() < 0.002) aux[i] ^= 1;
         if (rules.goalX >= 0 && rnd() < 0.02) { // travellers keep turning back toward where they are going
@@ -2437,7 +2728,10 @@
       if (flags[i] & BURN) {
         if (burn(i, t)) return;
       } else if (T > P_IGN[t]) {
-        if (!P_NEEDAIR[t] || hasAir(i)) ignite(i);
+        if (!P_NEEDAIR[t] || hasAir(i)) {
+          ignite(i);
+          for (let k = 0; k < 8; k++) { const f = flags[i + N8[k]] & DYE; if (f) { dye(i, f); break; } } // lit by a coloured blaze's heat, it burns in its colour
+        }
       }
 
       // 3. electricity
@@ -2457,7 +2751,7 @@
       }
 
       // 5. element behaviour
-      if (P_SAP[t] && !(flags[i] & BURN) && ((tick + i) & 7) === 0 && thirst(i, t)) return;
+      if ((P_SAP[t] || (t === WOOD && (flags[i] & LEAF))) && !(flags[i] & BURN) && ((tick + i) & 7) === 0 && thirst(i, t)) return;
       switch (t) {
         case FIRE: {
           if (--data[i] <= 0) {
@@ -2603,15 +2897,24 @@
           if (weather.wind && rnd() < Math.abs(weather.wind) * 0.15) { const j = i + drift(); if (type[j] === EMPTY) { swap(i, j); return; } }
           if (rnd() < 0.5) return; // drifts down slowly
           break;
-        case SEED: {
+        case SEED: { // aux 1: a plain plant's seed (a farmer's, or a Plant painted over bare ground); else a flower's
           const bt = type[i + SW];
-          if ((bt === DIRT && !rules.drySoil && rnd() < 0.004) || (bt === MUD && rnd() < 0.02)) {
-            if (type[i - SW] === EMPTY) { startPlant(i, PLANT); return; }
+          if (((bt === DIRT || bt === SOIL) && !rules.drySoil && rnd() < 0.004) || (bt === MUD && rnd() < 0.02)) {
+            if (type[i - SW] === EMPTY) { startPlant(i, aux[i] ? PLANT : FLOWER); return; }
           }
           break;
         }
-        case ACORN: case GRASSSEED: case CACTUSSEED: case VINESEED: case LILYSEED:
+        case ACORN: case GRASSSEED: case CACTUSSEED: case VINESEED: case LILYSEED: case PINECONE: case COCONUT:
           if (sprout(i, t)) return;
+          break;
+        case CATKIN:
+          if (--data[i] <= 0) { transform(i, EMPTY); return; }
+          if (sprout(i, t)) return;
+          if (rnd() < 0.7) { // fluff: it floats on the air and drifts with the wind
+            const j = i + (rnd() < 0.5 + weather.wind * 0.2 ? 1 : -1) - (rnd() < 0.35 ? SW : 0);
+            if (type[j] === EMPTY) swap(i, j);
+            return;
+          }
           break;
         case SPORES:
           if (--data[i] <= 0) { transform(i, EMPTY); return; }
@@ -2626,7 +2929,9 @@
           // dead leaves rot into soil where they lie on damp ground, and flutter as they fall
           if (rnd() < 0.0008) {
             const b = type[i + SW];
-            if (b === DIRT || b === MUD || (b === LITTER && rnd() < 0.3) || wetBeside(i)) { transform(i, DIRT); return; }
+            let onPlant = false; // caught in a living plant, it waits to fall (or a clump of soil would grow in mid-air)
+            for (let k = 0; k < 8; k++) if (P_SAP[type[i + N8[k]]]) { onPlant = true; break; }
+            if (!onPlant && (b === DIRT || b === SOIL || b === MUD || (b === LITTER && rnd() < 0.3) || wetBeside(i))) { transform(i, DIRT); return; }
           }
           if (rnd() < 0.3 && type[i + SW] === EMPTY) {
             const j = i + (rnd() < 0.5 ? -1 : 1);
@@ -2635,6 +2940,9 @@
           break;
         }
         case SAPLING: sapling(i); return;
+        case PINE: pine(i); return;
+        case PALM: palm(i); return;
+        case WILLOW: willow(i); return;
         case GRASS: grass(i); return;
         case CACTUS: cactus(i); return;
         case VINE: vine(i); return;
@@ -2642,6 +2950,10 @@
         case LILY: lily(i); return;
         case PLANT:
           if (flags[i] & BURN) return; // data is the burn timer now, not growth left
+          if ((flags[i] & LEAF) && aux[i] && rnd() < 0.00001 && type[i + SW] === EMPTY) { // a tree sheds a seed now and then
+            const s = aux[i] === PINE_LEAF ? PINECONE : aux[i] === PALM_LEAF ? COCONUT : CATKIN;
+            if (counts[s] < (s === CATKIN ? 40 : 20)) place(i + SW, s);
+          }
           if (rnd() < 0.004) mossCheck(i, i + N8[(rnd() * 8) | 0]);
           if (rnd() < 0.02) { // photosynthesis: breathe in carbon dioxide, breathe out oxygen
             const n = i + N8[(rnd() * 8) | 0];
@@ -2661,6 +2973,30 @@
         case FISH: fish(i); return;
         case WORM: worm(i); return;
         case FIREFLY: firefly(i); return;
+        case CEMENT:
+          // it sets as it stands (sooner when warm, never frozen), keeping any colour painted on it
+          if (temp[i] > 0 && (data[i] -= temp[i] > 60 ? 2 : 1) <= 0) { const c = col[i]; transform(i, CONCRETE); col[i] = c; return; }
+          break;
+        case ALCOHOL: {
+          const n = i + N8[(rnd() * 8) | 0], nt = type[n];
+          if (isWater(nt)) { if (rnd() < 0.3) { swap(i, n); return; } } // it mixes into water rather than floating on it
+          else if (nt === EL_I && rnd() < 0.05) { transform(n, EMPTY); col[i] = TINCTURE; flashRx(i, EL_I); } // tincture of iodine
+          // it evaporates from an open surface, far faster than water
+          if (type[i - SW] === EMPTY && ambient > 0 && rnd() < ambient * 0.00004) { transform(i, EMPTY); return; }
+          break;
+        }
+        case VINEGAR: {
+          const n = i + N8[(rnd() * 8) | 0], nt = type[n];
+          if (nt === ASH && rnd() < 0.05) { // ash is lye: vinegar fizzes off carbon dioxide and is spent
+            transform(n, CO2); transform(i, rnd() < 0.5 ? WATER : CO2); events.fizz++; flashRx(n, CO2); return;
+          }
+          if (nt === RUST && rnd() < 0.03) { transform(n, EMPTY); flashRx(n, RUST); if (rnd() < 0.3) { transform(i, WATER); return; } } // eats rust off
+          if (nt === CONCRETE && rnd() < 0.004) { // and slowly eats concrete, fizzing
+            const c = col[n]; transform(n, SAND); col[n] = c; transform(i, CO2); events.fizz++; flashRx(n, CO2); return;
+          }
+          break;
+        }
+        case LIGHT: ray(i); return;
         case ACID: {
           const n = i + N8[(rnd() * 8) | 0], nt = type[n];
           if (nt !== EMPTY && nt !== ACID) {
@@ -2856,6 +3192,7 @@
       weatherTick();
       if (disasters.length) disasterTick();
       if (hand.on) handPhysics();
+      if ((tick & 15) === 0) rootPass();
       const ltr = tick & 1;
       for (let y = H; y >= 1; y--) {
         const row = y * SW;
@@ -3180,13 +3517,25 @@
       [DIAMOND,         NEVER, NEVER,  0.12,  EL_C],      // the hardest thing there is: no earthquake breaks it
     ];
     for (const t of [PLANT, FLOWER, GRASS, DRYGRASS, VINE, MOSS, MUSHROOM, CACTUS, LILY]) SOLIDS.push([t, NEVER, NEVER, 1, LITTER]);
+    SOLIDS.push(
+      [SOIL,     5.5, 7.5, 1.3, DIRT],      // packed earth: slumps and slides early
+      [CONCRETE, 7,   10,  0.5, RUBBLE],    // unreinforced concrete cracks at VII and falls at X
+      [PINE, 9, 12, 0.5, SPLINTERS], [PALM, 9, 12, 0.5, SPLINTERS], [WILLOW, 9, 12, 0.5, SPLINTERS],
+    );
+    // cast metal: ductile, like steel, and it breaks back into its own grains
+    for (const d of list) if (d.castOf !== undefined) SOLIDS.push([d.id, 10.5, 15.5, 0.15, d.castOf]);
     const BREAKS = new Uint8Array(NT), TEARS = new Float32Array(NT);
     const QUAKE_FROM = new Float32Array(NT).fill(NEVER), QUAKE_RUIN = new Float32Array(NT).fill(NEVER);
-    for (const [t, from, ruin, tears, into] of SOLIDS) { QUAKE_FROM[t] = from; QUAKE_RUIN[t] = ruin; TEARS[t] = tears; BREAKS[t] = into; }
+    // a black hole tears the lighter of two equally tough solids apart a little sooner: density
+    // nudges it, but toughness decides (wood, light as it is, holds out longer than stone)
+    for (const [t, from, ruin, tears, into] of SOLIDS) {
+      QUAKE_FROM[t] = from; QUAKE_RUIN[t] = ruin; BREAKS[t] = into;
+      TEARS[t] = tears * Math.max(0.6, Math.min(1.25, Math.sqrt(25 / P_DENS[t])));
+    }
     // rock and masonry with a free face (a cliff, an overhang, the top of a wall) give way a step
     // of intensity sooner than the same stuff held in on every side
     const FACE_FIRST = new Uint8Array(NT);
-    for (const t of [STONE, OBSIDIAN, COAL, BRICK, CLAY]) FACE_FIRST[t] = 1;
+    for (const t of [STONE, OBSIDIAN, COAL, BRICK, CLAY, CONCRETE, SOIL]) FACE_FIRST[t] = 1;
     const unbreakable = (t) => t === WALL || t === CLONE || t === VOID || t === BOUND;
 
     // How far a weapon of this size reaches from where it is set off, in cells (the cursor's ring).
@@ -3239,11 +3588,13 @@
     // Turn a cell into t where a weapon puts it, keeping its heat. Never a discovery, as with painting.
     function become(i, t) { const T = temp[i]; place(i, t); temp[i] = T; stamp[i] = now; }
     function crumble(i) {
-      const to = BREAKS[type[i]];
+      const from = type[i], to = BREAKS[from];
       if (to) {
-        const tint = type[i] === GLASS ? aux[i] : 0; // stained glass breaks into shards of its colour
+        const tint = from === GLASS ? aux[i] : 0, c = col[i]; // stained glass breaks into shards of its colour
         become(i, to);
         if (tint) aux[i] = tint;
+        else if (to === RUBBLE) aux[i] = from; // rubble looks like what it broke from: brick red, concrete grey
+        if (c) col[i] = c; // and paint stays on the pieces
         if (!disc[to]) discover(to, i); // rubble, glass shards: found when something breaks up
       }
       return to !== 0;
@@ -3347,6 +3698,11 @@
           const c = catOf(i);
           if (c === C_LIQUID) {
             if (vx[i] * dir < want) vx[i] = dir * want;
+          } else if (c === C_POWDER) { // the wave rolls light grains along, and barely shifts heavy ones
+            const hf = heft(i);
+            if (rnd() < 0.3 * hf && vx[i] * dir < want * 0.6 * hf) { vx[i] = dir * want * 0.6 * hf; flags[i] &= ~SETTLED; }
+          } else if (c === C_STATIC && BREAKS[t] && P_DENS[t] < 10 && rnd() < 0.004 * (1 - k / TSUNAMI_BAND)) {
+            crumble(i); // timber, plants and ice float off
           } else if (t === HUMAN && rnd() < 0.4) {
             // people caught in it are carried along
             const h = i - SW, j = i + dir, jh = h + dir;
@@ -3460,7 +3816,7 @@
           if (I < 3.5) continue;
           if (c === C_POWDER) {
             if (t === DIRT && (flags[i] & SETTLED) && I < 7) continue; // packed soil holds till VII
-            const g = Math.min(1.3, gtab[dist] * a); // how hard it is thrown about here
+            const g = Math.min(1.3, gtab[dist] * a) * heft(i); // how hard it is thrown about here
             if (rnd() < g * 0.6) {
               vx[i] += sway * Math.min(1, g) * 0.8 + (rnd() - 0.5) * g;
               if (rnd() < 0.25) vy[i] -= rnd() * g * 1.4;
@@ -3535,13 +3891,13 @@
           if (c === C_POWDER || c === C_LIQUID) {
             // only the surface is torn off the ground, a little at a time (so it digs a trench as
             // it goes, down to the rock under loose ground)
-            if (h <= 2 && (!open(i - SW) || rnd() > 0.12 * env * core)) continue;
+            if (h <= 2 && (!open(i - SW) || rnd() > 0.12 * env * core * heft(i))) continue; // light stuff goes first
             if (fling) {
               vx[i] = (dx < 0 || (dx === 0 && rnd() < 0.5) ? -1 : 1) * (2 + rnd() * 2.5) * env;
               vy[i] = -rnd() * 0.8;
             } else {
               // whirled about the axis, never further out than the funnel is wide
-              vy[i] = Math.min(vy[i], -(0.9 + 1.7 * core) * env);
+              vy[i] = Math.min(vy[i], -(0.9 + 1.7 * core) * env * Math.min(1, heft(i)));
               vx[i] = -dx * 0.12 + Math.sin(spin + y * 0.21) * hw * 0.12 * env;
             }
             flags[i] &= ~SETTLED;
@@ -3549,8 +3905,8 @@
             if (t === HEAD || rnd() > 0.85 * env) continue;
             if (t === HUMAN) dangle(i, -Math.sign(dx), fling ? 0 : -2);
             else { const j = i - SW - Math.sign(dx); if (open(j)) swap(i, j); }
-          } else if (c === C_STATIC && h <= 5 && core > 0.25 && (BREAKS[t] === LITTER || BREAKS[t] === SPLINTERS) && rnd() < 0.03 * env) {
-            crumble(i); // ripped up: plants and timber go up as debris
+          } else if (c === C_STATIC && h <= 5 && core > 0.25 && BREAKS[t] && P_DENS[t] < 8 && rnd() < 0.03 * env) {
+            crumble(i); // ripped up: what is light (plants, timber) goes up as debris
           }
         }
       }
@@ -4050,8 +4406,8 @@
         if (dist < rh * 3) temp[i] += 60 * env; // matter spiralling in glows
         const c = catOf(i);
         if (c === C_POWDER || c === C_LIQUID) {
-          // pulled in, and round: it spirals rather than falling straight in
-          const nx = vx[i] * 0.9 + (ux - uy * 0.45) * g, ny = vy[i] * 0.9 + (uy + ux * 0.45) * g;
+          // pulled in, and round: it spirals rather than falling straight in (the light stuff first)
+          const gh = g * heft(i), nx = vx[i] * 0.9 + (ux - uy * 0.45) * gh, ny = vy[i] * 0.9 + (uy + ux * 0.45) * gh;
           vx[i] = nx > MAXV ? MAXV : nx < -MAXV ? -MAXV : nx;
           vy[i] = ny > MAXV ? MAXV : ny < -MAXV ? -MAXV : ny;
           flags[i] &= ~SETTLED;
@@ -4103,14 +4459,20 @@
       }
       if (!n && n < max && rnd() < 0.5) {
         const x = x0 + ((rnd() * (2 * R + 1)) | 0) - R, y = y0 + ((rnd() * (2 * R + 1)) | 0) - R;
-        if (x >= 0 && x < W && y >= 0 && y < H && type[idx(x, y)] === EMPTY) { place(idx(x, y), SEED_OF[t]); n++; }
+        if (x >= 0 && x < W && y >= 0 && y < H && type[idx(x, y)] === EMPTY) {
+          const j = idx(x, y);
+          place(j, SEED_OF[t]);
+          if (t === PLANT) aux[j] = 1; // a plain plant's seed, not a flower's
+          n++;
+        }
       }
       return n;
     }
 
     // Both return how many cells they changed, and stop after `max` (a story chapter's pouch).
-    // `tint`: a colour to paint glass or fire in (the number of the element that gives it)
-    function paint(x0, y0, r, t, density, replace, max = Infinity, tint = 0) {
+    // `tint`: a colour to paint glass or fire in (the number of the element that gives it); `rgb`: a
+    // colour to paint concrete in (0xrrggbb)
+    function paint(x0, y0, r, t, density, replace, max = Infinity, tint = 0, rgb = 0) {
       if (SEED_OF[t]) return sow(x0, y0, r, t, max);
       const tcat = P_CAT[t], dyed = t === FIRE ? FLAME_DYE[tint] : 0;
       let n = 0;
@@ -4136,9 +4498,107 @@
         if (rnd() > density) return;
         place(i, t);
         if (tint) { aux[i] = tint; flags[i] |= dyed; }
+        if (rgb) col[i] = PAINTED | rgb;
+        if (t === LIGHT) aux[i] = rayDir(cx(i) - x0, cy(i) - y0); // rays fly out from the brush
         n++;
       });
       return n;
+    }
+
+    // Explosion, painted with the brush: a blast in the brush's own shape (a circle, a square, a
+    // line, a box), about as fierce as black powder and nothing like a bomb. Inside the shape what is
+    // weak enough is blown to fire and smoke and the rest is thrown out from the middle; the air
+    // round it takes a sharp push. `tint`: the colour its flames burn in, as for painted fire.
+    function blastPaint(x0, y0, r, tint = 0) {
+      if (brush.shape === 'fill') brush.shape = 'circle'; // never a whole connected cave at once
+      const dyed = FLAME_DYE[tint], R = Math.max(1, r);
+      let bx = x0, by = y0, br = R;
+      if (brush.shape === 'box') { bx = (brush.x0 + brush.x1) >> 1; by = (brush.y0 + brush.y1) >> 1; br = Math.max(brush.x1 - brush.x0, brush.y1 - brush.y0) / 2 + 1; }
+      const flame = (i) => { become(i, FIRE); data[i] = 5 + ((rnd() * 16) | 0); if (rnd() < 0.3) flags[i] = SMOKE_WHITE; if (tint) { aux[i] = tint; flags[i] |= dyed; } };
+      let n = 0;
+      forCircle(x0, y0, R, (i) => {
+        const t = type[i];
+        if (t === WALL || t === CLONE || t === VOID || t === BOUND) return;
+        const dx = cx(i) - bx, dy = cy(i) - by, d = Math.sqrt(dx * dx + dy * dy);
+        temp[i] += 450;
+        n++;
+        if (t === EMPTY || (catOf(i) === C_GAS && !P_EXPL_R[t])) { if (rnd() < 0.7) flame(i); return; }
+        if (P_EXPL_R[t]) { if (!(flags[i] & BURN)) { flags[i] |= BURN; data[i] = 1 + ((rnd() * 4) | 0); } return; } // sets off explosives
+        const c = catOf(i);
+        if (rnd() < 0.85 - P_BLASTRES[t]) {
+          if (isWater(t)) become(i, STEAM);
+          else if (c === C_STATIC && BREAKS[t] && rnd() < 0.5) crumble(i);
+          else if (rnd() < 0.55) flame(i);
+          else become(i, rnd() < 0.6 ? SMOKE : EMPTY);
+        } else {
+          if (P_FLAM[t] > 0 && !(flags[i] & BURN)) ignite(i);
+          if (c === C_POWDER || c === C_LIQUID) fling(i, dx, dy, d, br, 0.9);
+        }
+      });
+      if (!n) return 0;
+      events.booms.push(bx, by, Math.max(2, Math.round(br)), tint);
+      const ax0 = (bx + 0.5) / AS, ay0 = (by + 0.5) / AS, ar = (br * 1.6 + 4) / AS;
+      for (let ay = Math.max(0, Math.floor(ay0 - ar)); ay <= Math.min(AH - 1, Math.floor(ay0 + ar)); ay++) {
+        for (let ax = Math.max(0, Math.floor(ax0 - ar)); ax <= Math.min(AW - 1, Math.floor(ax0 + ar)); ax++) {
+          const ex = ax + 0.5 - ax0, ey = ay + 0.5 - ay0, dd = Math.sqrt(ex * ex + ey * ey);
+          if (dd >= ar || dd < 0.5) continue;
+          const a = ay * AW + ax, k = 1 - dd / ar;
+          ap[a] = Math.min(AIR_MAXP, ap[a] + 22 * k);
+          avx[a] += (ex / dd) * 2.5 * k; avy[a] += (ey / dd) * 2.5 * k;
+        }
+      }
+      return n;
+    }
+
+    // The Paint tool: recolour whatever is under the brush, whatever it is (rgb 0 takes paint off).
+    function tintPaint(x0, y0, r, rgb) {
+      let n = 0;
+      forCircle(x0, y0, r, (i) => {
+        if (type[i] === EMPTY || type[i] === BOUND) return;
+        col[i] = rgb ? PAINTED | rgb : 0;
+        n++;
+      });
+      return n;
+    }
+
+    // The Image tool: a picture, w × h RGBA pixels (one per cell) centred on (x0, y0), built out of
+    // concrete in its own colours. See-through pixels leave what is there.
+    function placeImage(x0, y0, w, h, px) {
+      const left = x0 - (w >> 1), top = y0 - (h >> 1);
+      let n = 0;
+      for (let py = 0; py < h; py++) {
+        const y = top + py;
+        if (y < 0 || y >= H) continue;
+        for (let qx = 0; qx < w; qx++) {
+          const x = left + qx, k = (py * w + qx) * 4;
+          if (x < 0 || x >= W || px[k + 3] < 128) continue;
+          const i = idx(x, y);
+          place(i, CONCRETE);
+          col[i] = PAINTED | EXACT | (px[k] << 16) | (px[k + 1] << 8) | px[k + 2];
+          n++;
+        }
+      }
+      return n;
+    }
+
+    // Saves from before trees had living trunks, and scenes that build trees out of plain wood:
+    // wood joined to a tree's leaves or growing tip is living trunk.
+    function livenTrees() {
+      const q = [];
+      for (let i = 0; i < N; i++) {
+        if (type[i] !== WOOD || (flags[i] & LEAF)) continue;
+        for (let k = 0; k < 8; k++) {
+          const n = i + N8[k], t = type[n];
+          if (TREE[t] || t === PLANT) { flags[i] |= LEAF; sap[i] = 220; q.push(i); break; } // (a scene's crown of leaves is plain plant)
+        }
+      }
+      while (q.length) {
+        const i = q.pop();
+        for (let k = 0; k < 8; k++) {
+          const n = i + N8[k];
+          if (type[n] === WOOD && !(flags[n] & LEAF)) { flags[n] |= LEAF; sap[n] = 220; q.push(n); }
+        }
+      }
     }
 
     function erase(x0, y0, r, max = Infinity) {
@@ -4180,7 +4640,7 @@
     // Full copies of the state, for undo/redo.
     function snapshot() {
       return {
-        W, H, a: [type.slice(), shade.slice(), flags.slice(), charge.slice(), aux.slice(), data.slice(), temp.slice(), vy.slice(), vx.slice(), sap.slice()],
+        W, H, a: [type.slice(), shade.slice(), flags.slice(), charge.slice(), aux.slice(), data.slice(), temp.slice(), vy.slice(), vx.slice(), sap.slice(), col.slice()],
         air: [avx.slice(), avy.slice(), ap.slice()],
       };
     }
@@ -4190,6 +4650,7 @@
       aux.set(sn.a[4]); data.set(sn.a[5]); temp.set(sn.a[6]); vy.set(sn.a[7]);
       if (sn.a[8]) vx.set(sn.a[8]); else vx.fill(0);
       if (sn.a[9]) sap.set(sn.a[9]); else water();
+      if (sn.a[10]) col.set(sn.a[10]); else col.fill(0);
       if (sn.air) { avx.set(sn.air[0]); avy.set(sn.air[1]); ap.set(sn.air[2]); }
       else { avx.fill(0); avy.fill(0); ap.fill(0); }
       stamp.fill(0);
@@ -4226,12 +4687,13 @@
     const vis = (k) => idx(k % W, (k / W) | 0);
     const VQ = 16; // velocities are saved in sixteenths of a cell per tick
 
-    // v3 added velocities and the air field, v4 the water in plants; older saves load still, with
-    // everything at rest and every plant well watered.
+    // v3 added velocities and the air field, v4 the water in plants, v5 painted colours and living
+    // trunks; older saves load still, with everything at rest, every plant well watered and every
+    // tree's wood alive.
     function serialize() {
       const q = (a, k) => Math.round(a[k] * VQ);
       return {
-        v: 4, W, H, ambient, weather: { ...weather },
+        v: 5, W, H, ambient, weather: { ...weather },
         keys: list.map((d) => d.key),
         type: rle(type, (a, k) => a[vis(k)]),
         aux: rle(aux, (a, k) => a[vis(k)]),
@@ -4241,6 +4703,7 @@
         vx: rle(vx, (a, k) => Math.round(a[vis(k)] * VQ)),
         vy: rle(vy, (a, k) => Math.round(a[vis(k)] * VQ)),
         sap: rle(sap, (a, k) => a[vis(k)]),
+        col: rle(col, (a, k) => a[vis(k)]),
         air: { W: AW, H: AH, vx: rle(avx, q, AN), vy: rle(avy, q, AN), p: rle(ap, q, AN) },
       };
     }
@@ -4264,6 +4727,8 @@
       if (s.vx) unrle(s.vx, (k, v) => { vx[vis(k)] = v / VQ; });
       if (s.vy) unrle(s.vy, (k, v) => { vy[vis(k)] = v / VQ; });
       if (s.sap) unrle(s.sap, (k, v) => { sap[vis(k)] = v; }); else water();
+      if (s.col) unrle(s.col, (k, v) => { col[vis(k)] = v; });
+      if (!(s.v >= 5)) livenTrees();
       const air = s.air;
       if (air && air.W === AW && air.H === AH) {
         unrle(air.vx, (k, v) => { avx[k] = v / VQ; });
@@ -4274,11 +4739,11 @@
 
     return {
       W, H, SW, SH, N,
-      type, shade, flags, charge, aux, data, temp, vy, vx, sap,
+      type, shade, flags, charge, aux, data, temp, vy, vx, sap, col,
       air: { W: AW, H: AH, S: AS, vx: avx, vy: avy, p: ap, blocked: ablk },
       disc, counts, events,
       get tick() { return tick; },
-      idx, step, clear, place, transform, paint, erase, heat, sparkPaint, spawnBolt, explode,
+      idx, step, clear, place, transform, paint, erase, heat, sparkPaint, spawnBolt, explode, blastPaint, tintPaint, placeImage, livenTrees,
       cell, resetEvents, serialize, load, rnd, ignite, snapshot, restore, weather, rules, setBrush, grab, holdTo, release,
       get holding() { return hand.on ? hand.n : 0; },
       get gripping() { return hand.on; },
@@ -4290,7 +4755,7 @@
   }
 
   G.Sim = {
-    createWorld, BOUND, BURN, LEAF, PETAL, CENTER, BLEACH, CH_ACTIVE,
+    createWorld, BOUND, BURN, LEAF, PETAL, CENTER, BLEACH, CH_ACTIVE, PAINTED, EXACT,
     P: { CAT: P_CAT, DENS: P_DENS, CONDUCT: P_CONDUCT, FLAM: P_FLAM, PERIODIC: P_PERIODIC, MP: P_MP, BP: P_BP },
   };
 })(globalThis);

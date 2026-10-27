@@ -7,7 +7,7 @@
   const { ELEM, Sim } = G;
   const { R, list } = ELEM;
   const NT = 256;
-  const { BURN, LEAF, PETAL, CENTER, BLEACH } = Sim;
+  const { BURN, LEAF, PETAL, CENTER, BLEACH, EXACT } = Sim;
 
   const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
   const hex = ELEM.hexToRgb;
@@ -95,7 +95,7 @@
   }
 
   const SELF_LIT = new Uint8Array(64);
-  for (const m of [R.FIRE, R.LAVA, R.MOLTEN, R.EMBER, R.PLASMA, R.SPARK, R.RAD, R.MSPARK]) SELF_LIT[m] = 1;
+  for (const m of [R.FIRE, R.LAVA, R.MOLTEN, R.EMBER, R.PLASMA, R.SPARK, R.RAD, R.MSPARK, R.LIGHT]) SELF_LIT[m] = 1;
 
   // thin-film / prism colours: oil sheen, soap bubbles, diamond fire
   const RB = new Uint8Array(256 * 3);
@@ -142,7 +142,15 @@
 
   // living plant tissue: it yellows and browns as it dries out (world.sap)
   const SAPPY = new Uint8Array(NT);
-  for (const k of ['PLANT', 'FLOWER', 'GRASS', 'CACTUS', 'VINE', 'MUSHROOM', 'LILY', 'SAPLING']) SAPPY[ID[k]] = 1;
+  for (const k of ['PLANT', 'FLOWER', 'GRASS', 'CACTUS', 'VINE', 'MUSHROOM', 'LILY', 'SAPLING', 'PINE', 'PALM', 'WILLOW']) SAPPY[ID[k]] = 1;
+  // leaves by tree (a leaf's aux): oak (the plant's own green), pine needles, palm fronds, willow
+  const LEAF_RGB = [null, [38, 96, 62], [126, 172, 58], [150, 186, 112]];
+  // what sways in the wind (see the ripple in paintCells)
+  const SWAYS = new Uint8Array(64);
+  for (const m of [R.PLANT, R.GRASS, R.FLOWER, R.VINE, R.LILY]) SWAYS[m] = 1;
+  const SINE = new Float32Array(256);
+  for (let k = 0; k < 256; k++) SINE[k] = Math.sin((k / 256) * Math.PI * 2);
+  const RUBBLE = ID.RUBBLE;
 
   // Explosion flashes: an explosive's own blastColor, else the flame-test colour of whatever
   // coloured the blast, else fire orange; blastGlow is how bright the flash is.
@@ -295,7 +303,9 @@
     const HUMAN = ELEM.ID.HUMAN, BIRD = ELEM.ID.BIRD;
 
     function paintCells(tick, thermal) {
-      const { SW, type, shade, flags, charge, aux, data, temp, sap } = world;
+      const { SW, type, shade, flags, charge, aux, data, temp, sap, col } = world;
+      // the wind each plant feels: the air flowing past it, plus the weather's breeze
+      const AVX = world.air.vx, AW = world.air.W, breeze = world.weather.wind * 0.6;
       const liquidAt = (j) => {
         const u = type[j];
         return MODE[u] === R.PERIODIC ? temp[j] >= MP[u] && temp[j] < BP[u] : LIQ[u] === 1;
@@ -501,7 +511,11 @@
               break;
             }
             case R.PLANT: {
-              if (flags[i] & LEAF) { r += 26; g += 40; b += 10; }
+              if (flags[i] & LEAF) {
+                const lc = LEAF_RGB[aux[i]];
+                if (lc) { const j = 0.88 + (s & 31) / 130; r = lc[0] * j; g = lc[1] * j; b = lc[2] * j; } // pine, palm or willow
+                else { r += 26; g += 40; b += 10; }
+              }
               break;
             }
             case R.GRASS: {
@@ -636,6 +650,37 @@
               gl = 1;
               break;
             }
+            case R.LIGHT: {
+              // a ray: warm white, or the colour stained glass gave it
+              const pc = col[i];
+              if (pc) { r = (pc >> 16) & 255; g = (pc >> 8) & 255; b = pc & 255; r += (255 - r) * 0.25; g += (255 - g) * 0.25; b += (255 - b) * 0.25; }
+              else { r = 255; g = 248; b = 214; }
+              a = 255; gl = 1;
+              break;
+            }
+          }
+
+          // plants ripple in waves that run the way the wind blows, faster and stronger in a gale
+          if (SWAYS[mode]) {
+            const wv = AVX[(y >> 2) * AW + (x >> 2)] + breeze, sp = wv < 0 ? -wv : wv;
+            const amp = 4 + (sp > 2 ? 2 : sp) * 11;
+            const ph = (x * 22 - y * 6 - (wv < 0 ? -1 : 1) * tick * (2 + (sp > 2 ? 2 : sp) * 3)) & 255;
+            const k = SINE[ph] * amp;
+            r += k * 0.55; g += k; b += k * 0.3;
+          }
+          // rubble looks like what it broke from: brick red, concrete grey, black obsidian
+          if (t === RUBBLE && aux[i]) {
+            const q = aux[i] * 16 + (s >> 4), j = 0.74 + (hash(i) & 15) / 60;
+            r = PR[q] * j; g = PG[q] * j; b = PB[q] * j;
+          }
+          // a colour painted on: the paint's colour with the material's own grain showing through;
+          // a picture's pixels exactly
+          const pc = col[i];
+          if (pc && mode !== R.LIGHT) {
+            const cr = (pc >> 16) & 255, cg = (pc >> 8) & 255, cb = pc & 255;
+            if (pc & EXACT) { r = cr; g = cg; b = cb; }
+            else { const j = 0.84 + (s & 15) / 50; r = cr * j; g = cg * j; b = cb * j; }
+            if (a < 150) a = 170;
           }
 
           if (t === ID.OBSIDIAN && (x * 2 + y) % 13 === 0) { r += 46; g += 36; b += 58; } // glassy gloss
@@ -971,36 +1016,70 @@
       ctx.restore();
     }
 
-    // Little figures over the pixels: people with a head, shirt and walking legs; birds as flapping Vs.
+    // Little figures over the pixels, drawn twice the size of the two cells a person takes up so
+    // they read at any zoom: a head, a shirt, swinging arms and walking legs; in water, a swimmer
+    // doing the crawl at the surface. Birds are flapping Vs.
+    function wetAt(j) { const u = world.type[j]; return MODE[u] === R.PERIODIC ? world.temp[j] >= MP[u] && world.temp[j] < BP[u] : LIQ[u] === 1; }
     function drawCreatures(tick, sx, sy) {
       const { SW, aux, flags, shade, type } = world;
       const { ox, oy, s } = view;
-      if (s < 1.5) return;
-      const lw = Math.max(1, s * 0.28);
+      if (s < 1) return;
+      const u = s * 2; // a person is drawn at twice their cells' size
+      const lw = Math.max(1, u * 0.2);
       ctx.lineCap = 'round';
       for (let k = 0; k < nPeople; k++) {
         const i = people[k];
         if (type[i] !== HUMAN) continue;
         const x = (i % SW) - 1, y = ((i / SW) | 0) - 1;
-        const px = ox + sx + x * s, py = oy + sy + y * s;
-        const burning = flags[i] & 1;
+        const fx = ox + sx + (x + 0.5) * s, fy = oy + sy + (y + 1) * s; // the middle of their feet
+        const burning = flags[i] & 1, face = aux[i] & 1 ? 1 : -1;
         const q = HUMAN * 16 + ((aux[i] >> 1) & 15);
         const hq = ELEM.ID.HEAD * 16 + (shade[i - SW] >> 4);
         const shirt = burning ? '#ff8a2a' : `rgb(${PR[q]},${PG[q]},${PB[q]})`;
         const skin = `rgb(${PR[hq]},${PG[hq]},${PB[hq]})`;
-        const step = ((tick >> 3) + x) & 1 ? 0.18 : -0.18;
         ctx.strokeStyle = '#2a2622';
         ctx.lineWidth = lw;
-        ctx.beginPath();
-        ctx.moveTo(px + s * 0.5, py + s * 0.45); ctx.lineTo(px + s * (0.5 - 0.22 + step), py + s);
-        ctx.moveTo(px + s * 0.5, py + s * 0.45); ctx.lineTo(px + s * (0.5 + 0.22 - step), py + s);
+        if (wetAt(i + SW) || wetAt(i - 1) || wetAt(i + 1)) {
+          // swimming: lying along the water line, arms turning over in a crawl, legs kicking
+          const wy = fy - s * 0.55, ph = ((tick + x * 7) % 32) / 32 * Math.PI * 2, kick = Math.sin(ph * 2) * u * 0.12;
+          ctx.beginPath();
+          ctx.moveTo(fx - face * u * 0.25, wy); ctx.lineTo(fx - face * u * 0.95, wy + kick);
+          ctx.moveTo(fx - face * u * 0.25, wy + u * 0.08); ctx.lineTo(fx - face * u * 0.9, wy + u * 0.1 - kick);
+          ctx.stroke();
+          ctx.fillStyle = shirt;
+          ctx.fillRect(fx - u * 0.35, wy - u * 0.16, u * 0.7, u * 0.3);
+          ctx.strokeStyle = skin;
+          ctx.beginPath(); // one arm reaching over, the other pulling under
+          const sh = fx + face * u * 0.3;
+          ctx.moveTo(sh, wy - u * 0.05); ctx.lineTo(sh + face * Math.cos(ph) * u * 0.5, wy - Math.sin(ph) * u * 0.45);
+          ctx.moveTo(sh, wy - u * 0.05); ctx.lineTo(sh - face * Math.cos(ph) * u * 0.35, wy + Math.sin(ph) * u * 0.3);
+          ctx.stroke();
+          ctx.fillStyle = skin;
+          ctx.beginPath(); ctx.arc(fx + face * u * 0.55, wy - u * 0.2, u * 0.26, 0, Math.PI * 2); ctx.fill();
+          // the splash of their stroke
+          ctx.fillStyle = 'rgba(230,244,255,0.75)';
+          const spl = (tick + x * 5) & 7;
+          if (spl < 3) ctx.fillRect(sh + face * u * 0.45, wy - u * 0.05 - spl * s * 0.2, Math.max(1, s * 0.4), Math.max(1, s * 0.4));
+          continue;
+        }
+        const step = ((tick >> 3) + x) & 1 ? 0.2 : -0.2;
+        ctx.beginPath(); // legs
+        ctx.moveTo(fx, fy - u * 0.55); ctx.lineTo(fx + u * (-0.2 + step), fy);
+        ctx.moveTo(fx, fy - u * 0.55); ctx.lineTo(fx + u * (0.2 - step), fy);
+        ctx.stroke();
+        ctx.strokeStyle = skin;
+        ctx.beginPath(); // arms, swinging against the legs
+        ctx.moveTo(fx - u * 0.3, fy - u * 1.1); ctx.lineTo(fx - u * 0.38 - step * u * 0.6, fy - u * 0.65);
+        ctx.moveTo(fx + u * 0.3, fy - u * 1.1); ctx.lineTo(fx + u * 0.38 + step * u * 0.6, fy - u * 0.65);
         ctx.stroke();
         ctx.fillStyle = shirt;
-        ctx.fillRect(px + s * 0.18, py - s * 0.15, s * 0.64, s * 0.68);
+        ctx.fillRect(fx - u * 0.32, fy - u * 1.15, u * 0.64, u * 0.66);
         ctx.fillStyle = skin;
         ctx.beginPath();
-        ctx.arc(px + s * 0.5, py - s * 0.55, s * 0.42, 0, Math.PI * 2);
+        ctx.arc(fx, fy - u * 1.55, u * 0.4, 0, Math.PI * 2);
         ctx.fill();
+        ctx.fillStyle = '#2a2622'; // an eye, looking the way they walk
+        ctx.fillRect(fx + face * u * 0.16 - u * 0.05, fy - u * 1.62, Math.max(1, u * 0.1), Math.max(1, u * 0.1));
       }
       ctx.strokeStyle = '#1c1c22';
       ctx.lineWidth = Math.max(1, s * 0.22);
@@ -1181,6 +1260,17 @@
           } else outline(circle(rad), dash);
           break;
         }
+        case 'image': {
+          // the picture itself, faint, where it will be built
+          const im = brush.image;
+          if (!im) { outline(circle(rad), dash); break; }
+          const a = worldToCanvas(brush.x - (im.w >> 1), brush.y - (im.h >> 1));
+          ctx.globalAlpha = 0.55; ctx.imageSmoothingEnabled = false;
+          ctx.drawImage(im.canvas, a.px, a.py, im.w * s, im.h * s);
+          ctx.globalAlpha = 1;
+          outline(cellBox(brush.x - (im.w >> 1), brush.y - (im.h >> 1), brush.x - (im.w >> 1) + im.w - 1, brush.y - (im.h >> 1) + im.h - 1), dash);
+          break;
+        }
         case 'magnet': {
           // the reach, with arrows pointing in: it pulls everything loose toward the centre
           outline(circle(rad), [2 * dpr, 6 * dpr]);
@@ -1264,6 +1354,17 @@
           if ((xx & 3) === 0 || (y & 3) === 0) { r += 9; g += 10; b += 12; }
         } else if (mode === R.FIREFLY) {
           if (s < 40) { r = 255; g = 243; b = 138; } else { r = 20; g = 26; b = 24; }
+        } else if (mode === R.LIGHT) { // rays fanning out from a bright point
+          const dx = xx - w * 0.3, dy = y - h * 0.35, dd = Math.sqrt(dx * dx + dy * dy) / Math.max(w, h);
+          const beam = Math.cos(Math.atan2(dy, dx) * 7) > 0.55 ? 1 : 0.25, f = Math.max(0.12, (1 - dd * 1.3) * beam);
+          r = 255 * f; g = 246 * f; b = 210 * f;
+        } else if (def.key === 'paint') { // a rainbow of paint
+          const hh = ((xx * 6 + y * 3) & 255) * 3;
+          r = RB[hh]; g = RB[hh + 1]; b = RB[hh + 2];
+        } else if (def.key === 'image') { // a little picture: sky, a sun and a hill
+          const hill = y > h * 0.62 - Math.sin((xx / w) * 3) * h * 0.12;
+          const sun = (xx - w * 0.7) ** 2 + (y - h * 0.3) ** 2 < (h * 0.14) ** 2;
+          [r, g, b] = sun ? [255, 214, 90] : hill ? [70, 150, 70] : [110, 170, 230];
         }
         if (mode === R.PERIODIC) {
           const gc = def.gasColor || def.dischargeColor;

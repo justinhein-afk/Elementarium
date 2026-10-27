@@ -8,7 +8,7 @@ const path = require('path');
 const vm = require('vm');
 
 const root = path.join(__dirname, '..', 'js');
-for (const f of ['elements.js', 'periodic.js', 'sim.js', 'scenes.js']) {
+for (const f of ['elements.js', 'periodic.js', 'materials.js', 'sim.js', 'scenes.js']) {
   vm.runInThisContext(fs.readFileSync(path.join(root, f), 'utf8'), { filename: f });
 }
 const { ELEM, Sim, Scenes } = globalThis;
@@ -134,8 +134,9 @@ const check = (label, ok, detail) => out.push({ label, ok, detail });
   check('Water lilies float pads and flower', surface >= 6 && flowers >= 1, `${surface} pad cells at the surface, ${flowers} flower cells`);
 }
 
-// Painting a plant on soil plants a few real plants, which grow stems and flower, rather than
-// stamping a disc of leaves (a brush of radius 6 used to fill about 130 cells).
+// Painting a plant on soil plants a few real plants, which grow leafy stems (a Plant never flowers;
+// that is the Flower tile), rather than stamping a disc of leaves (a brush of radius 6 used to fill
+// about 130 cells).
 {
   const w = world();
   rect(w, 0, 80, 119, 89, ID.DIRT);
@@ -146,7 +147,7 @@ const check = (label, ok, detail) => out.push({ label, ok, detail });
   const flowers = cells(w, (t) => t === ID.FLOWER).length;
   const top = 80 - Math.min(...cells(w, (t) => t === ID.PLANT || t === ID.FLOWER).map(([, y]) => y));
   show('painted plants', w);
-  check('Painting plants grows plants, not a block', starts >= 2 && starts <= 6 && flowers >= 3 && top >= 8,
+  check('Painting plants grows plants, not a block', starts >= 2 && starts <= 6 && flowers === 0 && top >= 8,
     `the brush started ${starts} plants; they grew ${top} tall across ${stems.size} columns, with ${flowers} flower cells`);
 }
 

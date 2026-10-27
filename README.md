@@ -2,8 +2,12 @@
 
 A falling-sand alchemy lab. Every grain is simulated: heat diffuses, liquids settle by
 density, fire looks for fuel, current runs through metal, plants grow and fish swim.
-You start with 26 elements (including seven kinds of seed, humans, birds, ants and six kinds
-of weather). Experiment to fill the other 44 slots in the alchemy table.
+You start with 39 elements (eleven plants and trees, humans, birds, ants, clouds and hail, building
+materials, alcohol and vinegar, explosions, light, and the Paint and Image tools). Experiment to
+discover 38 more, and cast 12 metals into solid blocks.
+
+The alchemy table has eight sections: Solids, Powders, Liquids, Gases (clouds and fog among them),
+Energy, Plants, Life and Special.
 
 The **Periodic table** tab holds all 118 real elements, with real melting and boiling points and
 densities. Only hydrogen and helium are open at first; the rest are unlocked one at a time in the
@@ -129,31 +133,36 @@ lives a second or so before decaying down its chain, and the first time you make
 so. Thorium glows brilliant white in a flame, like the mantle of a gas lamp, and hot curium against
 tellurium makes current, a nuclear battery.
 
-**Seven kinds of seed**, in the Plants group. Each sprouts where its plant really would and
-grows the plant's own shape; growing one for the first time discovers that plant.
+**Plants and trees**, in the Plants group. The plants are their own seeds: there are no seed
+tiles. **Painting a plant plants it**: each dab starts a plant or two on fitting ground under the
+brush, spaced so each has room, and they grow from there. Painted over air, rock or the wrong
+ground, the brush scatters that plant's seed instead, which falls and sprouts where it lands.
 
-| Seed | Sprouts on | Grows into |
+| Tile | Grows on | Grows into |
 | --- | --- | --- |
-| Seed | soil (mud is fastest) | a flowering plant that blooms and drops seeds |
-| Acorn | soil | an oak: a trunk with a thick foot, branches and a broad crown; it drops acorns of its own |
-| Grass seed | soil | short blades that creep over bare soil on runners |
-| Cactus seed | dry sand only | a fat column with arms and a pink flower; needs no water and rots if drowned |
-| Vine seed | soil | a climber that clings to walls, stone and trees, and trails along the ground otherwise |
-| Spores | damp or shaded soil, ash or wood | mushrooms, red-spotted or brown, that puff more spores and rot wood into soil |
-| Lily seed | the bottom of a pond (it sinks) | a stem up to the surface, floating pads and a pink flower |
+| Plant | soil (mud is fastest) | a leafy green plant that never flowers |
+| Flower | soil | a short stem that blooms and drops seeds, which grow more flowers |
+| Grass | soil | short blades that creep over bare soil on runners |
+| Cactus | dry sand only | a fat column with arms and a pink flower; needs no water and rots if drowned |
+| Vine | soil | a climber that clings to walls, stone and trees, and trails along the ground otherwise |
+| Mushroom | damp or shaded soil, ash or wood | mushrooms, red-spotted or brown, that puff spores and rot wood into soil |
+| Water lily | the bottom of a pond | a stem up to the surface, floating pads and a pink flower |
+| Oak | soil | a trunk with a thick foot, branches and a broad, low crown; drops acorns |
+| Pine | soil | a tall, straight trunk and a cone of dark needles in tiers; drops pinecones |
+| Palm | sand or soil | a bare trunk that leans as it climbs, and a crown of drooping fronds; drops coconuts, which float and sprout on a beach |
+| Willow | soil (its fluffy seeds, which drift on the wind, sprout only near water) | a short, stout trunk, spreading limbs and long curtains of hanging leaves |
 
-**Painting a plant plants it.** Drawing Plant, Flower, Grass, Cactus, Vine, Mushroom or Water lily
-doesn't stamp a block of leaves: each dab starts a plant or two on fitting ground under the brush,
-spaced so each has room, and they grow from there (a Flower is a short stem that blooms quickly,
-Grass carpets the soil). Painted over air, rock or the wrong ground, the brush scatters that
-plant's seed instead, and it falls and sprouts where it lands.
+Each tree's leaves have their own colour. Grass, leaves and flowers ripple in waves that run the way
+the air is moving: faster and brighter in a gale, against the wind when it turns.
 
 **Plants live on water from their roots.** Each plant cell holds sap that climbs from roots in
 wet soil (mud best, then dirt; sand only suits cactus and a little grass), from water for
 water plants, or from the trunk for a tree's leaves. Cut a stem and everything above the cut
 yellows, dries and crumbles into dead leaves, which flutter down and rot into soil on damp
-ground. Plants on bare rock or in mid-air die the same way, frost kills them, a heatwave
-parches dry ground, and a thirsty plant stops growing.
+ground. Plants on bare rock die the same way, frost kills them, a heatwave parches dry ground,
+and a thirsty plant stops growing. A tree's living trunk carries water up to its leaves. A plant or
+a tree left hanging in the air, touching no ground at all, dies within three seconds: its leaves
+fall and a tree's wood stays as dead wood.
 
 ## The Lab
 
@@ -276,6 +285,22 @@ Glass broken by an earthquake or a black hole turns into **glass shards**, a pow
 breaks into shards of its own colour, and shards melt back into glass at 1,400°C. **Rubble**, from
 broken stone, brick and obsidian, is a powder you discover too, and **dry ice** sits with the powders.
 
+## Building, liquids, energy and paint
+
+| Tile | What it does |
+| --- | --- |
+| Soil (Solids) | packed earth that stays put; plants root in it as in dirt |
+| Concrete (Solids) | hard, heavy, fireproof. The dot on its tile lays it in any colour |
+| Cement (Liquids) | wet concrete: pour it into shape and it sets in about ten seconds (sooner when warm, never frozen), keeping any paint |
+| Alcohol (Liquids) | clear, light and very flammable: burns with a pale blue flame and leaves no smoke. Mixes into water, evaporates fast, kills plants, dissolves iodine into a brown tincture. Sodium, potassium and calcium fizz hydrogen off it gently, without the bang water brings |
+| Vinegar (Liquids) | a weak acid. Magnesium fizzes away in it, zinc and iron more slowly, calcium too; copper only turns green with verdigris, and silver and gold don't mind it. Fizzes carbon dioxide off ash, eats rust and slowly etches concrete, kills weeds, puts out fire, and carries current (a vinegar battery works like the lemon one) |
+| Explosion (Energy) | a blast in the shape of your brush (a circle, a square, a line, a box), about as fierce as black powder. The dot on its tile colours its flames in any fire colour you have made |
+| Light (Energy) | rays that fly out from the brush in straight lines, through air, water, ice, glass and diamond. Stained glass colours them, metal bounces them back, and where they land a phosphor glows, a solar cell makes current, a plant drinks it in and anything else warms a little |
+| Paint (Special) | recolours whatever is under the brush: stone, water, plants, even people. The dot on its tile picks the colour from a palette or the full colour picker; "Wash off" takes paint away. With the bucket shape it paints a whole area. Paint moves with what it is on, and is kept by saves and undo |
+| Image (Special) | click the tile to choose a picture file, then click the map: the picture is built out of concrete in its own colours, one cell a pixel, sized by the brush. See-through pixels leave what is there |
+
+Embers still fly off fires, but have no tile.
+
 ## Weapons
 
 The **Weapons** tab holds eleven catastrophes. Pick one and click the map to set it off; the
@@ -332,6 +357,16 @@ weakest first:
 | Metal | Iron | XI, and it seldom snaps even then: softer than glass but ductile | last of all |
 | Diamond | Carbon | never: it is the hardest thing there is | last of all |
 | Plants | Dead leaves | never: they sway | tear easily |
+| Soil, Concrete | Dirt, Rubble | V–VI, VII–X | soon, slower |
+| Cast metal blocks | their own grains | XI, like steel | last of all |
+
+**Rubble looks like what it broke from**: brick breaks into red rubble, obsidian into black, and
+painted concrete into rubble of its paint. **Density counts too.** Every solid has its real density,
+and the weapons go by it: a black hole tears light wood and ice apart before dense metal and pulls
+loose ash in before gold grains, a blast throws sand far higher than heavy gold or lead, a
+tornado lifts the light stuff first and rips up only light solids (timber, plants), a tsunami
+rolls light grains along and floats timber and ice off, and an earthquake shakes light grains
+about more than heavy ones.
 
 ## The Apprentice's Journey
 
@@ -413,6 +448,7 @@ everything at once.
 | --- | --- |
 | `js/elements.js` | Every alchemy element and creature as data: physics, heat, burning, phase changes, colours, recipe and hint |
 | `js/periodic.js` | The 118 periodic elements: real melting/boiling points, densities, families and chemistry flags, and the solid forms 12 of them cast into |
+| `js/materials.js` | Elements added after the periodic table (so saved element numbers stay put): soil, concrete, cement, alcohol, vinegar, explosion, light, the pine, palm and willow and their seeds, and the Paint and Image tools |
 | `js/facts.js` | What the Lab teaches: each element's discovery, name and uses, each family's card, and the reason behind each test result |
 | `js/lab.js` | The Lab's rules (no DOM): what is unlocked and ready, what each test shows, building a solvable sample, the test-tube worlds |
 | `js/tryit.js` | Try it (no DOM): each element's experiment, and the watcher that spots it being done in the world |
@@ -454,11 +490,12 @@ A few rules that shape what you can discover:
 - **Wind leans flames**, so a grass fire runs downwind. **Dry grass** (story only) catches at
   200°C and smoulders on under ash; water greens it back into ordinary grass.
 - **Life is emergent.** Seeds sprout on soil, plants drink through their roots and wilt
-  without them, bloom and drop seeds, oaks drop acorns,
+  without them, flowers drop seeds, trees drop acorns, pinecones, coconuts and drifting fluff,
   grass spreads, mushrooms puff spores and rot dead wood into soil, fish eat water plants
   and multiply, worms compost ash back into dirt.
-- **People and animals.** Humans are two cells (body and head). They walk, climb ledges,
-  avoid cliffs, swim for the surface when water closes over them (and drown if they can't reach it), plant seeds, start families and flee
+- **People and animals.** Humans are two cells (body and head), drawn at twice that size so
+  they read at any zoom, with swinging arms. They walk, climb ledges, avoid cliffs, swim the crawl
+  across water and for the surface when it closes over them (and drown if they can't reach it), plant crops, start families and flee
   fire, lava, acid and radiation. Birds fly at a comfortable height and perch in trees.
   Ants dig down into packed soil and haul the spoil up into anthills.
 - **Neutrons are rays.** A fissile cell that splits fires two or three neutrons in
@@ -488,6 +525,7 @@ node tools/searchtest.js
 node tools/groupstest.js
 node tools/casttest.js
 node tools/tintstest.js
+node tools/materialstest.js
 ```
 
 `simtest` runs the simulation headless and checks that every discovery is reachable from the
@@ -574,13 +612,22 @@ block with current lifts iron filings.
 from a scene's set-up, not with a locked element) and the choice is kept, that Glass and Fire paint in
 their colour and a painted blaze keeps it, that an earthquake breaks stained glass into shards of its
 colour that melt back into stained glass, and that rubble is discovered when rock breaks up.
+`materialstest` checks the table's sections (no Weather, no seed tiles, every plant a starter), that a
+plant and a tree left hanging in the air die in about three seconds while a rooted one lives, that
+the four trees grow their own shapes and drop their seeds, that Plant never flowers and Flower does,
+that cement sets into concrete keeping its paint, alcohol's blue flame, gentle sodium fizz and
+weedkilling, vinegar on magnesium, copper, gold and ash, that a painted explosion keeps the
+brush's shape and the fire colour, that light passes stained glass, takes its colour, bounces off
+metal and drives a solar cell, that paint and pictures survive saving and undo, that rubble keeps
+its colour, that density decides what a black hole tears and a blast throws, that a great quake
+breaks a gold block into grains, and that an older save's trees come back alive.
 
 <details>
 <summary>Spoilers: every recipe</summary>
 
-Steam (heat water) · Ice (cool water) · Smoke, Ash, Ember (burn wood) · Lava (heat stone) ·
+Steam (heat water) · Ice (cool water) · Smoke, Ash (burn wood) · Lava (heat stone) ·
 Obsidian (lava + water) · Molten glass, Glass (heat sand, let it cool) · Mud (dirt + water) ·
-Brick (heat mud) · Plant, Flower (seed on soil) · Saltwater (salt + water) ·
+Brick (heat mud) · Saltwater (salt + water) ·
 Rust (metal in water) · Molten metal (heat metal past 1500°C) · Snow (freeze steam) ·
 Gunpowder (ash + salt) · Acid (smoke drifting into a cooled cloud) ·
 Methane (plants in mud) · Coal (wood heated with no air) · Diamond (sealed coal at 2500°C) ·
