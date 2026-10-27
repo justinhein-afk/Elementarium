@@ -344,6 +344,7 @@
   G.TryIt = {
     init, reset, count, frame, staged, progress,
     own: (w) => setAside.delete(w),
+    aside: (w, t) => !!(setAside.get(w) || [])[t], // did a scene or a chapter put t in this world?
     has: (t) => !!done[t],
     text: (t) => (EXP[t] ? EXP[t].text : ''),
     needs: (t) => (EXP[t] ? EXP[t].req : []),

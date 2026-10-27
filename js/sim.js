@@ -19,7 +19,7 @@
     EL_BE, EL_CA, EL_TH, EL_ND, EL_SM,
     CLOUD, RAINCLOUD, STORMCLOUD, SNOWCLOUD, FOG, HAIL, CO2, DRYICE, CLAY, SOAP, FOAM, DRYGRASS,
     ACORN, GRASSSEED, CACTUSSEED, VINESEED, SPORES, LILYSEED, SAPLING, GRASS, CACTUS, VINE, MUSHROOM, LILY,
-    LITTER, BRICK, RUBBLE, SPLINTERS,
+    LITTER, BRICK, RUBBLE, SPLINTERS, SHARDS,
   } = ID;
 
   const BOUND = 255; // invisible border cell, so neighbour lookups never need bounds checks
@@ -30,6 +30,9 @@
   const SMOKE_WHITE = 64, SMOKE_NONE = 128; // what a blast's fire leaves when it dies out
   const BLEACH = 512; // a flower whose petals chlorine has turned white
   const MOLTEN = 1024; // a grain of a castable metal that has melted: it sets solid as it cools
+  // fire painted in a colour: its colour (an index into FLAME_EL) rides on the fuel it lights, so the
+  // blaze keeps burning in it. A pinch of an element in a fire tints only the flames that touch it.
+  const DYE = 0xF800, DYE_SHIFT = 11;
   // electric charge: a fresh pulse (NEW) becomes ACTIVE next tick, spreads, then decays (refractory)
   const CH_ACTIVE = 8, CH_NEW = 9;
   const GRAV = 0.22, MAXV = 5;
@@ -226,6 +229,8 @@
   P_FERRO[METAL] = 1; P_CURIE[METAL] = 770; // the alchemist's metal is iron: wired up, it makes an electromagnet
   const MAGNETS = []; // the permanent magnets: neodymium and samarium, as grains or as solid blocks
   for (let t = 0; t < NT; t++) if (P_PERM[t]) MAGNETS.push(t);
+  const FLAME_EL = [0], FLAME_DYE = new Uint16Array(NT); // dye index → flame element, and element → dye bits
+  for (let t = 0; t < NT; t++) if (P_FLAME[t] && FLAME_EL.length <= DYE >> DYE_SHIFT) { FLAME_DYE[t] = FLAME_EL.length << DYE_SHIFT; FLAME_EL.push(t); }
   P_CAT[BOUND] = C_STATIC; P_DENS[BOUND] = 1e9; P_COND[BOUND] = 0; P_ICAP[BOUND] = 1;
   P_ACIDRES[BOUND] = 1; P_BLASTRES[BOUND] = 99;
 
@@ -455,6 +460,8 @@
       data[i] = P_BURN_MIN[t] + ((rnd() * (P_BURN_MAX[t] - P_BURN_MIN[t] + 1)) | 0);
       events.ignite++;
     }
+    // pass a painted fire's colour on to the fuel it lights
+    function dye(n, f) { if (f & DYE) flags[n] = (flags[n] & ~DYE) | (f & DYE); }
 
     function burnOut(i, t) {
       const b = BURNINTO[t];
@@ -506,6 +513,7 @@
         if (type[j] === EMPTY) {
           transform(j, FIRE); data[j] = 6 + ((rnd() * 16) | 0); temp[j] = bt;
           if (P_FLAME[t]) aux[j] = t; // flame test colour
+          else if (flags[i] & DYE) { aux[j] = FLAME_EL[(flags[i] & DYE) >> DYE_SHIFT]; flags[j] |= flags[i] & DYE; }
         }
       }
       if (P_SPARK[t] && rnd() < 0.12) throwSparks(i, t, 1, 3); // magnesium, zirconium, a flint: white sparks
@@ -524,7 +532,7 @@
           return false;
         }
       } else if (P_FLAM[nt] > 0 && !(flags[n] & BURN) && rnd() < P_FLAM[nt] * 0.12) {
-        if (!P_NEEDAIR[nt] || hasAir(n)) ignite(n);
+        if (!P_NEEDAIR[nt] || hasAir(n)) { ignite(n); dye(n, flags[i]); }
       }
       if (t === WOOD || t === COAL) {
         if (rnd() < 0.004) { const j = i + UP3[(rnd() * 3) | 0]; if (type[j] === EMPTY) transform(j, EMBER); }
@@ -2403,7 +2411,7 @@
           } else {
             const to = P_HI_TO[t];
             if (to === STEAM) events.sizzle++;
-            const tint = t === GLASS ? aux[i] : 0; // stained glass keeps its colour when it melts
+            const tint = t === GLASS || t === SHARDS ? aux[i] : 0; // stained glass keeps its colour when it melts, as shards too
             transform(i, to);
             if (tint && to === MGLASS) aux[i] = tint;
             return;
@@ -2463,7 +2471,7 @@
           }
           if (temp[i] < 650) temp[i] = 650 + rnd() * 250;
           const n = i + N8[(rnd() * 8) | 0], nt = type[n];
-          if (P_FLAM[nt] > 0 && !(flags[n] & BURN) && rnd() < P_FLAM[nt] * 0.25) ignite(n);
+          if (P_FLAM[nt] > 0 && !(flags[n] & BURN) && rnd() < P_FLAM[nt] * 0.25) { ignite(n); dye(n, flags[i]); }
           // flame test: a pinch of a flame-colouring element tints the fire that licks it, and the
           // tint rises through the flame. Sodium's yellow swamps the others, as in a real flame.
           if (P_FLAME[nt] && !P_EXPL_R[nt]) { if (!aux[i] || nt === EL_NA) aux[i] = nt; }
@@ -3159,7 +3167,7 @@
     const NEVER = Infinity;
     const SOLIDS = [
       [ICE,             4.5,   7,      1.6,   SNOW],      // lake ice cracks at V
-      [GLASS,           4.5,   7,      1.5,   SAND],      // a few windows break at V, most by VII
+      [GLASS,           4.5,   7,      1.5,   SHARDS],    // a few windows break at V, most by VII
       [CLAY,            6,     8.5,    1.2,   DIRT],      // unfired, it is the first building material to go
       [BRICK,           6.5,   9,      1.1,   RUBBLE],    // unreinforced masonry cracks at VII, falls at VIII–IX
       [COAL,            7,     10,     1,     EL_C],      // a soft, brittle rock (Mohs 2.5)
@@ -3232,7 +3240,12 @@
     function become(i, t) { const T = temp[i]; place(i, t); temp[i] = T; stamp[i] = now; }
     function crumble(i) {
       const to = BREAKS[type[i]];
-      if (to) become(i, to);
+      if (to) {
+        const tint = type[i] === GLASS ? aux[i] : 0; // stained glass breaks into shards of its colour
+        become(i, to);
+        if (tint) aux[i] = tint;
+        if (!disc[to]) discover(to, i); // rubble, glass shards: found when something breaks up
+      }
       return to !== 0;
     }
     // The top of the ground in column x: the first cell from the top with solid, powder or liquid
@@ -4096,9 +4109,10 @@
     }
 
     // Both return how many cells they changed, and stop after `max` (a story chapter's pouch).
-    function paint(x0, y0, r, t, density, replace, max = Infinity) {
+    // `tint`: a colour to paint glass or fire in (the number of the element that gives it)
+    function paint(x0, y0, r, t, density, replace, max = Infinity, tint = 0) {
       if (SEED_OF[t]) return sow(x0, y0, r, t, max);
-      const tcat = P_CAT[t];
+      const tcat = P_CAT[t], dyed = t === FIRE ? FLAME_DYE[tint] : 0;
       let n = 0;
       forCircle(x0, y0, r, (i) => {
         if (n >= max) return;
@@ -4108,13 +4122,20 @@
           if (rnd() < density && cy(i) > 0 && open(i) && open(i - SW)) { spawnHuman(i); n++; }
           return;
         }
-        if (t === FIRE && P_FLAM[ct] > 0) { if (!(flags[i] & BURN)) { ignite(i); n++; } return; }
+        if (t === FIRE && P_FLAM[ct] > 0) {
+          if (!(flags[i] & BURN)) {
+            ignite(i); n++;
+            if (tint) { flags[i] |= dyed; const j = emitInto(i, FIRE); if (j >= 0) { aux[j] = tint; flags[j] |= dyed; } } // the blaze burns in its colour
+          }
+          return;
+        }
         if (!replace && ct !== EMPTY && !(catOf(i) === C_GAS && tcat !== C_GAS)) {
           if (t === FIRE) temp[i] += 40;
           return;
         }
         if (rnd() > density) return;
         place(i, t);
+        if (tint) { aux[i] = tint; flags[i] |= dyed; }
         n++;
       });
       return n;

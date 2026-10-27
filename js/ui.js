@@ -2,7 +2,7 @@
 (function (G) {
   'use strict';
 
-  const { ELEM, Renderer, AudioFX, Lab, TryIt } = G;
+  const { ELEM, Renderer, AudioFX, Lab, TryIt, Tints } = G;
   const { list, GROUPS, ID } = ELEM;
 
   const SYM = {
@@ -13,7 +13,7 @@
     spark: 'El', lightning: 'Lt', plasma: 'Pz', fish: 'Fs', worm: 'Wm', firefly: 'Ff', thermite: 'Th', napalm: 'Np',
     clone: 'Cl', void: 'Vo', cryo: 'Cy', nitro: 'Ni', moss: 'Ms',
     human: 'Hu', bird: 'Bd', ant: 'An',
-    cloud: 'Cu', raincloud: 'Ns', stormcloud: 'Cb', snowcloud: 'Nv', fog: 'Fg', hail: 'Hl',
+    cloud: 'Cu', raincloud: 'Ns', stormcloud: 'Cb', snowcloud: 'Nv', fog: 'Fg', hail: 'Hl', rubble: 'Rbl', shards: 'Sh',
     co2: 'CO₂', dryice: 'Dr', clay: 'Kl', soap: 'Sp', foam: 'Fm',
     acorn: 'Qu', grassseed: 'Gs', cactusseed: 'Cs', vineseed: 'Vs', spores: 'Sv', lilyseed: 'Ls',
     grass: 'Gr', cactus: 'Ct', vine: 'Vi', mushroom: 'Mu', lily: 'Ny',
@@ -97,7 +97,105 @@
     b.append(c);
     b.insertAdjacentHTML('beforeend', `<span class="num">${number.get(d.id)}</span><span class="sym"></span><span class="nm"></span>`);
     if (!opts.codex) b.addEventListener('click', () => select({ kind: 'element', t: d.id }));
+    if (!opts.codex && Tints.kindOf(d.id)) b.append(tintBadge(d.id)); // Glass and Fire: the colour they paint in
     return b;
+  }
+
+  // ───── colours for glass and fire ─────
+  // The dot in the corner of the Glass and Fire tiles: the colour they paint in (tints.js keeps
+  // which colours you have made). Click it for the colours, made and still to make.
+  function tintBadge(t) {
+    const s = document.createElement('span');
+    s.className = 'tint-badge';
+    s.setAttribute('role', 'button');
+    s.tabIndex = 0;
+    const open = (e) => { e.preventDefault(); e.stopPropagation(); openTintMenu(Tints.kindOf(t), s); };
+    s.addEventListener('click', open);
+    s.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') open(e); });
+    return s;
+  }
+  function paintBadge(s, t, shown) {
+    const kind = Tints.kindOf(t), pick = Tints.chosen(kind), made = Tints.count(kind);
+    s.hidden = !shown;
+    s.classList.toggle('none', !made);
+    s.classList.toggle('set', !!pick);
+    s.style.setProperty('--c', pick ? pick.color : 'transparent');
+    const noun = kind === 'glass' ? 'Glass' : 'Fire';
+    const label = pick ? `${noun} colour: ${pick.name} (${pick.d.name.toLowerCase()}). Click to change.`
+      : made ? `${noun} colours: ${made} made. Click to choose one.`
+        : kind === 'glass' ? 'Glass colours: stir a metal into molten glass to make the first.' : 'Fire colours: colour a flame with an element to make the first.';
+    s.title = label;
+    s.setAttribute('aria-label', label);
+  }
+
+  let tintMenu = null;
+  function closeTintMenu() {
+    if (!tintMenu) return;
+    tintMenu.remove();
+    tintMenu = null;
+    document.removeEventListener('pointerdown', outsideTint, true);
+  }
+  const outsideTint = (e) => { if (tintMenu && !tintMenu.contains(e.target) && !e.target.closest('.tint-badge')) closeTintMenu(); };
+  function openTintMenu(kind, anchor) {
+    const again = tintMenu && tintMenu.dataset.kind === kind;
+    closeTintMenu();
+    if (again) return; // a second click on the dot closes it
+    const opts = Tints.options(kind), made = opts.filter((o) => o.open).length, pick = Tints.chosen(kind);
+    const m = document.createElement('div');
+    m.className = 'tint-menu';
+    m.dataset.kind = kind;
+    m.setAttribute('role', 'dialog');
+    m.setAttribute('aria-label', `${kind === 'glass' ? 'Glass' : 'Fire'} colours`);
+    const head = document.createElement('div');
+    head.className = 'tint-head';
+    head.innerHTML = `<b>${kind === 'glass' ? 'Glass' : 'Fire'} colours</b><span>${made} of ${opts.length} made</span>`;
+    const grid = document.createElement('div');
+    grid.className = 'tint-grid';
+    const option = (o) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = `tint-opt${o && !o.open ? ' locked' : ''}${(o ? o.t : 0) === (pick ? pick.t : 0) ? ' on' : ''}`;
+      if (o) b.style.setProperty('--c', o.color);
+      const name = !o ? 'Plain' : o.open ? o.name : '?';
+      b.innerHTML = `<span class="tint-dot"></span><span class="tint-name"></span><small></small>`;
+      b.querySelector('.tint-name').textContent = name;
+      b.querySelector('small').textContent = o ? o.d.sym : '';
+      const el = o && o.d.name.toLowerCase();
+      b.title = !o ? `Plain ${kind}`
+        : o.open ? `${o.name}, from ${el}`
+          : !Lab.has(o.t) ? `Unlock ${el} in the Lab first`
+            : kind === 'glass' ? `Stir ${el} into molten glass to make this colour` : `Colour a fire with ${el} to make this colour`;
+      b.addEventListener('click', () => {
+        if (o && !o.open) { note(o.d.name, b.title + '.'); return; }
+        Tints.choose(kind, o ? o.t : 0);
+        closeTintMenu();
+        select({ kind: 'element', t: Tints.base(kind) }); // and pick up the glass or fire to paint with
+      });
+      return b;
+    };
+    grid.append(option(null), ...opts.map(option));
+    const foot = document.createElement('p');
+    foot.className = 'tint-note';
+    foot.textContent = kind === 'glass' ? 'Stir a metal into molten glass yourself to add its colour here.'
+      : 'Colour a flame yourself (a pinch of the element in a fire, or fireworks) to add its colour here.';
+    m.append(head, grid, foot);
+    m.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeTintMenu(); anchor.focus(); } });
+    document.body.append(m);
+    // beside the dot, kept on screen
+    const r = anchor.getBoundingClientRect(), w = m.offsetWidth, h = m.offsetHeight;
+    m.style.left = `${Math.max(8, Math.min(innerWidth - w - 8, r.right - w))}px`;
+    m.style.top = `${r.bottom + 6 + h < innerHeight ? r.bottom + 6 : Math.max(8, r.top - h - 6)}px`;
+    tintMenu = m;
+    document.addEventListener('pointerdown', outsideTint, true);
+    (m.querySelector('.tint-opt.on') || m.querySelector('.tint-opt')).focus();
+  }
+  // a colour made for the first time
+  function tintMade(kind, o, x, y) {
+    game.renderer.ring(x, y, o.color);
+    AudioFX.discovery();
+    toast({ eyebrow: 'New colour', name: `${o.name[0].toUpperCase()}${o.name.slice(1)} ${kind}`,
+      how: `From ${o.d.name.toLowerCase()}. Paint ${kind} in it: the colour dot on the ${kind === 'glass' ? 'Glass' : 'Fire'} tile.`, ms: 6500 });
+    refreshTable();
   }
 
   function paintTile(b, d, codex) {
@@ -116,6 +214,8 @@
       : 'Not within reach yet — discover its ingredients first';
     b.title = title;
     b.setAttribute('aria-label', isOpen ? d.name : 'Undiscovered element');
+    const badge = b.querySelector('.tint-badge');
+    if (badge) paintBadge(badge, d.id, isOpen);
   }
 
   function buildTable() {
@@ -335,6 +435,13 @@
         story.textContent = `${G.LabView.discoveredLine(d)}. Its name: ${f[2]}.`;
         el.append(story);
         if (Lab.has(d.id)) el.append(tryLine(d));
+      }
+      const tint = Tints.kindOf(d.id) && Tints.chosen(Tints.kindOf(d.id));
+      if (tint) { // painting glass or fire in a colour
+        const line = document.createElement('div');
+        line.className = 'try done';
+        line.textContent = `Painting in ${tint.name}, from ${tint.d.name.toLowerCase()}.`;
+        el.append(line);
       }
     }
   }
@@ -767,6 +874,8 @@ ${tried ? '★ Done' : 'Try it'}: ${TryIt.text(d.id)}` : ''}`
     Lab.init(store);
     TryIt.init(store);
     TryIt.onDone = tried;
+    Tints.init(store);
+    Tints.onOpen = tintMade;
     game.sandbox = store.get('sandbox', false);
     game.magnitude = store.get('magnitude', 7);
     syncWorldDisc(game.world);
@@ -820,6 +929,7 @@ ${tried ? '★ Done' : 'Try it'}: ${TryIt.text(d.id)}` : ''}`
       saveKnown();
       Lab.reset();
       TryIt.reset();
+      Tints.reset();
       G.LabView.reset();
       syncWorldDisc(game.world);
       if (game.selected.kind === 'element' && !unlocked(game.selected.t)) game.selected = { kind: 'element', t: ID.SAND };

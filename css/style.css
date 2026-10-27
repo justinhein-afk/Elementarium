@@ -423,6 +423,38 @@ input[type=range] { accent-color: var(--brass); width: 100%; }
 .sr-empty { color: var(--bone-dim); font-size: 14px; margin: 14px 2px; }
 .sr-fuzzy { color: var(--bone-faint); font-size: 12.5px; margin: 10px 2px 0; }
 
+/* ───────────── colours for glass and fire ───────────── */
+.tile .tint-badge {
+  position: absolute; right: 5px; bottom: 5px; z-index: 1; width: 16px; height: 16px; border-radius: 50%; cursor: pointer;
+  background: conic-gradient(#ff3a30, #ffb020, #6aff4a, #3affb0, #4a7aff, #b46aff, #ff3a30);
+  box-shadow: 0 0 0 2px rgba(5, 10, 12, 0.85);
+}
+.tile .tint-badge.set { background: var(--c); box-shadow: 0 0 0 2px rgba(5, 10, 12, 0.85), 0 0 8px var(--c); }
+.tile .tint-badge.none { background: transparent; border: 1.5px dashed rgba(236, 229, 211, 0.55); box-shadow: none; }
+.tile .tint-badge:hover, .tile .tint-badge:focus-visible { transform: scale(1.2); outline: none; box-shadow: 0 0 0 2px var(--brass); }
+.tint-menu {
+  position: fixed; z-index: 60; width: min(360px, calc(100vw - 16px)); max-height: min(440px, calc(100dvh - 16px)); overflow: auto;
+  padding: 12px; border-radius: 10px; background: var(--patina-900); border: 1px solid var(--brass-dim); box-shadow: 0 18px 50px rgba(0, 0, 0, 0.6);
+  display: grid; gap: 10px;
+}
+.tint-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.tint-head b { font: 20px/1 var(--f-display); color: var(--brass); font-weight: 400; }
+.tint-head span { font: 400 11px/1 var(--f-mono); color: var(--bone-faint); }
+.tint-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; }
+.tint-opt {
+  display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 6px 8px; border-radius: 6px;
+  background: var(--patina-800); border: 1px solid transparent; text-align: left; font-size: 13px; color: var(--bone);
+}
+.tint-opt:hover, .tint-opt:focus-visible { border-color: var(--verdigris); outline: none; }
+.tint-opt.on { border-color: var(--brass); box-shadow: 0 0 0 1px var(--brass-dim); }
+.tint-opt small { font: 400 10px/1 var(--f-mono); color: var(--bone-faint); }
+.tint-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-transform: capitalize; }
+.tint-dot { width: 16px; height: 16px; border-radius: 50%; background: var(--c, transparent); box-shadow: 0 0 6px var(--c, transparent), inset 0 0 0 1px rgba(0, 0, 0, 0.35); }
+.tint-opt:first-child .tint-dot { background: transparent; border: 1.5px solid var(--bone-faint); box-shadow: none; }
+.tint-opt.locked { color: var(--bone-faint); }
+.tint-opt.locked .tint-dot { background: transparent; border: 1.5px dashed rgba(236, 229, 211, 0.3); box-shadow: none; }
+.tint-note { margin: 0; font-size: 12px; color: var(--bone-faint); }
+
 /* ───────────── modals ───────────── */
 .modal {
   position: fixed; inset: 0; z-index: 40; display: grid; place-items: center; padding: 16px;

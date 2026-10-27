@@ -311,14 +311,13 @@
   // is found the first time it is cast, joins the Solids, does what its metal does (conducts, holds a
   // magnet, glows as a filament, splits) and melts back into the liquid metal at the same melting
   // point. Only these: there are not type slots enough for every element.
-  const CAST = ['Mg', 'Al', 'Si', 'Ti', 'Cr', 'Fe', 'Co', 'Ni', 'Cu', 'Zn', 'Ga', 'Zr', 'Mo', 'Ag', 'Sn', 'Nd', 'Sm', 'W', 'Pt', 'Au', 'Pb', 'Bi', 'U'];
+  const CAST = ['Mg', 'Al', 'Fe', 'Ni', 'Cu', 'Zn', 'Ag', 'Sn', 'W', 'Pt', 'Au', 'Pb'];
   // the ones with a catch: any gas counts as air for burning, so magnesium (alight at 600°C, molten
-  // at 650°C) has to be packed in with no gas at all, and a white-hot filament metal burns away in
+  // at 650°C) has to be packed in with no gas at all, and tungsten, a filament metal, burns away in
   // air long before it melts
   const HOW = {
     Mg: ['Magnesium melted in a sealed capsule packed full, and left to cool',
       'Pack magnesium into a sealed capsule with no room for air, then melt it: in the open it catches fire first.'],
-    Mo: ['Molybdenum melted sealed in argon, and left to cool', 'Melt molybdenum sealed in argon: in open air it burns away before it melts.'],
     W: ['Tungsten melted sealed in argon, and left to cool', 'Melt tungsten sealed in argon: in open air it burns away before it melts.'],
   };
   const solids = CAST.map((sym) => {
@@ -340,4 +339,17 @@
     s.castOf = G.ELEM.byKey[s.castOf].id;
     G.ELEM.list[s.castOf].castTo = s.id;
   }
+
+  // Glass shards: what glass breaks into when an earthquake or a black hole cracks it. Stained glass
+  // keeps its colour as shards (see crumble() in sim.js), and shards melt back into molten glass.
+  // An alchemy powder, added here after the periodic table so it takes the next free type number
+  // instead of renumbering every element after it (stained glass and coloured fire store a colour as
+  // an element's number).
+  G.ELEM.extend([{
+    key: 'shards', name: 'Glass shards', group: 'Powders', cat: CAT.POWDER, render: R.GLASS,
+    colors: ['#e6f6fa', '#d8f0f6', '#f2fbfd'], alpha: 0.12, density: 20, cond: 0.15, slide: 0.55,
+    hi: [1400, 'mglass', 0.02], acidRes: 1, blastRes: 0.1,
+    desc: 'Broken glass, sharp and glinting. Stained glass keeps its colour as shards. Melts back into glass at 1,400°C.',
+    recipe: 'Glass broken by an earthquake or a black hole', hint: 'Shake glass hard enough and it shatters: magnitude 5 cracks windows.', from: ['glass'],
+  }]);
 })(globalThis);

@@ -250,20 +250,31 @@ the Lab); clear the box, press Esc or click a tab to go back.
 Periodic-table solids are loose grains. Melt one past its melting point and let it cool, and it
 sets into a **solid block** that stands where it is, the way molten metal is cast for real. The first
 time you cast each one it is discovered and joins the **Solids** on the Alchemy tab (so you need its
-metal unlocked in the Lab first). Twenty-three metals cast: magnesium, aluminium, silicon, titanium,
-chromium, iron, cobalt, nickel, copper, zinc, gallium, zirconium, molybdenum, silver, tin,
-neodymium, samarium, tungsten, platinum, gold, lead, bismuth and uranium (there aren't type slots
-for every element). Melt the ones above 1,000°C on a floor of Wall, which never melts, since stone
-turns to lava first. Three have a catch, as in real foundries: magnesium catches fire at 600°C, just
-before it melts at 650°C, so it has to be packed into a sealed capsule with no room for air; and
-tungsten and molybdenum burn away in open air long before they melt, so they are melted sealed in
-argon. Powder that never melted stays powder.
+metal unlocked in the Lab first). Twelve metals cast: magnesium, aluminium, iron, nickel, copper,
+zinc, silver, tin, tungsten, platinum, gold and lead (each takes one of the game's 255 type slots).
+Melt the ones above 1,000°C on a floor of Wall, which never melts, since stone turns to lava first.
+Two have a catch, as in real foundries: magnesium catches fire at 600°C, just before it melts at
+650°C, so it has to be packed into a sealed capsule with no room for air; and tungsten burns away in
+open air long before it melts, so it is melted sealed in argon. Powder that never melted stays
+powder.
 
-A solid block does what its metal does: it conducts, a neodymium or samarium block is a magnet that
-holds still, iron, cobalt and nickel blocks become electromagnets with current, a tungsten block
-glows as a filament, silicon makes solar current, bismuth thermoelectric current, and a uranium
-block still splits. Heat one past its melting point and it runs as liquid metal again, and sets
-again as it cools.
+A solid block does what its metal does: it conducts, iron and nickel blocks become electromagnets
+with current, and a tungsten block glows as a filament. Heat one past its melting point and it runs
+as liquid metal again, and sets again as it cools.
+
+## Colours for glass and fire
+
+The Glass and Fire tiles have a colour dot in their bottom-right corner. Each colour opens the first
+time you make it yourself: stir a metal into molten glass for a stained-glass colour (11 in all), or
+colour a flame with an element, a pinch of it in a fire or a firework, for a fire colour (23 in all).
+The element has to be unlocked in the Lab first, and a scene's own stained glass and coloured
+campfires don't count. Click the dot to pick a colour (or Plain) and Glass or Fire paints in it.
+Coloured fire painted onto fuel keeps its colour as the blaze spreads, while a pinch of an element in
+a fire only colours the flames that touch it.
+
+Glass broken by an earthquake or a black hole turns into **glass shards**, a powder. Stained glass
+breaks into shards of its own colour, and shards melt back into glass at 1,400°C. **Rubble**, from
+broken stone, brick and obsidian, is a powder you discover too, and **dry ice** sits with the powders.
 
 ## Weapons
 
@@ -314,7 +325,7 @@ weakest first:
 
 | Solid | Breaks into | Earthquake starts to break it at | Black hole |
 | --- | --- | --- | --- |
-| Ice, Glass | Snow, Sand | V | gone almost at once |
+| Ice, Glass | Snow, Glass shards | V | gone almost at once |
 | Clay, Brick | Dirt, Rubble | VI–VII (sooner at a free face) | torn apart quickly |
 | Coal, Obsidian, Stone | Carbon, Rubble, Rubble | VII (cliffs sooner, bedrock at X and over) | soon after |
 | Wood | Splinters | IX: it is soft but fibrous, so it bends | slower |
@@ -401,7 +412,7 @@ everything at once.
 | File | Role |
 | --- | --- |
 | `js/elements.js` | Every alchemy element and creature as data: physics, heat, burning, phase changes, colours, recipe and hint |
-| `js/periodic.js` | The 118 periodic elements: real melting/boiling points, densities, families and chemistry flags, and the solid forms 23 of them cast into |
+| `js/periodic.js` | The 118 periodic elements: real melting/boiling points, densities, families and chemistry flags, and the solid forms 12 of them cast into |
 | `js/facts.js` | What the Lab teaches: each element's discovery, name and uses, each family's card, and the reason behind each test result |
 | `js/lab.js` | The Lab's rules (no DOM): what is unlocked and ready, what each test shows, building a solvable sample, the test-tube worlds |
 | `js/tryit.js` | Try it (no DOM): each element's experiment, and the watcher that spots it being done in the world |
@@ -476,6 +487,7 @@ node tools/tryittest.js
 node tools/searchtest.js
 node tools/groupstest.js
 node tools/casttest.js
+node tools/tintstest.js
 ```
 
 `simtest` runs the simulation headless and checks that every discovery is reachable from the
@@ -553,10 +565,15 @@ misspelt name still finds its element, that undiscovered alchemy stays hidden, a
 with the best match comes first.
 `groupstest` checks that the Element Groups book builds every group, shows every element, has a colour
 for every swatch and a group for every jump link, and that nothing in it comes out blank.
-`casttest` melts each of the 23 castable metals the way its hint says and checks it sets solid and is
+`casttest` melts each of the 12 castable metals the way its hint says and checks it sets solid and is
 discovered as it does; that magnesium in open air and tungsten in air don't cast; that powder that
 never melted stays powder; that a block stands in mid-air, melts back into liquid metal and sets again;
-and that a neodymium block lifts iron, a silicon slab makes solar current and a uranium block splits.
+and that a copper block carries current, a tungsten block in argon glows as a filament and an iron
+block with current lifts iron filings.
+`tintstest` checks that a glass or fire colour opens the first time you make it in your own world (not
+from a scene's set-up, not with a locked element) and the choice is kept, that Glass and Fire paint in
+their colour and a painted blaze keeps it, that an earthquake breaks stained glass into shards of its
+colour that melt back into stained glass, and that rubble is discovered when rock breaks up.
 
 <details>
 <summary>Spoilers: every recipe</summary>
@@ -572,7 +589,8 @@ cloud high up) · Plasma (lightning) · Fish (lightning into saltwater) ·
 Worm (lightning into mud) · Firefly (electricity on a flower) · Thermite (rust + gunpowder) ·
 Napalm (oil + gunpowder) · Cryo (snow cooled below −150°C) · Nitro (oil + acid; also detonates when dropped) ·
 Moss (a plant against damp stone) · Clay (dry mud) · Carbon dioxide (smoke settling) ·
-Dry ice (freeze carbon dioxide below −78.5°C) · Soap (ash + oil) · Foam (soap + water)
+Dry ice (freeze carbon dioxide below −78.5°C) · Soap (ash + oil) · Foam (soap + water) ·
+Glass shards, Rubble (break glass, stone or brick with an earthquake)
 
 </details>
 

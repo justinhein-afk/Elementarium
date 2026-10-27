@@ -523,7 +523,7 @@
       recipe: 'What smoke leaves behind as it clears', hint: 'Let smoke settle. Part of it sinks instead of rising.', from: ['smoke'],
     },
     {
-      key: 'dryice', name: 'Dry Ice', group: 'Solids', cat: CAT.POWDER, render: R.SPARKLE,
+      key: 'dryice', name: 'Dry Ice', group: 'Powders', cat: CAT.POWDER, render: R.SPARKLE,
       colors: ['#eef3f6', '#e2e9ee', '#f6f9fb'], density: 15, cond: 0.25, cap: 2, temp: -78.5, slide: 0.5,
       blastRes: 0.2,
       desc: 'Frozen CO₂ at −78.5°C. Turns straight to fog.',
@@ -559,10 +559,12 @@
     },
     // what an earthquake, a meteor or a black hole leaves of rock and masonry (see the Weapons tab)
     {
-      key: 'rubble', name: 'Rubble', group: 'Powders', cat: CAT.POWDER, hidden: true,
+      key: 'rubble', name: 'Rubble', group: 'Powders', cat: CAT.POWDER,
       colors: ['#5f6268', '#6b6e74', '#54575c', '#77706a'], density: 24, cond: 0.15, slide: 0.45,
       hi: [1100, 'lava', 0.02], acidRes: 0.5, blastRes: 0.3,
       desc: 'Broken rock. Melts back into lava.',
+      recipe: 'Stone, brick or obsidian broken up by an earthquake or a black hole',
+      hint: 'Shake stone hard enough and it breaks up: an earthquake of magnitude 7 will do it.', from: ['stone'],
     },
     {
       key: 'splinters', name: 'Splinters', group: 'Powders', cat: CAT.POWDER, hidden: true,

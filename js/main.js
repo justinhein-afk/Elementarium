@@ -2,7 +2,7 @@
 (function (G) {
   'use strict';
 
-  const { ELEM, Sim, Renderer, AudioFX, UI, Scenes, Journey, Lab, LabView, TryIt } = G;
+  const { ELEM, Sim, Renderer, AudioFX, UI, Scenes, Journey, Lab, LabView, TryIt, Tints } = G;
   const { ID, CAT, list } = ELEM;
   const $ = (s) => document.querySelector(s);
 
@@ -172,7 +172,7 @@
     // people and seeds keep their own spacing
     const solid = game.shape !== 'circle' && game.shape !== 'square' && densityFor(t) >= 0.3;
     const replace = game.replace || game.shape === 'fill';
-    const n = use(sel, (max) => w.paint(x, y, r, t, solid ? 1 : densityFor(t), replace, max));
+    const n = use(sel, (max) => w.paint(x, y, r, t, solid ? 1 : densityFor(t), replace, max, Tints.tintFor(t))); // glass and fire in their colour
     if (!n) return;
     const c = list[t].cat;
     AudioFX.pour(c === CAT.LIQUID ? 'liquid' : c === CAT.GAS ? 'gas' : c === CAT.POWDER ? 'powder' : 'solid');
@@ -634,6 +634,7 @@
     if (ev.shake) renderer.shake(ev.shake);
     if (ev.fission) { renderer.shake(Math.min(10, ev.fission * 0.4)); renderer.flash(Math.min(0.7, ev.fission * 0.03)); }
     TryIt.frame(game.world, ev);
+    Tints.frame(game.world);
     // an experiment with a pile to build or a wait to hold shows how far along it is
     if (game.world.tick % 20 === 0 && game.selected.kind === 'element' && TryIt.progress(game.selected.t)) UI.refreshInspect();
     if (!LabView.isOpen()) AudioFX.frame(ev); // the Lab's test tube has the sound while it is open

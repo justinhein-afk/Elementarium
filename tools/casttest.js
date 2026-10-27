@@ -1,6 +1,6 @@
 // Headless checks for cast metal: each metal's powder, melted and left to cool, sets into its solid
-// form (the way its hint says: in the open on a floor of Wall, sealed in argon for tungsten and
-// molybdenum, packed into a capsule for magnesium), and the solid forms behave as their metals do.
+// form (the way its hint says: in the open on a floor of Wall, sealed in argon for tungsten, packed
+// into a capsule for magnesium), and the solid forms behave as their metals do.
 // Run: node tools/casttest.js
 'use strict';
 const fs = require('fs');
@@ -49,7 +49,7 @@ function cast(p, how) {
 
 const castable = P.filter((d) => d.castTo);
 {
-  const how = { Mg: 'capsule', W: 'argon', Mo: 'argon' };
+  const how = { Mg: 'capsule', W: 'argon' };
   const bad = [];
   // most of the heap is enough: red-hot iron in open air throws a few sparks and burns to rust, and
   // chance can go against a run, so each metal gets a second try
@@ -88,27 +88,28 @@ const castable = P.filter((d) => d.castTo);
   check('Every solid melts into its own metal', ok, `${castable.length} solids, each in the Solids group`);
 }
 // ── the solid forms do what their metals do ──
-{ // a neodymium block, held up by nothing (no shelf, as magnettest's powder needs), lifts iron filings
-  const w = world(), nd = el('Nd').castTo, fe = ID.EL_FE;
-  rect(w, 0, 56, 95, 63, ID.STONE); rect(w, 39, 45, 55, 49, nd);
-  for (let x = 37; x <= 57; x++) w.place(w.idx(x, 55), fe);
+{ // a copper block, held up by nothing, carries current from a battery along its length
+  const w = world(), cu = el('Cu').castTo;
+  rect(w, 30, 30, 65, 31, cu); w.place(w.idx(29, 30), ID.BATTERY);
+  let far = 0;
+  for (let k = 0; k < 300; k++) { w.step(); w.resetEvents(); if (w.charge[w.idx(65, 31)] > 0) far++; }
+  check('A copper block carries current', far > 0 && count(w, cu) === 72, `current reached the far end ${far} times, the bar still in place`);
+}
+{ // a tungsten block sealed in argon, between two batteries, glows white-hot as a filament and lasts
+  const w = world(), wb = el('W').castTo;
+  rect(w, 30, 30, 66, 44, ID.GLASS); rect(w, 31, 31, 65, 43, ID.EL_AR);
+  rect(w, 35, 37, 61, 37, wb); w.place(w.idx(34, 37), ID.BATTERY); w.place(w.idx(62, 37), ID.BATTERY);
+  let hot = 0;
+  for (let k = 0; k < 600; k++) { w.step(); w.resetEvents(); for (let i = 0; i < w.N; i++) if (w.type[i] === wb) hot = Math.max(hot, w.temp[i]); }
+  check('A tungsten block is a filament', hot >= 1500 && count(w, wb) === 27, `up to ${Math.round(hot)}°C, all 27 cells still there`);
+}
+{ // an iron block wired to a battery is an electromagnet: it lifts iron filings
+  const w = world(), fe = ID.EL_FE, bar = el('Fe').castTo;
+  rect(w, 0, 56, 95, 63, ID.STONE); rect(w, 36, 47, 59, 49, bar); w.place(w.idx(35, 48), ID.BATTERY);
+  for (let x = 36; x <= 59; x++) w.place(w.idx(x, 55), fe);
   for (let k = 0; k < 600; k++) { w.step(); w.resetEvents(); }
   let lifted = 0; for (let i = 0; i < w.N; i++) if (w.type[i] === fe && ((i / w.SW) | 0) < 54) lifted++;
-  check('A neodymium block is a magnet', lifted > 21 * 0.7 && count(w, nd) === 85, `${lifted} of 21 iron filings lifted, the magnet still in place`);
-}
-{ // a slab of silicon under open sky makes current
-  const w = world(), si = el('Si').castTo;
-  rect(w, 0, 56, 95, 63, ID.STONE); rect(w, 30, 50, 65, 50, si);
-  let live = 0;
-  for (let k = 0; k < 300; k++) { w.step(); w.resetEvents(); for (let i = 0; i < w.N; i++) if (w.type[i] === si && w.charge[i] > 0) live++; }
-  check('A silicon slab is a solar panel', live > 0, `${live} live cell-ticks`);
-}
-{ // a big block of uranium goes critical like a heap
-  const w = world(), u = el('U').castTo;
-  rect(w, 0, 56, 95, 63, ID.WALL); rect(w, 33, 24, 62, 55, u);
-  let fission = 0;
-  for (let k = 0; k < 600; k++) { w.step(); fission += w.events.fission; w.resetEvents(); }
-  check('A uranium block still splits', fission > 20, `${fission} fissions`);
+  check('An iron block with current is an electromagnet', lifted > 24 * 0.5, `${lifted} of 24 iron filings lifted`);
 }
 
 let fail = 0;
