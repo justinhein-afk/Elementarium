@@ -16,11 +16,12 @@
     EL_H, EL_HE, EL_C, EL_O, EL_F, EL_AL, EL_S, EL_FE, EL_KR, EL_BA,
     EL_NA, EL_MG, EL_P, EL_CL, EL_BR, EL_I, EL_GA, EL_ZR, EL_PD, EL_PT, EL_AU, EL_HG,
     EL_TI, EL_CR, EL_NI, EL_CU, EL_ZN, EL_CE, EL_PB, EL_U, MSPARK,
-    EL_BE, EL_CA, EL_TH, EL_ND, EL_SM,
+    EL_BE, EL_CA, EL_TH, EL_ND, EL_SM, EL_SR,
     CLOUD, RAINCLOUD, STORMCLOUD, SNOWCLOUD, FOG, HAIL, CO2, DRYICE, CLAY, SOAP, FOAM, DRYGRASS,
     ACORN, GRASSSEED, CACTUSSEED, VINESEED, SPORES, LILYSEED, SAPLING, GRASS, CACTUS, VINE, MUSHROOM, LILY,
     LITTER, BRICK, RUBBLE, SPLINTERS, SHARDS,
     SOIL, CONCRETE, CEMENT, ALCOHOL, VINEGAR, LIGHT, PINE, PINECONE, PALM, COCONUT, WILLOW, CATKIN,
+    EXPLOSION, SUGAR, LIME, LIMESTONE, CELL, COW, WOLF, SHARK,
   } = ID;
 
   const BOUND = 255; // invisible border cell, so neighbour lookups never need bounds checks
@@ -31,6 +32,7 @@
   const SMOKE_WHITE = 64, SMOKE_NONE = 128; // what a blast's fire leaves when it dies out
   const BLEACH = 512; // a flower whose petals chlorine has turned white
   const MOLTEN = 1024; // a grain of a castable metal that has melted: it sets solid as it cools
+  const SWIMS = 32; // a person's aux bit: this one can swim (half of everyone); the rest sink and drown
   // fire painted in a colour: its colour (an index into FLAME_EL) rides on the fuel it lights, so the
   // blaze keeps burning in it. A pinch of an element in a fire tints only the flames that touch it.
   const DYE = 0xF800, DYE_SHIFT = 11;
@@ -171,7 +173,7 @@
   for (const t of [GUNPOWDER, METHANE, OIL, NAPALM, THERMITE, NITRO, EL_H]) P_VOLATILE[t] = 1;
   for (const t of [FISH, WORM, FIREFLY, PLANT, FLOWER, SEED, MOSS, HUMAN, HEAD, BIRD, ANT,
     ACORN, GRASSSEED, CACTUSSEED, VINESEED, SPORES, LILYSEED, SAPLING, GRASS, CACTUS, VINE, MUSHROOM, LILY,
-    PINE, PINECONE, PALM, COCONUT, WILLOW, CATKIN]) P_LIVING[t] = 1;
+    PINE, PINECONE, PALM, COCONUT, WILLOW, CATKIN, CELL, COW, WOLF, SHARK]) P_LIVING[t] = 1;
   // living plant tissue, which needs water from its roots (see thirst())
   const P_SAP = new Uint8Array(NT);
   for (const t of [PLANT, FLOWER, GRASS, CACTUS, VINE, MUSHROOM, LILY, SAPLING, PINE, PALM, WILLOW]) P_SAP[t] = 1;
@@ -253,7 +255,11 @@
   const MAGNETS = []; // the permanent magnets: neodymium and samarium, as grains or as solid blocks
   for (let t = 0; t < NT; t++) if (P_PERM[t]) MAGNETS.push(t);
   const FLAME_EL = [0], FLAME_DYE = new Uint16Array(NT); // dye index → flame element, and element → dye bits
-  for (let t = 0; t < NT; t++) if (P_FLAME[t] && FLAME_EL.length <= DYE >> DYE_SHIFT) { FLAME_DYE[t] = FLAME_EL.length << DYE_SHIFT; FLAME_EL.push(t); }
+  for (let t = 0; t < NT; t++) if (P_FLAME[t] && FLAME_EL.length < DYE >> DYE_SHIFT) { FLAME_DYE[t] = FLAME_EL.length << DYE_SHIFT; FLAME_EL.push(t); }
+  // Rainbow fire, once every fire colour is made: a fire's aux of RAINBOW (no element has that
+  // number) burns in each colour in turn (see render.js). It takes the last dye index.
+  const RAINBOW = 254, RAINBOW_DYE = DYE >> DYE_SHIFT;
+  FLAME_EL[RAINBOW_DYE] = RAINBOW; FLAME_DYE[RAINBOW] = RAINBOW_DYE << DYE_SHIFT;
   P_CAT[BOUND] = C_STATIC; P_DENS[BOUND] = 1e9; P_COND[BOUND] = 0; P_ICAP[BOUND] = 1;
   P_ACIDRES[BOUND] = 1; P_BLASTRES[BOUND] = 99;
 
@@ -318,6 +324,15 @@
   rx(METAL, VINEGAR, 0.004, RUST, KEEP);        // iron soaked in vinegar rusts fast
   rx(CEMENT, LAVA, 0.2, CONCRETE, KEEP);        // baked hard at once
   for (const t of PLANTISH) { rx(ALCOHOL, t, 0.04, KEEP, LITTER); rx(VINEGAR, t, 0.05, KEEP, LITTER); }
+  rx(LIME, SAND, 0.03, CEMENT, CEMENT);         // lime mortar: lime and sand
+  rx(LIME, CO2, 0.08, LIMESTONE, EMPTY);        // lime water clouds over with carbon dioxide: calcium carbonate
+  rx(LIME, ACID, 0.1, SALTWATER, EMPTY, EV_SIZZLE); // an alkali neutralises an acid, to a salt in water
+  rx(LIME, VINEGAR, 0.05, WATER, WATER);
+  rx(LIMESTONE, VINEGAR, 0.008, CO2, WATER);    // vinegar fizzes slowly on limestone (acid is in LIMESTONE below)
+  rx(STEAM, SNOW, 0.03, FOG, KEEP);             // warm vapour over snow: fog
+  rx(CLOUD, SNOW, 0.05, SNOWCLOUD, EMPTY);      // a cloud seeded with snow
+  rx(RAINCLOUD, SNOW, 0.05, SNOWCLOUD, EMPTY);
+  rx(RAINCLOUD, SPARK, 0.5, STORMCLOUD, KEEP);  // a rain cloud charged with electricity
 
   // ───────────── world ─────────────
   function createWorld(W, H) {
@@ -426,8 +441,8 @@
     function place(i, t) {
       type[i] = t; flags[i] = 0; aux[i] = 0; charge[i] = 0; vy[i] = 0; vx[i] = 0; stamp[i] = 0; col[i] = 0;
       data[i] = initData(t); temp[i] = P_TEMP[t]; shade[i] = (rnd() * 256) | 0; sap[i] = P_SAP[t] ? 200 : 0;
-      if (t === FISH || t === FIREFLY || t === BIRD) aux[i] = rnd() < 0.5 ? 1 : 0;
-      else if (t === HUMAN) aux[i] = (((rnd() * 127) | 0) << 1) | (rnd() < 0.5 ? 1 : 0);
+      if (t === FISH || t === FIREFLY || t === BIRD || t === COW || t === WOLF || t === SHARK) aux[i] = rnd() < 0.5 ? 1 : 0;
+      else if (t === HUMAN) aux[i] = (((rnd() * 16) | 0) << 1) | (rnd() < 0.5 ? SWIMS : 0) | (rnd() < 0.5 ? 1 : 0); // shirt colour in bits 1–4
     }
 
     function swap(a, b) {
@@ -638,6 +653,7 @@
     function explode(x0, y0, r, power, src = 0) {
       const tint = colourant(x0, y0, r) || (P_FLAME[src] ? src : 0), kind = P_BLAST[src];
       events.booms.push(x0, y0, r, tint || src);
+      if (src && !disc[EXPLOSION]) discover(EXPLOSION, idx(x0, y0));
       const R = r * 2, r2 = r * r, R2 = R * R;
       for (let dy = -R; dy <= R; dy++) {
         const y = y0 + dy;
@@ -875,6 +891,7 @@
       x = Math.max(0, Math.min(W - 1, x | 0));
       y = Math.max(0, Math.min(H - 1, y | 0));
       if (natural && !disc[LIGHTNING]) discover(LIGHTNING, idx(x, y));
+      if (!disc[LIGHT]) discover(LIGHT, idx(x, y)); // a flash that lights up the sky
       let bx = x, by = y, drift = 0, hit = -1, last = -1;
       while (by < H) {
         const i = idx(bx, by), t = type[i];
@@ -977,6 +994,25 @@
         data[i] = b - 1;
         if (b - 1 <= 0 && aux[i] && rnd() < 0.5) bloom(i, aux[i]);
       }
+    }
+
+    // A plant's stem grows into another kind where it finds that kind's home: against wood an oak,
+    // in snow a pine, by the sea a palm, in clay a willow, in ash grass, by sand a cactus, up a brick
+    // wall a vine. (Living wood doesn't count, or every leaf on a tree would turn.)
+    function mutate(i) {
+      const n = i + N8[(rnd() * 8) | 0], nt = type[n];
+      let to = 0;
+      if (nt === WOOD) { if (!(flags[n] & LEAF)) to = SAPLING; }
+      else if (nt === SNOW || nt === ICE) to = PINE;
+      else if (nt === SALTWATER) to = PALM;
+      else if (nt === CLAY) to = WILLOW;
+      else if (nt === ASH) to = GRASS;
+      else if (nt === SAND) to = CACTUS;
+      else if (nt === BRICK) to = VINE;
+      if (!to) return false;
+      startPlant(i, to);
+      flashRx(i, PLANT);
+      return true;
     }
 
     function isWater(t) { return t === WATER || t === SALTWATER; }
@@ -1613,6 +1649,230 @@
       }
     }
 
+    // ───── cells, and the animals they grow into ─────
+    // A creature born where something else was: it keeps the heat there, and is a discovery.
+    function birth(i, t) {
+      const T = temp[i];
+      place(i, t); temp[i] = T; stamp[i] = now;
+      if (!disc[t]) discover(t, i);
+    }
+    const liquidAt = (j) => { const t = type[j]; return t !== EMPTY && t !== BOUND && catOf(j) === C_LIQUID; };
+    const heavyAt = (j) => { const t = type[j]; if (t === BOUND) return true; if (t === EMPTY) return false; const c = catOf(j); return c === C_STATIC || c === C_POWDER; };
+    // A one-cell animal under powder or rock with no air beside it suffocates in five seconds; one
+    // under water drowns in ten (cows and wolves swim up first). aux bits 4–7 count it, a step every
+    // 20 ticks (40 under water); bit 0 is the way it faces and bits 1–3 are free for the animal.
+    function smothered(i) {
+      const up = i - SW, wet = liquidAt(up);
+      if (!(wet || heavyAt(up)) || airAt(i - 1) || airAt(i + 1) || airAt(i + SW)) { aux[i] &= 15; return false; }
+      if (tick % (wet ? 40 : 20) === 0) {
+        const c = (aux[i] >> 4) + 1;
+        if (c >= 15) return true;
+        aux[i] = (aux[i] & 15) | (c << 4);
+      }
+      return false;
+    }
+    // Glance around cell i (a few random cells within r) for any of the kinds a, b, c; returns the
+    // cell seen, or -1.
+    function spot(i, r, a, b = -2, c = -2) {
+      const x = cx(i), y = cy(i);
+      for (let s = 0; s < 3; s++) {
+        const dx = ((rnd() * (2 * r + 1)) | 0) - r, dy = ((rnd() * (r + 1)) | 0) - (r >> 1);
+        const xx = x + dx, yy = y + dy;
+        if ((dx === 0 && dy === 0) || xx < 0 || xx >= W || yy < 0 || yy >= H) continue;
+        const j = idx(xx, yy), t = type[j];
+        if (t === a || t === b || t === c) return j;
+      }
+      return -1;
+    }
+    // A person caught by a wolf or a shark: both their cells go (into the water, in the sea).
+    function killHuman(n) {
+      const body = type[n] === HEAD ? n + SW : n, head = body - SW;
+      const fill = (j) => become(j, isWater(type[j + SW]) || isWater(type[j - 1]) || isWater(type[j + 1]) ? WATER : EMPTY);
+      if (type[body] === HUMAN) fill(body);
+      if (type[head] === HEAD) fill(head);
+      flashRx(body, EL_SR); // a red flash
+    }
+
+    // A cell drifts in water and divides there; out of it, it falls like a grain and dries up in
+    // about half a minute. What it touches decides what it grows into (see evolve()).
+    function microbe(i) {
+      let wet = 0;
+      for (let k = 0; k < 4; k++) if (isWater(type[i + N4[k]])) wet++;
+      if ((data[i] += wet ? 1 : 2) > 3600 + shade[i] * 8) { transform(i, EMPTY); return; }
+      if (rnd() < 0.12) { // what it touches (looking all round, so a cow walking past still counts)
+        const k0 = (rnd() * 8) | 0;
+        for (let k = 0; k < 8; k++) if (evolve(i, i + N8[(k0 + k) & 7])) return;
+      }
+      if (wet) {
+        if (wet >= 3 && rnd() < 0.002 && counts[FISH] < 300) { birth(i, FISH); flashRx(i, CELL); return; }
+        const n = i + N8[(rnd() * 8) | 0];
+        if (isWater(type[n])) {
+          if (rnd() < 0.002 && counts[CELL] < 400) { transform(n, CELL); return; } // it divides
+          if (rnd() < 0.3) { swap(i, n); return; } // and drifts
+        }
+      }
+      if (canEnter(P_DENS[CELL], i + SW)) movePowder(i, CELL);
+    }
+    function evolve(i, n) {
+      const nt = type[n];
+      let to = 0;
+      switch (nt) {
+        case MUD: case DIRT: case SOIL: if (counts[WORM] < 150) to = WORM; break; // in damp earth: a worm
+        case SUGAR: if (counts[ANT] < 200) to = ANT; break;                      // at something sweet: an ant
+        case FLOWER: if (counts[FIREFLY] < 120) to = FIREFLY; break;              // on a flower: a firefly
+        case GRASS: if (counts[COW] < 60) to = COW; break;                        // in a meadow: a cow
+        case COW: if (counts[WOLF] < 20) to = WOLF; break;                        // beside its prey: a hunter
+        case FISH: if (counts[SHARK] < 12) to = SHARK; break;
+        case CLAY: if (counts[HUMAN] < 80 && open(i - SW)) to = HUMAN; break;     // shaped from clay: a person
+        case PLANT: if ((flags[n] & LEAF) && counts[BIRD] < 50) to = BIRD; break; // up in the leaves: a bird
+        case WOOD: to = flags[n] & LEAF ? (counts[BIRD] < 50 ? BIRD : 0) : MUSHROOM; break; // on a log: a mushroom
+        case ALCOHOL: // bacteria sour it into vinegar
+          transform(n, VINEGAR); transform(i, EMPTY); flashRx(n, VINEGAR);
+          return true;
+      }
+      if (!to) return false;
+      if (to === MUSHROOM) startPlant(i, MUSHROOM);
+      else { birth(i, to); if (to === HUMAN) birth(i - SW, HEAD); }
+      flashRx(i, CELL);
+      return true;
+    }
+
+    // Cows and wolves walk the ground on four legs: one cell each, drawn bigger. They fall, step up
+    // a ledge a cell high, turn back at a cliff, at fire or at water, and swim up if they fall in.
+    // Returns where the animal is now, or -1 if it has died or fallen.
+    function quad(i, lifespan) {
+      if (!(flags[i] & BURN) && ++data[i] > lifespan) { transform(i, ASH); return -1; }
+      if (smothered(i)) { transform(i, ASH); return -1; }
+      const b = i + SW;
+      if (open(b)) { swap(i, b); return -1; }
+      if (liquidAt(i - SW) && rnd() < 0.4) { swap(i, i - SW); return -1; } // swims up
+      return i;
+    }
+    function walk(i) {
+      const dir = aux[i] & 1 ? 1 : -1, f = i + dir;
+      if (hazardAt(f) || hazardAt(f + SW)) { aux[i] ^= 1; return i; }
+      if (open(f)) {
+        let drop = 0;
+        while (drop < 5 && open(f + SW * (drop + 1))) drop++;
+        const land = f + SW * (drop + 1);
+        if (drop >= 5 || hazardAt(land) || (liquidAt(land) && !liquidAt(i + SW))) { aux[i] ^= 1; return i; }
+        swap(i, f); return f;
+      }
+      if (open(f - SW) && open(i - SW)) { swap(i, f - SW); return f - SW; } // up a ledge
+      aux[i] ^= 1;
+      return i;
+    }
+    // Turn to face (toward > 0) or away from (toward < 0) cell j.
+    function face(i, j, toward) { const right = (cx(j) > cx(i)) === toward > 0; aux[i] = (aux[i] & ~1) | (right ? 1 : 0); }
+    // A calf, a pup: on open ground beside the parent.
+    function young(i, t) {
+      const s = i + (aux[i] & 1 ? -1 : 1);
+      if (open(s) && !open(s + SW)) place(s, t);
+    }
+
+    function cow(i) {
+      if ((i = quad(i, 40000 + shade[i] * 60)) < 0) return;
+      const run = threat(i, 5), wolf = spot(i, 9, WOLF);
+      if (run) aux[i] = (aux[i] & ~1) | (run > 0 ? 1 : 0);
+      else if (wolf >= 0) face(i, wolf, -1); // flees
+      const scared = run || wolf >= 0;
+      if (rnd() < (scared ? 0.5 : 0.07)) i = walk(i);
+      else if (rnd() < 0.004) aux[i] ^= 1;
+      if (!scared && rnd() < 0.02) { // grazing
+        const n = i + N8[(rnd() * 8) | 0], nt = type[n];
+        if (nt === GRASS || nt === DRYGRASS || nt === FLOWER || (nt === PLANT && !(flags[n] & LEAF) && cy(n) >= cy(i) - 1)) {
+          transform(n, EMPTY);
+          const meals = ((aux[i] >> 1) & 7) + 1;
+          if (meals >= 6 && counts[COW] < 60 && spot(i, 6, COW) >= 0) { young(i, COW); aux[i] &= ~14; }
+          else aux[i] = (aux[i] & ~14) | (Math.min(7, meals) << 1);
+        }
+      }
+    }
+
+    function wolf(i) {
+      if ((i = quad(i, 36000 + shade[i] * 60)) < 0) return;
+      const run = threat(i, 5), prey = run ? -1 : spot(i, 11, COW, HUMAN, HEAD);
+      if (run) aux[i] = (aux[i] & ~1) | (run > 0 ? 1 : 0);
+      else if (prey >= 0) face(i, prey, 1);
+      if (rnd() < (run || prey >= 0 ? 0.55 : 0.1)) i = walk(i);
+      else if (rnd() < 0.004) aux[i] ^= 1;
+      for (let k = 0; k < 8; k++) { // a bite at anything to eat beside it
+        const n = i + N8[k], nt = type[n];
+        if ((nt !== COW && nt !== HUMAN && nt !== HEAD) || rnd() > 0.1) continue;
+        if (nt === COW) { become(n, EMPTY); flashRx(n, EL_SR); } else killHuman(n);
+        const meals = ((aux[i] >> 1) & 7) + 1;
+        if (meals >= 3 && counts[WOLF] < 20 && spot(i, 8, WOLF) >= 0) { young(i, WOLF); aux[i] &= ~14; }
+        else aux[i] = (aux[i] & ~14) | (Math.min(7, meals) << 1);
+        break;
+      }
+    }
+
+    // Sharks swim like big fish, hunt fish and swimmers, and die on dry land within seconds.
+    function shark(i) {
+      if (++data[i] > 30000 + shade[i] * 40) { transform(i, DIRT); return; }
+      let wet = 0;
+      for (let k = 0; k < 4; k++) if (isWater(type[i + N4[k]])) wet++;
+      if (!wet) { // stranded: it flops about and suffocates
+        if (tick % 10 === 0) { const c = (aux[i] >> 4) + 1; if (c >= 15) { transform(i, DIRT); return; } aux[i] = (aux[i] & 15) | (c << 4); }
+        if (open(i + SW)) swap(i, i + SW);
+        return;
+      }
+      aux[i] &= 15;
+      const prey = spot(i, 12, FISH, HUMAN, HEAD);
+      if (prey >= 0) face(i, prey, 1);
+      else if (rnd() < 0.01) aux[i] ^= 1;
+      if (rnd() < (prey >= 0 ? 0.6 : 0.3)) {
+        const dir = aux[i] & 1 ? 1 : -1;
+        const dy = prey >= 0 ? Math.sign(cy(prey) - cy(i)) : rnd() < 0.1 ? -1 : rnd() < 0.2 ? 1 : 0;
+        const j = i + dir + dy * SW;
+        if (isWater(type[j])) i = (swap(i, j), j);
+        else if (isWater(type[i + dir])) i = (swap(i, i + dir), i + dir);
+        else aux[i] ^= 1;
+      }
+      for (let k = 0; k < 8; k++) {
+        const n = i + N8[k], nt = type[n];
+        if ((nt !== FISH && nt !== HUMAN && nt !== HEAD) || rnd() > 0.12) continue;
+        if (nt === FISH) { become(n, WATER); flashRx(n, EL_SR); } else killHuman(n);
+        const meals = ((aux[i] >> 1) & 7) + 1;
+        if (meals >= 4 && counts[SHARK] < 12) {
+          const s = i + N4[(rnd() * 4) | 0];
+          if (isWater(type[s])) place(s, SHARK);
+          aux[i] &= ~14;
+        } else aux[i] = (aux[i] & ~14) | (Math.min(7, meals) << 1);
+        break;
+      }
+    }
+
+    // ───── limestone ─────
+    // Water seeping down through limestone (a pond or rain on the rock above a cave) drips from its
+    // underside, and each drop leaves a little calcite behind: a stalactite grows down from the
+    // ceiling, slower the longer it hangs, and the drops landing under it build a stalagmite up.
+    // data is how far a stalactite cell hangs (or a stalagmite cell stands): 0 for the rock itself.
+    function seeps(i) {
+      let j = i - SW;
+      for (let k = 0; k < 24; k++, j -= SW) {
+        const t = type[j];
+        if (isWater(t)) return true;
+        if (t !== LIMESTONE) return false;
+      }
+      return false;
+    }
+    function drip(i) {
+      const L = data[i], b = i + SW;
+      if (L >= 12 || rnd() > 1 / (1 + L * 0.6)) return;
+      // a new one starts only with clear rock either side, so each hangs as a spike of its own
+      if (L === 0 && (rnd() > 0.3 || type[b - 1] !== EMPTY || type[b + 1] !== EMPTY || type[b - 2] !== EMPTY || type[b + 2] !== EMPTY)) return;
+      transform(b, LIMESTONE); data[b] = L + 1;
+      // the drop falls on: where it lands, a stalagmite rises
+      let f = b + SW, gap = 0;
+      while (gap < 60 && type[f] === EMPTY) { f += SW; gap++; }
+      if (gap < 3 || rnd() > 0.5) return;
+      const ft = type[f];
+      if (ft === LIMESTONE ? data[f] < 8 : (ft !== BOUND && catOf(f) === C_STATIC && P_SAP[ft] === 0)) {
+        transform(f - SW, LIMESTONE); data[f - SW] = ft === LIMESTONE ? data[f] + 1 : 1;
+      }
+    }
+
     // ───── the periodic table ─────
     // Burning flecks of metal flung from cell i: up to n of them, at up to `speed` cells a tick.
     function throwSparks(i, src, n, speed) {
@@ -2077,20 +2337,24 @@
       if (type[h] !== HEAD) { transform(i, ASH); return; }
       const burning = flags[i] & BURN;
       if (!burning && ++data[i] > 36000 + shade[i] * 60) { transform(i, ASH); transform(h, ASH); return; }
-      // breath runs out while the head is under liquid
+      // breath (the head's data) runs out in ten seconds with the head under liquid, and in five
+      // buried under sand or rubble with no air at all
       const choke = (type[h - SW] === CO2) + (type[h - 1] === CO2) + (type[h + 1] === CO2) >= 2;
       // drowning: liquid over the head, or no air touching the head at all while water is all
       // around (crowded against a flooded ceiling, people don't keep each other breathing)
-      const wetAt = (j) => type[j] !== BOUND && type[j] !== EMPTY && catOf(j) === C_LIQUID;
+      const wetAt = liquidAt;
       const airAt2 = (j) => { const t = type[j]; return t === EMPTY || (t !== BOUND && t !== CO2 && catOf(j) === C_GAS); };
       const breath = airAt2(h - SW) || airAt2(h - 1) || airAt2(h + 1);
       const flooded = wetAt(h - 1) || wetAt(h + 1) || wetAt(i - 1) || wetAt(i + 1) || wetAt(i + SW);
-      if (choke || wetAt(h - SW) || (!breath && flooded)) {
-        if (++data[h] > 700) { transform(i, ASH); transform(h, ASH); return; }
-      } else if (data[h] > 0) data[h] -= 2;
+      const under = choke || wetAt(h - SW) || (!breath && flooded);
+      const buried = !under && !breath && heavyAt(h - SW) && !airAt2(i - 1) && !airAt2(i + 1);
+      if (under || buried) {
+        if ((data[h] += buried ? 4 : 2) > 1200) { transform(i, ASH); transform(h, ASH); return; }
+      } else if (data[h] > 0) data[h] -= 4;
 
       let panic = vy[i];
-      const run = threat(i, 5);
+      let run = threat(i, 5);
+      if (!run && rnd() < 0.3) { const hunter = spot(i, 8, WOLF, SHARK); if (hunter >= 0) run = cx(hunter) > cx(i) ? -1 : 1; }
       if (run) { panic = 110; aux[i] = (aux[i] & ~1) | (run > 0 ? 1 : 0); }
       if (burning) panic = 110;
       if (panic > 0) panic--;
@@ -2098,8 +2362,11 @@
 
       const b = i + SW;
       if (open(b)) { swap(i, b); swap(h, i); return; } // fall
-      // with water over their head they swim for the surface, pushing off the bottom if need be
-      if (type[h - SW] !== BOUND && catOf(h - SW) === C_LIQUID && rnd() < 0.45) {
+      if (!(aux[i] & SWIMS)) {
+        // one who can't swim sinks, thrashing, and drowns on the bottom unless it is shallow
+        if (wetAt(b) && rnd() < 0.3) { swap(i, b); swap(h, i); return; }
+      } else if (wetAt(h - SW) && rnd() < 0.45) {
+        // with water over their head they swim for the surface, pushing off the bottom if need be
         swap(h, h - SW); swap(i, h); return; // swim up
       }
 
@@ -2145,6 +2412,7 @@
       const burning = flags[i] & BURN;
       if (!burning && ++data[i] > 30000 + shade[i] * 40) { transform(i, ASH); return; }
       if ((isWater(type[i + SW]) || isWater(type[i - SW])) && rnd() < 0.05) { transform(i, ASH); return; }
+      if (smothered(i)) { transform(i, ASH); return; }
       const run = threat(i, 4);
       if (run) { vy[i] = 0; aux[i] = (aux[i] & ~1) | (run > 0 ? 1 : 0); }
       if (vy[i] > 0) { vy[i]--; return; } // perched
@@ -2189,6 +2457,10 @@
       let grip = false;
       for (let k = 0; k < 8; k++) if (gripAt(i + N8[k])) { grip = true; break; }
       if (!grip) { movePowder(i, ANT); return; }
+      const sn = i + N8[(rnd() * 8) | 0];
+      if (type[sn] === SUGAR && rnd() < 0.02) { // a crumb of sugar: food for the nest
+        if (counts[ANT] < 200 && rnd() < 0.25) place(sn, ANT); else transform(sn, EMPTY);
+      }
       const carrying = aux[i] & 2;
       if (rnd() < 0.5) {
         const r = rnd();
@@ -2337,6 +2609,7 @@
       if (drop === WATER && ambient <= 0) drop = SNOW;
       if (p && rnd() < p) {
         place(b, drop);
+        if (!disc[drop]) discover(drop, b); // hail from a storm in cool air
         if (drop === WATER) temp[b] = Math.max(1, ambient);
         if (natural) { // a natural cloud wrings itself out
           if (aux[i] > 0) aux[i]--;
@@ -2899,6 +3172,8 @@
           break;
         case SEED: { // aux 1: a plain plant's seed (a farmer's, or a Plant painted over bare ground); else a flower's
           const bt = type[i + SW];
+          // a flower's seed sunk in a pond grows into a water lily instead
+          if (!aux[i] && (isWater(type[i - SW]) || isWater(type[i + SW])) && rnd() < 0.004) { transform(i, LILYSEED); return; }
           if (((bt === DIRT || bt === SOIL) && !rules.drySoil && rnd() < 0.004) || (bt === MUD && rnd() < 0.02)) {
             if (type[i - SW] === EMPTY) { startPlant(i, aux[i] ? PLANT : FLOWER); return; }
           }
@@ -2955,6 +3230,7 @@
             if (counts[s] < (s === CATKIN ? 40 : 20)) place(i + SW, s);
           }
           if (rnd() < 0.004) mossCheck(i, i + N8[(rnd() * 8) | 0]);
+          if (!(flags[i] & LEAF) && rnd() < 0.006 && mutate(i)) return;
           if (rnd() < 0.02) { // photosynthesis: breathe in carbon dioxide, breathe out oxygen
             const n = i + N8[(rnd() * 8) | 0];
             if (type[n] === CO2) transform(n, EL_O);
@@ -2969,10 +3245,38 @@
             const j = i + N8[(rnd() * 8) | 0];
             if (type[j] === EMPTY) transform(j, SEED);
           }
+          if (rnd() < 0.002 && counts[LILY] < 400) { // a flower in a pond drops a seed that roots on the bed: a water lily
+            const j = i + N8[(rnd() * 8) | 0];
+            if (type[j] === WATER) transform(j, LILYSEED);
+          }
           return;
         case FISH: fish(i); return;
         case WORM: worm(i); return;
         case FIREFLY: firefly(i); return;
+        case CELL: microbe(i); return;
+        case COW: cow(i); return;
+        case WOLF: wolf(i); return;
+        case SHARK: shark(i); return;
+        case SUGAR: {
+          const n = i + N8[(rnd() * 8) | 0], nt = type[n];
+          // dissolved in water it ferments: the water turns to alcohol, bubbling off carbon dioxide
+          if (nt === WATER && rnd() < 0.004) { transform(n, ALCOHOL); transform(i, rnd() < 0.4 ? CO2 : EMPTY); flashRx(n, ALCOHOL); return; }
+          // acid tears the water out of it and leaves black carbon, hot and steaming
+          if (nt === ACID && rnd() < 0.08) {
+            transform(i, COAL); temp[i] += 80; events.fizz++; flashRx(i, COAL);
+            if (rnd() < 0.4) { transform(n, STEAM); temp[n] = 140; } // the acid is spent slowly: one drop chars several grains
+            return;
+          }
+          break;
+        }
+        case LIMESTONE: {
+          const n = i + N8[(rnd() * 8) | 0];
+          if (type[n] === ACID && rnd() < 0.05) { // acid fizzes it away to carbon dioxide
+            transform(i, CO2); transform(n, rnd() < 0.5 ? WATER : EMPTY); events.fizz++; flashRx(i, CO2); return;
+          }
+          if (type[i + SW] === EMPTY && rnd() < 0.002 && seeps(i)) drip(i);
+          return;
+        }
         case CEMENT:
           // it sets as it stands (sooner when warm, never frozen), keeping any colour painted on it
           if (temp[i] > 0 && (data[i] -= temp[i] > 60 ? 2 : 1) <= 0) { const c = col[i]; transform(i, CONCRETE); col[i] = c; return; }
@@ -3519,6 +3823,7 @@
     for (const t of [PLANT, FLOWER, GRASS, DRYGRASS, VINE, MOSS, MUSHROOM, CACTUS, LILY]) SOLIDS.push([t, NEVER, NEVER, 1, LITTER]);
     SOLIDS.push(
       [SOIL,     5.5, 7.5, 1.3, DIRT],      // packed earth: slumps and slides early
+      [LIMESTONE, 6.5, 9.5, 0.8, RUBBLE],   // a soft sedimentary rock (Mohs 3): its overhangs fall early
       [CONCRETE, 7,   10,  0.5, RUBBLE],    // unreinforced concrete cracks at VII and falls at X
       [PINE, 9, 12, 0.5, SPLINTERS], [PALM, 9, 12, 0.5, SPLINTERS], [WILLOW, 9, 12, 0.5, SPLINTERS],
     );
@@ -4611,6 +4916,26 @@
       return n;
     }
 
+    // The Smash tool: what is brittle breaks, as an earthquake would break it: stone, brick and
+    // concrete to rubble of their own colour, glass to shards of its colour, ice and hail to snow,
+    // wood to splinters, plants to dead leaves. Metal bends instead, diamond is too hard, and
+    // creatures are left be.
+    const CRUSH = new Uint8Array(NT);
+    CRUSH[HAIL] = SNOW;
+    function smash(x0, y0, r, max = Infinity) {
+      let n = 0;
+      forCircle(x0, y0, r, (i) => {
+        if (n >= max || rnd() > 0.35) return;
+        const t = type[i];
+        if (t === EMPTY || t === METAL || t === BATTERY || t === DIAMOND || P_SOLID[t] || unbreakable(t)) return;
+        if (BREAKS[t] && P_CAT[t] === C_STATIC) { if (crumble(i)) n++; return; }
+        const to = CRUSH[t];
+        if (to) { const c = col[i]; become(i, to); if (c) col[i] = c; if (!disc[to]) discover(to, i); n++; }
+      });
+      if (n) events.cracks += n;
+      return n;
+    }
+
     function heat(x0, y0, r, delta) {
       forCircle(x0, y0, r, (i) => {
         let T = temp[i] + delta;
@@ -4743,7 +5068,7 @@
       air: { W: AW, H: AH, S: AS, vx: avx, vy: avy, p: ap, blocked: ablk },
       disc, counts, events,
       get tick() { return tick; },
-      idx, step, clear, place, transform, paint, erase, heat, sparkPaint, spawnBolt, explode, blastPaint, tintPaint, placeImage, livenTrees,
+      idx, step, clear, place, transform, paint, erase, smash, heat, sparkPaint, spawnBolt, explode, blastPaint, tintPaint, placeImage, livenTrees,
       cell, resetEvents, serialize, load, rnd, ignite, snapshot, restore, weather, rules, setBrush, grab, holdTo, release,
       get holding() { return hand.on ? hand.n : 0; },
       get gripping() { return hand.on; },
@@ -4755,7 +5080,7 @@
   }
 
   G.Sim = {
-    createWorld, BOUND, BURN, LEAF, PETAL, CENTER, BLEACH, CH_ACTIVE, PAINTED, EXACT,
+    createWorld, BOUND, BURN, LEAF, PETAL, CENTER, BLEACH, CH_ACTIVE, PAINTED, EXACT, SWIMS, RAINBOW,
     P: { CAT: P_CAT, DENS: P_DENS, CONDUCT: P_CONDUCT, FLAM: P_FLAM, PERIODIC: P_PERIODIC, MP: P_MP, BP: P_BP },
   };
 })(globalThis);

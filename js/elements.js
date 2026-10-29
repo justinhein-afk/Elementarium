@@ -14,6 +14,7 @@
     WOOD: 17, PLANT: 18, FISH: 19, WALL: 20, METAL: 21, HUMAN: 22, HEAD: 23, BIRD: 24, PERIODIC: 25, RAD: 26,
     GLASS: 27, ICE: 28, CLOUD: 29, FOG: 30, FOAM: 31, SPARKLE: 32, CO2: 33,
     GRASS: 34, CACTUS: 35, VINE: 36, MUSHROOM: 37, LILY: 38, MSPARK: 39, LIGHT: 40,
+    CELL: 41, COW: 42, WOLF: 43, SHARK: 44, LIMESTONE: 45, CONCRETE: 46,
   };
 
   const GROUPS = ['Solids', 'Powders', 'Liquids', 'Gases', 'Energy', 'Plants', 'Life', 'Special'];
@@ -115,10 +116,11 @@
       desc: 'Drop it in a pond; it grows up to the surface.',
     },
     {
-      key: 'sapling', name: 'Oak', group: 'Plants', cat: CAT.STATIC, render: R.WOOD, starter: true,
+      key: 'sapling', name: 'Oak', group: 'Plants', cat: CAT.STATIC, render: R.WOOD,
       colors: ['#6f8a3a', '#7a9844', '#647c34'], density: 7, cond: 0.06, flam: 0.3, ign: 300, burn: [60, 120],
       burnTemp: 750, fireEmit: 0.25, burnInto: [['ash', 2], ['ember', 1], ['empty', 1]], blastRes: 0.3,
       desc: 'A broad oak with a low, spreading crown. Grows in soil and drops acorns.',
+      recipe: 'A plant growing against wood', hint: 'Let a plant grow up against a block of wood.', from: ['plant', 'wood'],
     },
     {
       key: 'litter', name: 'Dead leaves', group: 'Plants', cat: CAT.POWDER, hidden: true,
@@ -148,11 +150,10 @@
 
     // ───────────────────────── discoveries ─────────────────────────
     {
-      key: 'steam', name: 'Steam', group: 'Gases', cat: CAT.GAS, render: R.GAS,
+      key: 'steam', name: 'Steam', group: 'Gases', cat: CAT.GAS, render: R.GAS, starter: true,
       colors: ['#c8d4e2', '#d4dfeb', '#bccada'], alpha: 0.5, density: 0.4, cond: 0.06, cap: 0.6,
       loss: 0.002, temp: 130, lo: [90, 'water', 0.012], acidRes: 1, blastRes: 0,
       desc: 'Rises, cools and rains back down. Makes clouds.',
-      recipe: 'Water heated past 100°C', hint: 'What does fire do to water?', from: ['water', 'fire'],
     },
     {
       key: 'ice', name: 'Ice', group: 'Solids', cat: CAT.STATIC, density: 9.2, render: R.ICE,
@@ -238,39 +239,44 @@
       desc: 'A plant in bloom. Drops seeds that grow more flowers.',
     },
     {
-      key: 'grass', name: 'Grass', group: 'Plants', cat: CAT.STATIC, density: 4, render: R.GRASS, starter: true,
+      key: 'grass', name: 'Grass', group: 'Plants', cat: CAT.STATIC, density: 4, render: R.GRASS,
       colors: ['#5aa83a', '#68b844', '#4e9832', '#76c24e'], cond: 0.06,
       flam: 0.6, ign: 220, burn: [8, 16], burnTemp: 600, fireEmit: 0.3,
       burnInto: [['ash', 2], ['empty', 3], ['fire', 1]], blastRes: 0.05,
       desc: 'Creeps over bare soil. Burns fast.',
+      recipe: 'A plant touching ash', hint: 'Grass is the first thing to come back after a fire: let a plant grow into ash.', from: ['plant', 'ash'],
     },
     {
-      key: 'cactus', name: 'Cactus', group: 'Plants', cat: CAT.STATIC, density: 9, render: R.CACTUS, starter: true,
+      key: 'cactus', name: 'Cactus', group: 'Plants', cat: CAT.STATIC, density: 9, render: R.CACTUS,
       colors: ['#3f8a4a', '#479653', '#377a40', '#4fa05b'], cond: 0.08, cap: 3,
       flam: 0.08, ign: 420, burn: [80, 140], burnTemp: 600, fireEmit: 0.15,
       burnInto: [['steam', 2], ['ash', 1]], blastRes: 0.15,
       desc: 'Grows in dry sand. Burns slowly; rots if drowned.',
+      recipe: 'A plant touching sand', hint: 'Plant something at the edge of the desert, where soil meets sand.', from: ['plant', 'sand'],
     },
     {
-      key: 'vine', name: 'Vine', group: 'Plants', cat: CAT.STATIC, density: 5, render: R.VINE, starter: true,
+      key: 'vine', name: 'Vine', group: 'Plants', cat: CAT.STATIC, density: 5, render: R.VINE,
       colors: ['#2f7a2c', '#38883a', '#2a6c28', '#44963e'], cond: 0.06,
       flam: 0.45, ign: 240, burn: [12, 24], burnTemp: 620, fireEmit: 0.3,
       burnInto: [['ash', 2], ['empty', 3], ['fire', 1]], blastRes: 0.1,
       desc: 'Climbs walls, stone and trees; trails on the ground.',
+      recipe: 'A plant touching brick', hint: 'Let a plant grow against a brick wall.', from: ['plant', 'brick'],
     },
     {
-      key: 'mushroom', name: 'Mushroom', group: 'Plants', cat: CAT.STATIC, density: 4, render: R.MUSHROOM, starter: true,
+      key: 'mushroom', name: 'Mushroom', group: 'Plants', cat: CAT.STATIC, density: 4, render: R.MUSHROOM,
       colors: ['#c8402e', '#d4523a', '#b8382a', '#cc4a34'], cond: 0.05,
       flam: 0.2, ign: 260, burn: [20, 40], burnTemp: 550, fireEmit: 0.15,
       burnInto: [['ash', 1], ['empty', 1]], blastRes: 0.05,
       desc: 'Feeds on rot. Puffs spores and turns wood to soil.',
+      recipe: 'A cell left on wood', hint: 'Fungi are living cells too. Leave one on a log.', from: ['cell', 'wood'],
     },
     {
-      key: 'lily', name: 'Water lily', group: 'Plants', cat: CAT.STATIC, density: 5, render: R.LILY, starter: true,
+      key: 'lily', name: 'Water lily', group: 'Plants', cat: CAT.STATIC, density: 5, render: R.LILY,
       colors: ['#3f9a4a', '#48a855', '#378a42'], cond: 0.08,
       flam: 0.2, ign: 280, burn: [12, 24], burnTemp: 550, fireEmit: 0.2,
       burnInto: [['ash', 1], ['empty', 2]], blastRes: 0.1,
       desc: 'Roots on a pond bed and floats its pads on top.',
+      recipe: 'A flower dropped in water', hint: 'Drop a flower into a pond.', from: ['flower', 'water'],
     },
     {
       key: 'saltwater', name: 'Saltwater', group: 'Liquids', cat: CAT.LIQUID, render: R.LIQUID,
@@ -327,7 +333,7 @@
       key: 'coal', name: 'Coal', group: 'Solids', cat: CAT.STATIC, density: 14,
       colors: ['#262626', '#1e1e1e', '#2f2f2f', '#191919'], cond: 0.1, flam: 0.08, ign: 450,
       burn: [700, 1100], burnTemp: 1150, fireEmit: 0.2, burnInto: [['ash', 3], ['ember', 1]],
-      hi: [2500, 'diamond', 0.01], blastRes: 0.35,
+      hi: [2500, 'diamond', 0.01], acidRes: 0.85, blastRes: 0.35, // carbon: acid hardly touches it
       desc: 'Burns for ages. Sealed and heated, it turns rare.',
       recipe: 'Wood heated above 350°C with no air', hint: 'Bury wood and heat it — don\'t let it breathe.', from: ['wood'],
     },
@@ -368,19 +374,19 @@
       colors: ['#ff8a2a', '#ffa43c', '#ff7316', '#f2c14e'], density: 10, cond: 0.1, cap: 2,
       hi: [55, 'ash', 0.1], blastRes: 0.1,
       desc: 'Swims and breeds. Hates heat and electricity.',
-      recipe: 'Lightning striking saltwater', hint: 'Life began in salty seas, sparked from the sky.', from: ['lightning', 'saltwater'],
+      recipe: 'A cell left in water (or lightning striking saltwater)', hint: 'Leave a cell in water for a while.', from: ['cell', 'water'],
     },
     {
       key: 'worm', name: 'Worm', group: 'Life', cat: CAT.LIFE, render: R.PAL,
       colors: ['#e3899a', '#d97b8c', '#ee9aaa'], density: 15, cond: 0.1, hi: [60, 'ash', 0.1],
       desc: 'Burrows through soil, turning ash into dirt.',
-      recipe: 'Lightning striking mud', hint: 'Wet earth, struck by the sky.', from: ['lightning', 'mud'],
+      recipe: 'A cell in damp earth (or lightning striking mud)', hint: 'Bury a cell in wet earth.', from: ['cell', 'mud'],
     },
     {
       key: 'firefly', name: 'Firefly', group: 'Life', cat: CAT.LIFE, render: R.FIREFLY,
       colors: ['#fff38a', '#e9ff8a'], density: 0.5, cond: 0.05, hi: [90, 'ash', 0.2],
       desc: 'Drifts and blinks. Breeds near flowers.',
-      recipe: 'A flower touched by electricity', hint: 'Give a flower a spark.', from: ['flower', 'spark'],
+      recipe: 'A cell on a flower (or a flower touched by electricity)', hint: 'Put a cell on a flower.', from: ['cell', 'flower'],
     },
     {
       key: 'thermite', name: 'Thermite', group: 'Powders', cat: CAT.POWDER,
@@ -435,27 +441,30 @@
       recipe: 'A plant touching wet stone', hint: 'Let a plant grow against stone where water is close.', from: ['plant', 'stone'],
     },
     {
-      key: 'human', name: 'Human', group: 'Life', cat: CAT.LIFE, render: R.HUMAN, starter: true,
+      key: 'human', name: 'Human', group: 'Life', cat: CAT.LIFE, render: R.HUMAN,
       colors: ['#3d6fb6', '#b6463d', '#3d9a5a', '#b68a3d', '#7a4db6', '#3d9ab0'], density: 10, cond: 0.08, cap: 2,
       flam: 0.3, ign: 160, burn: [40, 70], burnTemp: 600, fireEmit: 0.25, burnInto: [['ash', 1]],
       hi: [70, 'ash', 0.05], lo: [-25, 'ice', 0.02], blastRes: 0.05,
-      desc: 'Walks, swims, farms and raises families. Flees danger.',
+      desc: 'Walks, farms and raises families. Flees danger. Only half of them can swim.',
+      recipe: 'A cell touching clay', hint: 'The old stories say people were shaped from clay and given life.', from: ['cell', 'clay'],
     },
     {
       key: 'head', name: 'Human', group: 'Life', cat: CAT.LIFE, render: R.HEAD, hidden: true,
       colors: ['#f1c9a5', '#d9a37a', '#a8724d', '#6e4a32'], density: 10, cond: 0.08, cap: 2, blastRes: 0.05,
     },
     {
-      key: 'bird', name: 'Bird', group: 'Life', cat: CAT.LIFE, render: R.BIRD, starter: true,
+      key: 'bird', name: 'Bird', group: 'Life', cat: CAT.LIFE, render: R.BIRD,
       colors: ['#2e2e36', '#4a3e34', '#3a4450', '#5a4636'], density: 1, cond: 0.05,
       flam: 0.4, ign: 120, burn: [6, 12], burnTemp: 500, burnInto: [['ash', 1]], hi: [80, 'ash', 0.1],
       desc: 'Flies in flocks, perches on trees, eats seeds.',
+      recipe: 'A cell among a tree’s leaves', hint: 'Put a cell up in the leaves of a tree.', from: ['cell', 'sapling'],
     },
     {
-      key: 'ant', name: 'Ant', group: 'Life', cat: CAT.LIFE, starter: true,
+      key: 'ant', name: 'Ant', group: 'Life', cat: CAT.LIFE,
       colors: ['#1c1410', '#2a1a12', '#3a2216'], density: 12, cond: 0.05,
       flam: 0.2, ign: 150, burn: [4, 8], burnTemp: 400, burnInto: [['ash', 1]], hi: [70, 'ash', 0.1],
       desc: 'Digs tunnels and piles up anthills.',
+      recipe: 'A cell touching sugar', hint: 'Leave a cell beside something sweet.', from: ['cell', 'sugar'],
     },
     {
       key: 'rad', name: 'Radiation', group: 'Energy', cat: CAT.GAS, render: R.RAD, hidden: true,
@@ -471,40 +480,46 @@
 
     // ───────────────────────── weather: clouds and fog are gases, hail a powder ─────────────────────────
     {
-      key: 'cloud', name: 'Cloud', group: 'Gases', cat: CAT.GAS, render: R.CLOUD, starter: true,
+      key: 'cloud', name: 'Cloud', group: 'Gases', cat: CAT.GAS, render: R.CLOUD,
       colors: ['#eef2f6', '#e2e8ee', '#f6f8fa'], alpha: 0.85, density: 0.45, cond: 0.02, cap: 0.6, loss: 0.01, temp: 5,
       acidRes: 1, blastRes: 0,
       desc: 'Drifts with the wind. Packed tight, it brings rain.',
+      recipe: 'Steam rising high into cool air', hint: 'Let steam rise to the top of the sky.', from: ['steam'],
     },
     {
-      key: 'raincloud', name: 'Rain cloud', group: 'Gases', cat: CAT.GAS, render: R.CLOUD, starter: true,
+      key: 'raincloud', name: 'Rain cloud', group: 'Gases', cat: CAT.GAS, render: R.CLOUD,
       colors: ['#8e99a5', '#7f8a96', '#9ba5af'], alpha: 0.9, density: 0.45, cond: 0.02, cap: 0.6, loss: 0.01, temp: 5,
       acidRes: 1, blastRes: 0,
       desc: 'Rains until wrung out; snows below freezing.',
+      recipe: 'Clouds packed tightly together', hint: 'Gather a lot of cloud in one place.', from: ['cloud'],
     },
     {
-      key: 'stormcloud', name: 'Storm cloud', group: 'Gases', cat: CAT.GAS, render: R.CLOUD, starter: true,
+      key: 'stormcloud', name: 'Storm cloud', group: 'Gases', cat: CAT.GAS, render: R.CLOUD,
       colors: ['#454d5a', '#3a414d', '#525a66'], alpha: 0.95, density: 0.45, cond: 0.02, cap: 0.6, loss: 0.01, temp: 5,
       acidRes: 1, blastRes: 0,
       desc: 'Heavy rain, hail and lightning.',
+      recipe: 'A rain cloud grown huge, or charged with electricity', hint: 'Feed a rain cloud until it towers, or give it a spark.', from: ['raincloud'],
     },
     {
-      key: 'snowcloud', name: 'Snow cloud', group: 'Gases', cat: CAT.GAS, render: R.CLOUD, starter: true,
+      key: 'snowcloud', name: 'Snow cloud', group: 'Gases', cat: CAT.GAS, render: R.CLOUD,
       colors: ['#c6cfda', '#bac4d0', '#d2dae4'], alpha: 0.9, density: 0.45, cond: 0.02, cap: 0.6, loss: 0.01, temp: -12,
       acidRes: 1, blastRes: 0,
       desc: 'Sifts snow onto everything below.',
+      recipe: 'Clouds in freezing air, or snow thrown into a cloud', hint: 'Throw snow into a cloud.', from: ['cloud', 'snow'],
     },
     {
-      key: 'fog', name: 'Fog', group: 'Gases', cat: CAT.GAS, render: R.FOG, starter: true,
+      key: 'fog', name: 'Fog', group: 'Gases', cat: CAT.GAS, render: R.FOG,
       colors: ['#dfe5ea', '#d3dae0', '#e8edf1'], alpha: 0.32, density: 0.6, cond: 0.02, cap: 0.6, loss: 0.01, temp: 6,
       life: [700, 1800], acidRes: 1, blastRes: 0,
       desc: 'A cloud on the ground. Burns off as it warms.',
+      recipe: 'Steam drifting over snow', hint: 'Breathe warm steam over cold snow.', from: ['steam', 'snow'],
     },
     {
-      key: 'hail', name: 'Hail', group: 'Powders', cat: CAT.POWDER, render: R.SPARKLE, starter: true,
+      key: 'hail', name: 'Hail', group: 'Powders', cat: CAT.POWDER, render: R.SPARKLE,
       colors: ['#e9f4fb', '#d6e8f3', '#f6fbfe'], density: 9, cond: 0.4, cap: 2, temp: -5,
       hi: [1, 'water', 0.03], slide: 0.8, blastRes: 0.2,
       desc: 'Ice pellets from storms. Melts above 0°C.',
+      recipe: 'A storm cloud in cool air', hint: 'A thunderstorm drops ice when the air is below 12°C.', from: ['stormcloud'],
     },
 
     // ───────────────────────── more discoveries ─────────────────────────
@@ -617,7 +632,6 @@
     if (d.hi) d.hi = [d.hi[0], ref(d.hi[1]), d.hi[2]];
     if (d.lo) d.lo = [d.lo[0], ref(d.lo[1]), d.lo[2]];
     if (d.burnInto) d.burnInto = d.burnInto.map(([k, w]) => [ref(k), w]);
-    d.fromIds = d.from.map(ref);
   }
 
   list.forEach(register);
@@ -634,6 +648,8 @@
     },
   };
   function refresh() {
+    // recipes may name an element added later (a cell, sugar), so they are looked up once all are in
+    for (const d of list) d.fromIds = d.from.map((k) => (byKey[k] ? byKey[k].id : -1));
     ELEM.discoverable = list.filter((d) => !d.hidden && !d.starter && !d.special && !d.periodic);
     ELEM.starters = list.filter((d) => d.starter);
   }

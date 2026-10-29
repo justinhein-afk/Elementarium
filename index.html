@@ -47,7 +47,7 @@
         <button id="btn-zoom-out" class="tb" title="Zoom out (− or scroll)" aria-label="Zoom out"><span class="ico">−</span></button>
         <button id="btn-zoom" class="tb mono zoom" title="Show the whole map (0)">100%</button>
         <button id="btn-zoom-in" class="tb" title="Zoom in (+ or scroll)" aria-label="Zoom in"><span class="ico">+</span></button>
-        <span class="sep"></span>
+        <span class="sep brk"></span>
         <button id="btn-thermal" class="tb" title="Thermal view (T)" aria-pressed="false">Thermal</button>
         <button id="btn-air" class="tb" title="Air view: wind and pressure (V)" aria-pressed="false">Air</button>
         <button id="btn-lens" class="tb" title="Magnifying lens (L)" aria-pressed="false">Lens</button>
@@ -78,10 +78,10 @@
 
       <div id="world-menu" class="menu" hidden>
         <div class="menu-title">Map size</div>
-        <button data-size="fit">Fit the screen <small>about four pixels per cell</small></button>
-        <button data-size="256x256">256 × 256 <small>square, like a small WorldBox map</small></button>
-        <button data-size="384x256">384 × 256 <small>wide</small></button>
-        <button data-size="512x320">512 × 320 <small>large — slower on older machines</small></button>
+        <button data-size="small">Small <small>256 × 160</small></button>
+        <button data-size="fit">Fit <small>320 × 200, sized for most screens</small></button>
+        <button data-size="wide">Wide <small>384 × 240</small></button>
+        <button data-size="large">Large <small>512 × 320, slower on older machines</small></button>
         <div class="menu-sep"></div>
         <button id="btn-save">Save world <small>one slot, kept in this browser</small></button>
         <button id="btn-load">Load saved world</button>
@@ -116,6 +116,9 @@
           <div class="bar"><i id="found-bar"></i></div>
         </div>
         <button id="brand-min" class="brand-min" type="button" aria-controls="brand"></button>
+        <button id="btn-more" class="brand-more" type="button" aria-expanded="false" aria-controls="foot-btns"
+          aria-label="More: Journey, Lab, Codex, Hint and Help" title="Journey, Lab, Codex, Hint and Help"><span aria-hidden="true">‹</span></button>
+        <div class="brand-tray" id="brand-tray"></div>
       </header>
 
       <section class="tools" id="tools" aria-label="Tools">
@@ -123,11 +126,14 @@
           <button class="tool" data-tool="erase" title="Erase (E, or right-drag)"><span class="glyph">⌫</span>Erase</button>
           <button class="tool" data-tool="heat" title="Heat (H)"><span class="glyph heat">▲</span>Heat</button>
           <button class="tool" data-tool="cool" title="Cool (C)"><span class="glyph cool">▼</span>Cool</button>
-          <button class="tool" data-tool="magnet" title="Magnet (G): pull loose matter and people to the cursor, let go to throw"><span class="glyph magnet"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M3 2h3.5v6.2a1.5 1.5 0 003 0V2H13v6.2a5 5 0 01-10 0z" fill="currentColor"/><path d="M3 2h3.5v2.2H3zM9.5 2H13v2.2H9.5z" fill="#ece5d3"/></svg></span>Magnet</button>
-          <button class="mag-switch" id="magnet-mode" type="button" role="switch" aria-checked="false"
-            title="Magnetic: when on, the Magnet picks up only what a real magnet would (iron, cobalt, nickel, neodymium, liquid oxygen…), and drops it once it is heated past its Curie point. When off, it carries any loose matter.">
-            <span class="track"><span class="knob"></span></span><span class="lbl">Magnetic</span>
-          </button>
+          <div class="tool-box magnet-box" id="magnet-box">
+            <button class="tool" data-tool="magnet" title="Magnet (G): pull loose matter and people to the cursor, let go to throw"><span class="glyph magnet"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M3 2h3.5v6.2a1.5 1.5 0 003 0V2H13v6.2a5 5 0 01-10 0z" fill="currentColor"/><path d="M3 2h3.5v2.2H3zM9.5 2H13v2.2H9.5z" fill="#ece5d3"/></svg></span>Magnet</button>
+            <button class="mag-switch" id="magnet-mode" type="button" role="switch" aria-checked="false" aria-label="Magnetic"
+              title="Magnetic: when on, the Magnet picks up only what a real magnet would (iron, cobalt, nickel, neodymium, liquid oxygen…), and drops it once it is heated past its Curie point. When off, it carries any loose matter.">
+              <span class="track"><span class="knob"></span></span>
+            </button>
+          </div>
+          <button class="tool" data-tool="smash" title="Smash (X): break what is brittle under the brush, stone to rubble, glass to shards, ice to snow; smash rubble again for sand"><span class="glyph smash"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M2.2 6.4l4.6-4.6 3.1 3.1-4.6 4.6z" fill="currentColor"/><path d="M7.6 7.9l1.5-1.5 5.4 5.4a1.06 1.06 0 01-1.5 1.5z" fill="currentColor" opacity=".75"/><path d="M11.4 1.2l.5 1.6M14.6 4.2l-1.6.4M13.6 1.9l-1 1.2" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg></span>Smash</button>
         </div>
         <div class="shape-row" role="group" aria-label="Brush shape">
           <button class="shape" data-shape="circle" title="Circle brush (1)" aria-label="Circle brush"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><circle cx="8" cy="8" r="5.2" fill="currentColor"/></svg></button>
@@ -184,7 +190,7 @@
         aria-label="Resize the description" title="Drag to resize the description · double-click to reset"></div>
       <footer class="panel-foot">
         <div id="inspect"></div>
-        <div class="foot-btns">
+        <div class="foot-btns" id="foot-btns">
           <button id="btn-journey" class="pill journey">Journey</button>
           <button id="btn-lab" class="pill lab" title="Unlock periodic elements by identifying mystery samples">Lab</button>
           <button id="btn-codex" class="pill">Codex</button>
@@ -219,7 +225,10 @@
           <div class="eyebrow" id="lab-eyebrow">The Lab</div>
           <h2 id="lab-title">Mystery sample</h2>
         </div>
-        <button class="close" data-close aria-label="Close">×</button>
+        <div class="lab-head-btns">
+          <button class="lab-help" id="lab-help" type="button" aria-label="How the Lab works" title="How the Lab works">?</button>
+          <button class="close" data-close aria-label="Close">×</button>
+        </div>
       </header>
       <div class="lab-body" id="lab-body"></div>
       <footer class="lab-foot">
@@ -239,17 +248,18 @@
         <button class="close" data-close aria-label="Close">×</button>
       </header>
       <div class="groups-body" id="groups-body"></div>
+      <button class="to-top" id="groups-top" type="button" aria-label="Back to the start" title="Back to the start"><svg viewBox="0 0 16 16" width="18" height="18" aria-hidden="true"><path d="M3.5 10.5L8 6l4.5 4.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
     </div>
   </div>
 
   <div id="welcome" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="welcome-title">
     <div class="modal-card">
       <h2 id="welcome-title">Elementarium</h2>
-      <p class="lede">Every grain here is simulated: heat spreads, liquids settle by weight, fire looks for fuel, current runs through metal. You start with 26 elements, seven of them seeds. The rest of the table is waiting to be found.</p>
+      <p class="lede">Every grain here is simulated: heat spreads, liquids settle by weight, fire looks for fuel, current runs through metal. You start with 17 elements: wall, soil, stone, wood and metal; sand, dirt, salt and sugar; water, oil and lime; steam and fire; a plant, a flower, and a single living cell, which grows into every animal. The rest of the table is waiting to be found.</p>
       <ul class="keys">
         <li><kbd>Drag</kbd> paint the selected element · <kbd>Right-drag</kbd> erase</li>
         <li><kbd>Scroll</kbd> zoom · <kbd>Middle-drag</kbd> or <kbd>WASD</kbd> move the map</li>
-        <li><kbd>Ctrl</kbd> + <kbd>Scroll</kbd> or <kbd>[</kbd> <kbd>]</kbd> brush size · <kbd>1</kbd>–<kbd>7</kbd> brush shape · <kbd>G</kbd> magnet</li>
+        <li><kbd>Ctrl</kbd> + <kbd>Scroll</kbd> or <kbd>[</kbd> <kbd>]</kbd> brush size · <kbd>1</kbd>–<kbd>7</kbd> brush shape · <kbd>G</kbd> magnet · <kbd>X</kbd> smash</li>
         <li><kbd>Ctrl</kbd> + <kbd>Z</kbd> undo · <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>Z</kbd> redo</li>
         <li><kbd>Middle-click</kbd> pick up the element under the cursor</li>
         <li><strong>Periodic table</strong> tab: it starts with hydrogen and helium; unlock the rest one by one in the <strong>Lab</strong> by identifying mystery samples</li>

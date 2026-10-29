@@ -24,8 +24,13 @@
       options: P.filter((d) => d.flameColor).map((d) => ({ t: d.id, d, color: d.flameColor, name: Lab.result('flame', d).band })),
     },
   };
+  // Rainbow: once every fire colour is made, fire and explosions can burn in all of them in turn
+  // (a colour every two seconds; see render.js). Its number is no element's.
+  const RAINBOW = G.Sim.RAINBOW;
+  const RAINBOW_OPT = { t: RAINBOW, color: '#ff5a5a', name: 'rainbow', rainbow: true, d: { name: 'Every fire colour', sym: '✦' } };
+  const rainbowOpen = () => made.fire.size === KINDS.fire.options.length;
   const kindOf = (t) => (t === ID.GLASS ? 'glass' : t === ID.FIRE || t === ID.EXPLOSION ? 'fire' : null); // an explosion burns in fire's colours
-  const optionOf = (kind, t) => KINDS[kind].options.find((o) => o.t === t) || null;
+  const optionOf = (kind, t) => (kind === 'fire' && t === RAINBOW ? RAINBOW_OPT : KINDS[kind].options.find((o) => o.t === t) || null);
 
   // ───── what is open, and what is chosen ─────
   const made = { glass: new Set(), fire: new Set() }; // element ids
@@ -39,17 +44,19 @@
       for (const sym of m[kind] || []) if (bySym[sym] && optionOf(kind, bySym[sym].id)) made[kind].add(bySym[sym].id);
       const pick = bySym[c[kind]];
       chosen[kind] = pick && made[kind].has(pick.id) ? pick.id : 0;
+      if (kind === 'fire' && c.fire === 'rainbow' && rainbowOpen()) chosen.fire = RAINBOW;
     }
   }
   function save() {
     if (!store) return;
     const syms = (kind) => [...made[kind]].map((t) => ELEM.list[t].sym);
     store.set('tints', { glass: syms('glass'), fire: syms('fire') });
-    store.set('tint', { glass: chosen.glass ? ELEM.list[chosen.glass].sym : null, fire: chosen.fire ? ELEM.list[chosen.fire].sym : null });
+    const fire = chosen.fire === RAINBOW ? 'rainbow' : chosen.fire ? ELEM.list[chosen.fire].sym : null;
+    store.set('tint', { glass: chosen.glass ? ELEM.list[chosen.glass].sym : null, fire });
   }
   function reset() { made.glass.clear(); made.fire.clear(); chosen.glass = 0; chosen.fire = 0; save(); }
   function choose(kind, t) {
-    chosen[kind] = t && made[kind].has(t) ? t : 0;
+    chosen[kind] = t && (made[kind].has(t) || (kind === 'fire' && t === RAINBOW && rainbowOpen())) ? t : 0;
     save();
   }
   // the colour to paint an element in: the chosen one for Glass and Fire, none for anything else
@@ -80,7 +87,8 @@
   }
 
   G.Tints = {
-    init, reset, choose, tintFor, kindOf, frame,
+    init, reset, choose, tintFor, kindOf, frame, RAINBOW,
+    rainbow: () => ({ ...RAINBOW_OPT, open: rainbowOpen() }),
     chosen: (kind) => (chosen[kind] ? optionOf(kind, chosen[kind]) : null),
     options: (kind) => KINDS[kind].options.map((o) => ({ ...o, open: made[kind].has(o.t) })),
     count: (kind) => made[kind].size,

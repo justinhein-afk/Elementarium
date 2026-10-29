@@ -7,7 +7,7 @@
   const { ELEM, Sim } = G;
   const { R, list } = ELEM;
   const NT = 256;
-  const { BURN, LEAF, PETAL, CENTER, BLEACH, EXACT } = Sim;
+  const { BURN, LEAF, PETAL, CENTER, BLEACH, EXACT, SWIMS, RAINBOW } = Sim;
 
   const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
   const hex = ELEM.hexToRgb;
@@ -160,6 +160,21 @@
     if (h) BLAST_RGB[d.id] = hex(h).join(',');
     if (d.blastGlow) BLAST_GLOW[d.id] = d.blastGlow;
   }
+  // Rainbow fire (a fire whose aux is Sim.RAINBOW, painted once every fire colour is made): the fire
+  // colours in turn round the colour wheel, each held two seconds (120 ticks), blending quickly into
+  // the next.
+  const RAINBOW_RGB = ELEM.periodic.filter((d) => d.flameColor).map((d) => hex(d.flameColor)).sort((p, q) => {
+    const hue = ([r, g, b]) => { const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn || 1;
+      const h = mx === r ? (g - b) / d : mx === g ? 2 + (b - r) / d : 4 + (r - g) / d; return (h + 6) % 6; };
+    return hue(p) - hue(q);
+  });
+  const rainbowNow = [255, 150, 60];
+  function rainbowAt(tick) {
+    const n = RAINBOW_RGB.length, ph = tick / 120, k = Math.floor(ph), f = Math.min(1, (ph - k) * 6);
+    const a = RAINBOW_RGB[(k + n - 1) % n], b = RAINBOW_RGB[k % n];
+    for (let c = 0; c < 3; c++) rainbowNow[c] = (a[c] + (b[c] - a[c]) * f) | 0;
+    return rainbowNow;
+  }
   // A reaction's burst of light: the element's flame colour, else its gas colour, else its own
   const SPARK_RGB = list.map((d) => hex(d.flameColor || d.gasColor || d.colors[0]).join(','));
 
@@ -300,7 +315,10 @@
     // creatures found this frame, drawn as sprites over the pixels
     let people = new Int32Array(256), nPeople = 0;
     let birds = new Int32Array(256), nBirds = 0;
-    const HUMAN = ELEM.ID.HUMAN, BIRD = ELEM.ID.BIRD;
+    let beasts = new Int32Array(256), nBeasts = 0; // cows, wolves and sharks
+    const HUMAN = ELEM.ID.HUMAN, BIRD = ELEM.ID.BIRD, HEADT = ELEM.ID.HEAD;
+    const COW = ELEM.ID.COW, WOLF = ELEM.ID.WOLF, SHARK = ELEM.ID.SHARK;
+    let frameTick = 0;
 
     function paintCells(tick, thermal) {
       const { SW, type, shade, flags, charge, aux, data, temp, sap, col } = world;
@@ -311,7 +329,13 @@
         return MODE[u] === R.PERIODIC ? temp[j] >= MP[u] && temp[j] < BP[u] : LIQ[u] === 1;
       };
       let o = 0;
-      nPeople = 0; nBirds = 0;
+      nPeople = 0; nBirds = 0; nBeasts = 0;
+      frameTick = tick;
+      const rbw = rainbowAt(tick);
+      // drawn as figures (zoomed in far enough), a swimmer lies along the water: the two cells they
+      // stand in show what is around them instead, so no upright outline shows behind the figure
+      const figures = view.s >= 1;
+      const swimming = (j) => (aux[j] & SWIMS) && (liquidAt(j + SW) || liquidAt(j - 1) || liquidAt(j + 1));
       for (let y = 0; y < H; y++) {
         let i = (y + 1) * SW + 1;
         for (let x = 0; x < W; x++, i++, o++) {
@@ -337,6 +361,18 @@
           } else if (t === BIRD) {
             if (nBirds === birds.length) { const n = new Int32Array(nBirds * 2); n.set(birds); birds = n; }
             birds[nBirds++] = i;
+          } else if (t === COW || t === WOLF || t === SHARK) {
+            if (nBeasts === beasts.length) { const n = new Int32Array(nBeasts * 2); n.set(beasts); beasts = n; }
+            beasts[nBeasts++] = i;
+          }
+          if (figures && ((t === HUMAN && swimming(i)) || (t === HEADT && type[i + SW] === HUMAN && swimming(i + SW)))) {
+            // in the water, the water beside it; above the surface, nothing (the air)
+            const j = liquidAt(i - 1) ? i - 1 : liquidAt(i + 1) ? i + 1 : -1;
+            if (j < 0) { out[o] = 0; glow[o] = 0; depth[x] = 0; continue; }
+            out[o] = out[o - 1 >= 0 && j === i - 1 ? o - 1 : o] || 0; // the cell to its left, already drawn
+            if (j === i + 1 || !out[o]) { const q = type[j] * 16 + (shade[j] >> 4); out[o] = (((ALPHA[type[j]] | 0) << 24) | (PB[q] << 16) | (PG[q] << 8) | PR[q]) >>> 0; }
+            glow[o] = 0; depth[x] = depth[x] + 1;
+            continue;
           }
 
           const s = shade[i];
@@ -362,6 +398,37 @@
             case R.WOOD: {
               const q = t * 16 + (((y * 3 + (x >> 3) + (s >> 6)) & 15));
               r = PR[q]; g = PG[q]; b = PB[q];
+              break;
+            }
+            case R.CONCRETE: {
+              // poured smooth: only a faint, slow mottle, no grain
+              const m = SINE[(x * 3 + y * 5) & 255] * 1.6 + SINE[(x * 2 - y * 3 + 96) & 255] * 1.4;
+              r = PR[t * 16] + m; g = PG[t * 16] + m; b = PB[t * 16] + m;
+              break;
+            }
+            case R.LIMESTONE: {
+              const hang = data[i];
+              if (hang) {
+                // a stalactite or stalagmite: pale calcite, wet and glinting at its tip
+                r = 238 - hang * 3; g = 230 - hang * 3; b = 212 - hang * 3;
+                if (type[i + SW] === 0 || type[i - SW] === 0) { r += 12; g += 14; b += 18; }
+                if ((hash(i + (tick >> 3)) & 31) === 0) { r = 252; g = 252; b = 248; }
+                break;
+              }
+              // beds of rock in gently wavy layers, sharp joints across them, and fossil shells
+              const yy = y + SINE[(x * 5) & 255] * 1.6 + 64, bed = (yy / 3) | 0, bh = hash(bed * 7919);
+              const tone = (bh & 31) - 15, grain = (s & 7) - 3; // each bed its own shade, with little grain
+              r = PR[t * 16] + tone + grain; g = PG[t * 16] + tone + grain; b = PB[t * 16] + tone * 0.8 + grain;
+              if (yy - bed * 3 < 0.55 && (bh & 3) === 0) { r -= 28; g -= 28; b -= 26; } // a bedding plane
+              if ((x + (bh >> 5)) % 17 === 0) { r -= 24; g -= 24; b -= 22; } // a joint
+              if ((hash(i * 13) & 127) === 0) { r += 24; g += 22; b += 16; } // a shell
+              break;
+            }
+            case R.CELL: {
+              // a living cell: a soft green blob that pulses
+              const ph = SINE[(s + tick * 3) & 255];
+              r += ph * 14; g += ph * 18; b += ph * 12;
+              a = 225; gl = 0.12;
               break;
             }
             case R.BRICK: {
@@ -450,7 +517,8 @@
               k = clamp(k, 0, 63);
               r = FIRE[k * 3]; g = FIRE[k * 3 + 1]; b = FIRE[k * 3 + 2];
               const fc = aux[i];
-              if (fc && FLAMEC.on[fc]) { // flame test: the burning element tints its fire
+              if (fc === RAINBOW) { r = (r * 0.18 + rbw[0] * 0.82) | 0; g = (g * 0.18 + rbw[1] * 0.82) | 0; b = (b * 0.18 + rbw[2] * 0.82) | 0; }
+              else if (fc && FLAMEC.on[fc]) { // flame test: the burning element tints its fire
                 r = (r * 0.18 + FLAMEC.r[fc] * 0.82) | 0; g = (g * 0.18 + FLAMEC.g[fc] * 0.82) | 0; b = (b * 0.18 + FLAMEC.b[fc] * 0.82) | 0;
               }
               a = clamp(120 + life * 6, 120, 255);
@@ -679,7 +747,7 @@
           if (pc && mode !== R.LIGHT) {
             const cr = (pc >> 16) & 255, cg = (pc >> 8) & 255, cb = pc & 255;
             if (pc & EXACT) { r = cr; g = cg; b = cb; }
-            else { const j = 0.84 + (s & 15) / 50; r = cr * j; g = cg * j; b = cb * j; }
+            else { const j = mode === R.CONCRETE ? 0.97 + (s & 3) / 100 : 0.84 + (s & 15) / 50; r = cr * j; g = cg * j; b = cb * j; } // painted concrete stays smooth
             if (a < 150) a = 170;
           }
 
@@ -835,7 +903,7 @@
       for (let k = blasts.length - 1; k >= 0; k--) {
         const b = blasts[k], age = (now - b.t0) / BLAST_MS;
         if (age >= 1) { blasts.splice(k, 1); continue; }
-        const c = BLAST_RGB[b.kind], a = (1 - age) * (1 - age) * BLAST_GLOW[b.kind] * dim;
+        const c = b.kind === RAINBOW ? rainbowAt(frameTick).join(',') : BLAST_RGB[b.kind], a = (1 - age) * (1 - age) * BLAST_GLOW[b.kind] * dim;
         const px = view.ox + sx + (b.x + 0.5) * s, py = view.oy + sy + (b.y + 0.5) * s;
         const R = b.r * (2 + age * 2.4) * s;
         const g = ctx.createRadialGradient(px, py, 0, px, py, R);
@@ -1017,8 +1085,9 @@
     }
 
     // Little figures over the pixels, drawn twice the size of the two cells a person takes up so
-    // they read at any zoom: a head, a shirt, swinging arms and walking legs; in water, a swimmer
-    // doing the crawl at the surface. Birds are flapping Vs.
+    // they read at any zoom: a square head, a shirt, swinging arms and walking legs; in water, a
+    // swimmer lying flat doing the crawl at the surface, and one who can't swim thrashing upright
+    // with bubbles rising. Birds are flapping Vs; cows, wolves and sharks are drawn over their cell.
     function wetAt(j) { const u = world.type[j]; return MODE[u] === R.PERIODIC ? world.temp[j] >= MP[u] && world.temp[j] < BP[u] : LIQ[u] === 1; }
     function drawCreatures(tick, sx, sy) {
       const { SW, aux, flags, shade, type } = world;
@@ -1039,9 +1108,33 @@
         const skin = `rgb(${PR[hq]},${PG[hq]},${PB[hq]})`;
         ctx.strokeStyle = '#2a2622';
         ctx.lineWidth = lw;
-        if (wetAt(i + SW) || wetAt(i - 1) || wetAt(i + 1)) {
+        const wet = wetAt(i + SW) || wetAt(i - 1) || wetAt(i + 1);
+        if (wet && !(aux[i] & SWIMS)) {
+          // can't swim: upright, arms thrashing over their head, bubbles rising
+          const ph = ((tick + x * 7) % 20) / 20 * Math.PI * 2, wave = Math.sin(ph) * u * 0.25;
+          ctx.beginPath();
+          ctx.moveTo(fx, fy - u * 0.55); ctx.lineTo(fx - u * 0.25, fy - wave * 0.4);
+          ctx.moveTo(fx, fy - u * 0.55); ctx.lineTo(fx + u * 0.25, fy + wave * 0.4);
+          ctx.stroke();
+          ctx.fillStyle = shirt;
+          ctx.fillRect(fx - u * 0.32, fy - u * 1.15, u * 0.64, u * 0.66);
+          ctx.strokeStyle = skin;
+          ctx.beginPath();
+          ctx.moveTo(fx - u * 0.3, fy - u * 1.1); ctx.lineTo(fx - u * 0.55 + wave, fy - u * 2.1);
+          ctx.moveTo(fx + u * 0.3, fy - u * 1.1); ctx.lineTo(fx + u * 0.55 - wave, fy - u * 2.1);
+          ctx.stroke();
+          ctx.fillStyle = skin;
+          ctx.fillRect(fx - u * 0.36, fy - u * 1.9, u * 0.72, u * 0.72);
+          ctx.fillStyle = 'rgba(230,244,255,0.8)';
+          for (let q = 0; q < 2; q++) {
+            const bp = ((tick + x * 13 + q * 17) % 34) / 34;
+            ctx.fillRect(fx + (q ? 0.25 : -0.2) * u, fy - u * 2 - bp * u * 1.4, Math.max(1, s * 0.45), Math.max(1, s * 0.45));
+          }
+          continue;
+        }
+        if (wet) {
           // swimming: lying along the water line, arms turning over in a crawl, legs kicking
-          const wy = fy - s * 0.55, ph = ((tick + x * 7) % 32) / 32 * Math.PI * 2, kick = Math.sin(ph * 2) * u * 0.12;
+          const wy = fy + s * 0.15, ph = ((tick + x * 7) % 32) / 32 * Math.PI * 2, kick = Math.sin(ph * 2) * u * 0.12;
           ctx.beginPath();
           ctx.moveTo(fx - face * u * 0.25, wy); ctx.lineTo(fx - face * u * 0.95, wy + kick);
           ctx.moveTo(fx - face * u * 0.25, wy + u * 0.08); ctx.lineTo(fx - face * u * 0.9, wy + u * 0.1 - kick);
@@ -1054,8 +1147,8 @@
           ctx.moveTo(sh, wy - u * 0.05); ctx.lineTo(sh + face * Math.cos(ph) * u * 0.5, wy - Math.sin(ph) * u * 0.45);
           ctx.moveTo(sh, wy - u * 0.05); ctx.lineTo(sh - face * Math.cos(ph) * u * 0.35, wy + Math.sin(ph) * u * 0.3);
           ctx.stroke();
-          ctx.fillStyle = skin;
-          ctx.beginPath(); ctx.arc(fx + face * u * 0.55, wy - u * 0.2, u * 0.26, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = skin; // the head, turned to breathe
+          ctx.fillRect(fx + face * u * 0.55 - u * 0.24, wy - u * 0.44, u * 0.48, u * 0.46);
           // the splash of their stroke
           ctx.fillStyle = 'rgba(230,244,255,0.75)';
           const spl = (tick + x * 5) & 7;
@@ -1075,9 +1168,7 @@
         ctx.fillStyle = shirt;
         ctx.fillRect(fx - u * 0.32, fy - u * 1.15, u * 0.64, u * 0.66);
         ctx.fillStyle = skin;
-        ctx.beginPath();
-        ctx.arc(fx, fy - u * 1.55, u * 0.4, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.fillRect(fx - u * 0.36, fy - u * 1.9, u * 0.72, u * 0.72);
         ctx.fillStyle = '#2a2622'; // an eye, looking the way they walk
         ctx.fillRect(fx + face * u * 0.16 - u * 0.05, fy - u * 1.62, Math.max(1, u * 0.1), Math.max(1, u * 0.1));
       }
@@ -1093,6 +1184,81 @@
         ctx.moveTo(cxp - s * 0.9, cyp + s * flap); ctx.lineTo(cxp, cyp + s * 0.2); ctx.lineTo(cxp + s * 0.9, cyp + s * flap);
         ctx.stroke();
       }
+      for (let k = 0; k < nBeasts; k++) {
+        const i = beasts[k], t = type[i];
+        if (t !== COW && t !== WOLF && t !== SHARK) continue;
+        const x = (i % SW) - 1, y = ((i / SW) | 0) - 1;
+        const fx = ox + sx + (x + 0.5) * s, fy = oy + sy + (y + 1) * s, face = aux[i] & 1 ? 1 : -1;
+        const burning = flags[i] & 1;
+        if (t === SHARK) drawShark(fx, fy - s * 0.5, face, s, tick + x * 5, burning);
+        else drawBeast(t === COW, fx, fy, face, s, ((tick >> 3) + x) & 1, shade[i], burning);
+      }
+    }
+    // A cow (white with black patches, horns and a pink snout) or a wolf (grey, pointed ears and a
+    // bushy tail) standing on the bottom of its cell, about the size of a person.
+    function drawBeast(isCow, fx, fy, face, s, stepping, sh, burning) {
+      const L = isCow ? 2.2 : 1.9, top = isCow ? 2.6 : 2.2, belly = isCow ? 1.2 : 1.1;
+      const body = burning ? '#ff8a2a' : isCow ? '#f2efe6' : '#7d7a76', dark = isCow ? '#2a2420' : '#55524e';
+      ctx.lineWidth = Math.max(1, s * 0.45);
+      ctx.strokeStyle = dark;
+      ctx.beginPath(); // four legs, walking
+      const st = stepping ? 0.25 : -0.25;
+      for (const lx of [-L * 0.7, -L * 0.45, L * 0.45, L * 0.7]) {
+        const sw = (lx < 0 ? st : -st) * s;
+        ctx.moveTo(fx + lx * s, fy - belly * s); ctx.lineTo(fx + lx * s + sw, fy);
+      }
+      ctx.stroke();
+      ctx.fillStyle = body;
+      ctx.fillRect(fx - L * s, fy - top * s, L * 2 * s, (top - belly) * s);
+      if (isCow) { // patches
+        ctx.fillStyle = dark;
+        const p = (sh >> 4) & 3;
+        ctx.fillRect(fx + (p - 1.6) * 0.5 * s, fy - top * s, 1.1 * s, 0.8 * s);
+        ctx.fillRect(fx - (p * 0.3 + 0.4) * s * face, fy - (top - 0.7) * s, 0.8 * s, 0.6 * s);
+      }
+      // the head, out front and a little up
+      const hx = fx + face * (L + 0.5) * s, hy = fy - (top + (isCow ? 0.3 : 0.5)) * s, hw = (isCow ? 1.2 : 1.1) * s;
+      ctx.fillStyle = body;
+      ctx.fillRect(hx - hw / 2, hy, hw, (isCow ? 1.2 : 0.9) * s);
+      if (isCow) {
+        ctx.fillStyle = '#e8a0a0'; // snout
+        ctx.fillRect(hx + face * hw * 0.15 - hw * 0.3, hy + 0.75 * s, hw * 0.6, 0.45 * s);
+        ctx.strokeStyle = '#d8ceb8'; ctx.lineWidth = Math.max(1, s * 0.3);
+        ctx.beginPath(); ctx.moveTo(hx - hw * 0.35, hy); ctx.lineTo(hx - hw * 0.5, hy - 0.5 * s); ctx.moveTo(hx + hw * 0.35, hy); ctx.lineTo(hx + hw * 0.5, hy - 0.5 * s); ctx.stroke();
+      } else {
+        ctx.fillRect(hx + face * hw * 0.4 - hw * 0.25, hy + 0.35 * s, hw * 0.6, 0.45 * s); // muzzle
+        ctx.fillStyle = dark; // pointed ears
+        ctx.beginPath(); ctx.moveTo(hx - hw * 0.45, hy); ctx.lineTo(hx - hw * 0.25, hy - 0.7 * s); ctx.lineTo(hx - hw * 0.02, hy); ctx.fill();
+      }
+      ctx.fillStyle = '#1c1a18'; // an eye
+      ctx.fillRect(hx + face * hw * 0.2 - s * 0.15, hy + 0.3 * s, Math.max(1, s * 0.3), Math.max(1, s * 0.3));
+      ctx.strokeStyle = isCow ? dark : body; ctx.lineWidth = Math.max(1, s * (isCow ? 0.3 : 0.55));
+      ctx.beginPath(); // the tail
+      const tx = fx - face * L * s, ty = fy - (top - 0.2) * s;
+      if (isCow) { ctx.moveTo(tx, ty); ctx.lineTo(tx - face * 0.4 * s, ty + 1.2 * s); }
+      else { ctx.moveTo(tx, ty + 0.2 * s); ctx.lineTo(tx - face * 1.1 * s, ty - 0.3 * s); }
+      ctx.stroke();
+    }
+    // A shark: a grey torpedo with a white belly, a tall fin and a beating tail.
+    function drawShark(cx0, cy0, face, s, ph, burning) {
+      const L = 2.6 * s, Hh = 0.75 * s, beat = Math.sin(ph * 0.35) * 0.5 * s;
+      ctx.fillStyle = burning ? '#ff8a2a' : '#6e7f8e';
+      ctx.beginPath();
+      ctx.moveTo(cx0 + face * L, cy0); // the snout
+      ctx.quadraticCurveTo(cx0 + face * L * 0.4, cy0 - Hh, cx0 - face * L * 0.7, cy0 - Hh * 0.3);
+      ctx.lineTo(cx0 - face * L * 0.7, cy0 + Hh * 0.3);
+      ctx.quadraticCurveTo(cx0 + face * L * 0.4, cy0 + Hh, cx0 + face * L, cy0);
+      ctx.fill();
+      ctx.beginPath(); // the dorsal fin
+      ctx.moveTo(cx0 + face * L * 0.25, cy0 - Hh * 0.8); ctx.lineTo(cx0 - face * L * 0.05, cy0 - Hh * 2.1); ctx.lineTo(cx0 - face * L * 0.2, cy0 - Hh * 0.75);
+      ctx.fill();
+      ctx.beginPath(); // the tail, beating
+      ctx.moveTo(cx0 - face * L * 0.65, cy0); ctx.lineTo(cx0 - face * L * 1.15, cy0 - Hh * 1.4 + beat); ctx.lineTo(cx0 - face * L * 1.05, cy0 + Hh * 1.1 + beat);
+      ctx.fill();
+      ctx.fillStyle = '#dfe6ea'; // the belly
+      ctx.fillRect(cx0 - face * L * 0.4 - (face < 0 ? 0 : L * 0.9), cy0 + Hh * 0.2, L * 0.9 + L * 0.4, Hh * 0.4);
+      ctx.fillStyle = '#101418';
+      ctx.fillRect(cx0 + face * L * 0.62 - s * 0.15, cy0 - Hh * 0.35, Math.max(1, s * 0.3), Math.max(1, s * 0.3));
     }
 
     // A circular 3× magnifier that follows the cursor.

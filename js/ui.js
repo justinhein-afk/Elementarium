@@ -19,6 +19,7 @@
     grass: 'Gr', cactus: 'Ct', vine: 'Vi', mushroom: 'Mu', lily: 'Ny',
     soil: 'So', concrete: 'Cc', cement: 'Cm', alcohol: 'Et', vinegar: 'Vg', explosion: 'Ex', light: 'Lx',
     sapling: 'Qr', pine: 'Pi', palm: 'Pm', willow: 'Sx', pinecone: 'Pc', coconut: 'Cn', catkin: 'Ck', paint: 'Pa', image: 'Im',
+    sugar: 'Su', lime: 'Cx', limestone: 'Lp', cell: 'Cel', cow: 'Bo', wolf: 'Wf', shark: 'Sk',
   };
 
   for (const d of list) if (d.castOf !== undefined) SYM[d.key] = list[d.castOf].sym; // a solid metal shows its metal's symbol
@@ -31,11 +32,24 @@
   };
 
   const $ = (s) => document.querySelector(s);
+  // Each section opens with its starters. The Solids then run from rock and building stuff to the
+  // cast metals, lightest first, with diamond, the hardest of all, last.
+  const FIRST = {
+    Solids: ['wall', 'soil', 'stone', 'wood', 'metal'], Powders: ['sand', 'dirt', 'salt', 'sugar'],
+    Liquids: ['water', 'oil', 'lime'], Plants: ['plant', 'flower'], Life: ['cell'],
+  };
   const tableOrder = [];
-  for (const g of GROUPS) for (const d of list) if (!d.hidden && d.group === g) tableOrder.push(d);
-  // the Oak's tile sits with the other trees rather than at the head of the plants (its element is older)
-  tableOrder.splice(tableOrder.indexOf(ELEM.byKey.sapling), 1);
-  tableOrder.splice(tableOrder.indexOf(ELEM.byKey.pine), 0, ELEM.byKey.sapling);
+  for (const g of GROUPS) {
+    const first = (FIRST[g] || []).map((k) => ELEM.byKey[k]);
+    let rest = list.filter((d) => !d.hidden && d.group === g && !first.includes(d));
+    if (g === 'Solids') {
+      const cast = rest.filter((d) => d.castOf !== undefined).sort((a, b) => a.density - b.density);
+      rest = rest.filter((d) => d.castOf === undefined && d.key !== 'diamond').concat(cast, ELEM.byKey.diamond);
+    }
+    // the Oak's tile sits with the other trees rather than at the head of the plants (its element is older)
+    if (g === 'Plants') { rest.splice(rest.indexOf(ELEM.byKey.sapling), 1); rest.splice(rest.indexOf(ELEM.byKey.pine), 0, ELEM.byKey.sapling); }
+    tableOrder.push(...first, ...rest);
+  }
   const number = new Map(tableOrder.map((d, k) => [d.id, k + 1]));
   const tiles = new Map();
   const swatches = new Map();
@@ -231,6 +245,7 @@
     s.hidden = !shown;
     s.classList.toggle('none', !made);
     s.classList.toggle('set', !!pick);
+    s.classList.toggle('rainbow', !!(pick && pick.rainbow));
     s.style.setProperty('--c', pick ? pick.color : 'transparent');
     const noun = list[t].name;
     const label = pick ? `${noun} colour: ${pick.name} (${pick.d.name.toLowerCase()}). Click to change.`
@@ -266,7 +281,7 @@
     const option = (o) => {
       const b = document.createElement('button');
       b.type = 'button';
-      b.className = `tint-opt${o && !o.open ? ' locked' : ''}${(o ? o.t : 0) === (pick ? pick.t : 0) ? ' on' : ''}`;
+      b.className = `tint-opt${o && !o.open ? ' locked' : ''}${o && o.rainbow ? ' rainbow' : ''}${(o ? o.t : 0) === (pick ? pick.t : 0) ? ' on' : ''}`;
       if (o) b.style.setProperty('--c', o.color);
       const name = !o ? 'Plain' : o.open ? o.name : '?';
       b.innerHTML = `<span class="tint-dot"></span><span class="tint-name"></span><small></small>`;
@@ -274,11 +289,12 @@
       b.querySelector('small').textContent = o ? o.d.sym : '';
       const el = o && o.d.name.toLowerCase();
       b.title = !o ? `Plain ${kind}`
+        : o.rainbow ? (o.open ? 'Rainbow: every fire colour in turn, changing every two seconds' : `Make all ${opts.length} fire colours to burn in every one of them in turn`)
         : o.open ? `${o.name}, from ${el}`
           : !Lab.has(o.t) ? `Unlock ${el} in the Lab first`
             : kind === 'glass' ? `Stir ${el} into molten glass to make this colour` : `Colour a fire with ${el} to make this colour`;
       b.addEventListener('click', () => {
-        if (o && !o.open) { note(o.d.name, b.title + '.'); return; }
+        if (o && !o.open) { note(o.rainbow ? 'Rainbow fire' : o.d.name, b.title + '.'); return; }
         Tints.choose(kind, o ? o.t : 0);
         closeTintMenu();
         select({ kind: 'element', t }); // and pick up the glass, fire or explosion to paint with
@@ -286,6 +302,7 @@
       return b;
     };
     grid.append(option(null), ...opts.map(option));
+    if (kind === 'fire') grid.append(option(Tints.rainbow())); // every colour in turn, once all are made
     const foot = document.createElement('p');
     foot.className = 'tint-note';
     foot.textContent = kind === 'glass' ? 'Stir a metal into molten glass yourself to add its colour here.'
@@ -374,6 +391,7 @@
     heat: ['Heat', 'Heats what is under the brush. Hold it to melt stone.'],
     cool: ['Cool', 'Chills what is under the brush, down to absolute zero.'],
     magnet: ['Magnet', 'Hold to carry loose matter and people. Flick to throw. Switch Magnetic on and it picks up only magnetic metals, as a real magnet would.'],
+    smash: ['Smash', 'Breaks what is brittle under the brush: stone and brick to rubble, glass to shards, ice to snow, wood to splinters. Smash rubble or shards again for sand. Metal bends, and diamond holds.'],
   };
 
   // ───── weapons ─────
@@ -734,6 +752,10 @@ ${tried ? '★ Done' : 'Try it'}: ${TryIt.text(d.id)}` : ''}`
         const el = e.target.closest('.g-el');
         if (el) { closeModal($('#groups')); select({ kind: 'element', t: +el.dataset.t }); } // pick it up
       });
+      // the ^ in the corner, once you have scrolled a way down: back to the start
+      const top = $('#groups-top');
+      body.addEventListener('scroll', () => top.classList.toggle('show', body.scrollTop > 240), { passive: true });
+      top.addEventListener('click', () => { AudioFX.click(); body.scrollTo({ top: 0, behavior: reducedMotion ? 'auto' : 'smooth' }); });
       groupsBuilt = true;
     }
     AudioFX.click();
@@ -995,11 +1017,12 @@ ${tried ? '★ Done' : 'Try it'}: ${TryIt.text(d.id)}` : ''}`
       toolButtons[b.dataset.tool] = b;
       b.addEventListener('click', () => select({ kind: 'tool', name: b.dataset.tool }));
     });
-    // the Magnetic switch beside the Magnet: on, the Magnet picks up only magnetic metals
+    // the Magnetic switch in the Magnet's box: on, the Magnet picks up only magnetic metals
     const magSwitch = $('#magnet-mode');
     const setMagnetic = (on) => {
       game.magnetOnly = on;
       magSwitch.setAttribute('aria-checked', on);
+      $('#magnet-box').classList.toggle('magnetic', on);
       magSwitch.title = `Magnetic is ${on ? 'ON' : 'OFF'}. On, the Magnet picks up only what a real magnet would (iron, cobalt, nickel, neodymium, liquid oxygen…) and drops it once heated past its Curie point. Off, it carries any loose matter.`;
       store.set('magnetOnly', on);
     };

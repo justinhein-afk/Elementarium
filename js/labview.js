@@ -107,7 +107,7 @@
   const isOpen = () => !$('#lab').hidden;
   function loop(now) {
     raf = 0;
-    if (!isOpen()) { bench = null; return; }
+    if (!isOpen()) { bench = null; if (tour >= 0) { endTour(false); tourWanted = true; } return; } // closed mid-tour: it picks up next time
     const dt = Math.min(100, now - prev);
     prev = now;
     if (bench) {
@@ -118,15 +118,19 @@
       bench.flush(tubeEvents);
       const r = $('#lab .tube-reading');
       if (r) r.textContent = bench.reading();
-      if (!shown && bench.showing) { shown = true; render(); }
+      if (!shown && bench.showing) { shown = true; render(); tourEvent('shown'); }
     }
     if (tubeWorld) tube.draw(tubeWorld.tick, { thermal: false, air: false, reducedMotion, lens: false, weather: { ambient: 20, gloom: 0 }, disasters: tubeWorld.disasters });
     const w = $('#lab .wait-left');
     if (w) {
-      const left = Math.ceil((wait - Date.now()) / 1000);
-      if (left > 0) w.textContent = `${left} s`;
-      else render();
+      const ms = wait - Date.now(), left = Math.ceil(ms / 1000);
+      if (left > 0) {
+        w.textContent = `${left} s`;
+        const fill = $('#lab .lt-fill');
+        if (fill) fill.style.width = `${(1 - ms / Lab.RETRY_MS) * 100}%`;
+      } else render();
     }
+    placeTour();
     raf = requestAnimationFrame(loop);
   }
   function startLoop() {
@@ -145,10 +149,12 @@
     shown = false;
     showInTube(bench);
     render();
+    tourEvent('test');
   }
 
   function guess(d) {
     if (!cur || !shown) return;
+    if (tour >= 0) endTour(true); // named it: the tour has done its job
     const target = cur.target, right = d === target;
     // the first time you identify one of a family, its card comes with it (the start set doesn't count)
     const first = right && !P.some((e) => e !== target && e.fam === target.fam && Lab.has(e.id) && !Lab.START.includes(e.sym));
@@ -176,6 +182,92 @@
     render();
   }
 
+  // ───── the wait for a fresh sample ─────
+  // A flask bubbling away on the bench, and a bar that fills as the sample gets ready; once it is,
+  // the flask settles and the bar turns gold.
+  const FLASK = '<svg class="lt-flask" viewBox="0 0 40 48" width="40" height="48" aria-hidden="true">'
+    + '<path class="lt-liquid" d="M9.3 30h21.4l4.1 8.1a3.4 3.4 0 01-3 4.9H8.2a3.4 3.4 0 01-3-4.9z"/>'
+    + '<circle class="lt-b b1" cx="16" cy="38" r="1.9"/><circle class="lt-b b2" cx="23" cy="39" r="1.4"/><circle class="lt-b b3" cx="20" cy="35" r="1.1"/>'
+    + '<path class="lt-glass" d="M14 3.5h12M16 3.5v12.2L5.5 37.4a4.4 4.4 0 004 6.1h21a4.4 4.4 0 004-6.1L24 15.7V3.5"/></svg>';
+  function waitBox() {
+    const ms = wait - Date.now(), ready = ms <= 0;
+    const box = el('div', `lab-timer${ready ? ' ready' : ''}`);
+    box.insertAdjacentHTML('afterbegin', FLASK);
+    const txt = el('div', 'lt-text');
+    txt.append(el('div', 'lt-label', ready ? 'A fresh sample is ready' : 'Preparing a fresh sample'),
+      el('div', 'lt-sub', ready ? 'It is on the bench, waiting for you.' : 'Your master is weighing it out and sealing it in its jar.'));
+    const bar = el('div', 'lt-bar'), fill = el('i', 'lt-fill');
+    fill.style.width = `${ready ? 100 : (1 - ms / Lab.RETRY_MS) * 100}%`;
+    bar.append(fill);
+    txt.append(bar);
+    box.append(txt, el('span', ready ? 'lt-left' : 'lt-left wait-left', ready ? '✓' : `${Math.ceil(ms / 1000)} s`));
+    return box;
+  }
+
+  // ───── the tour, the first time the Lab opens (and again from its ?) ─────
+  // It walks you through your first sample on the bench itself: the page dims and each part lights
+  // up in turn, with a note beside it. You run a real test when it asks, and it moves on by itself.
+  // `wait`: what you must do before it goes on (run a test, or let the reading come out).
+  const TOUR = [
+    { at: '.sample-card', title: 'Your mystery sample', text: 'An element you haven’t unlocked yet, sealed in a jar. Your job is to work out which one it is.' },
+    { at: '.handbook thead', title: 'What it might be', text: 'It is one of these. Each column is what your master’s handbook says that element does in each test, roughly.' },
+    { at: '.test-row', title: 'Run a test', text: 'You may run three. Pick one whose row reads differently for the candidates (◆ marks those for your first samples). Try one now.', wait: 'test' },
+    { at: '.tube-wrap', title: 'Watch the tube', text: 'The test runs here, in a tube of its own. Its exact reading comes out under the tube.', wait: 'shown' },
+    { at: '.handbook-wrap', title: 'Which one matches?', text: 'The reading is in the Sample column now. Compare it with each candidate’s row, and click a name to cross out one that doesn’t fit. Two still fit? Run another test.' },
+    { at: '.handbook tfoot', title: 'Name it', text: 'When only one fits, name it. Right, and it unlocks: you can paint with it, and its neighbours on the table become ready to research. Wrong, and it stays locked, and the next sample takes ten seconds.' },
+  ];
+  let tour = -1, tourWanted = false; // the step on show (-1: none), and whether to start it at the next bench
+  let tourHole = null, tourTip = null;
+  function startTour() { tourWanted = false; tour = 0; drawTour(); }
+  function endTour(done) {
+    tour = -1;
+    if (done) UI.store.set('labGuide', true);
+    if (tourHole) { tourHole.remove(); tourTip.remove(); tourHole = tourTip = null; }
+  }
+  // something happened on the bench: a waiting step may now go on
+  function tourEvent(kind) {
+    if (tour < 0 || TOUR[tour].wait !== kind) return;
+    tour++;
+    drawTour();
+  }
+  function drawTour() {
+    if (tour < 0) return;
+    if (tour >= TOUR.length) { endTour(true); return; }
+    if (!tourHole) {
+      tourHole = el('div', 'tour-hole');
+      tourTip = el('div', 'tour-tip');
+      tourTip.setAttribute('role', 'dialog');
+      tourTip.setAttribute('aria-live', 'polite');
+      document.body.append(tourHole, tourTip);
+    }
+    const st = TOUR[tour], last = tour === TOUR.length - 1;
+    // a step waiting for something that can't happen now (no tests left, no test running) just goes on
+    const waits = st.wait === 'test' ? !!cur && cur.ran.length < Lab.TEST_BUDGET : st.wait === 'shown' ? !shown : false;
+    tourTip.innerHTML = '';
+    const head = el('div', 'tt-head');
+    head.append(el('span', 'tt-step', `${tour + 1} of ${TOUR.length}`), el('b', '', st.title));
+    const btns = el('div', 'tt-btns');
+    btns.append(button('Skip the tour', 'tt-skip', () => endTour(true)));
+    if (waits) btns.append(el('span', 'tt-wait', st.wait === 'test' ? 'Click a test to go on' : 'Running the test…'));
+    else btns.append(button(last ? 'Start researching' : 'Next', 'pill primary', () => { tour++; drawTour(); }));
+    tourTip.append(head, el('p', '', st.text), btns);
+    placeTour();
+  }
+  // keep the light on its part (the bench is redrawn often, and scrolls), the note beside it
+  function placeTour() {
+    if (tour < 0 || !tourHole) return;
+    const t = $(`#lab ${TOUR[tour].at}`);
+    if (!t) { tourHole.style.opacity = 0; tourTip.style.opacity = 0; return; }
+    const r = t.getBoundingClientRect(), pad = 6;
+    Object.assign(tourHole.style, { opacity: 1, left: `${r.left - pad}px`, top: `${r.top - pad}px`, width: `${r.width + pad * 2}px`, height: `${r.height + pad * 2}px` });
+    const tw = tourTip.offsetWidth, th = tourTip.offsetHeight, gap = 14;
+    let top = r.bottom + pad + gap;
+    if (top + th > innerHeight - 8) top = r.top - pad - gap - th; // no room below: above it
+    if (top < 8) top = Math.max(8, Math.min(innerHeight - th - 8, r.top + 8)); // nor above: over its edge
+    const left = Math.max(8, Math.min(innerWidth - tw - 8, r.left + Math.min(24, r.width / 4)));
+    Object.assign(tourTip.style, { opacity: 1, left: `${left}px`, top: `${top}px` });
+  }
+
   // ───── what the Lab shows ─────
   function render() {
     const body = $('#lab-body'), actions = $('#lab-actions');
@@ -191,9 +283,7 @@
       $('#lab-title').textContent = 'Preparing a sample';
       const box = el('div', 'lab-wait');
       box.append(el('p', '', 'Your master always said a wrong guess costs time, not just pride. A fresh sample is on its way.'));
-      const p = el('p', 'lab-count');
-      p.append('Ready in ', el('span', 'wait-left', `${Math.ceil((wait - Date.now()) / 1000)} s`));
-      box.append(p);
+      box.append(waitBox());
       body.append(box);
       actions.append(close);
       return;
@@ -208,6 +298,8 @@
     }
     renderBench(body);
     actions.append(close);
+    if (tourWanted) requestAnimationFrame(startTour); // once the bench is laid out
+    else if (tour >= 0) requestAnimationFrame(drawTour);
   }
 
   function renderBench(body) {
@@ -377,10 +469,8 @@
     }
     box.append(ul);
     // the loop re-renders this page once the wait is over
-    const waiting = Date.now() < wait, p = el('p', 'lab-count');
-    if (waiting) p.append('A fresh sample is ready in ', el('span', 'wait-left', `${Math.ceil((wait - Date.now()) / 1000)} s`));
-    else p.textContent = 'A fresh sample is ready.';
-    box.append(p);
+    const waiting = Date.now() < wait;
+    box.append(waitBox());
     body.append(box);
     const nb = button('Next sample', 'pill primary', next);
     nb.disabled = waiting;
@@ -389,6 +479,7 @@
 
   // ───── opening and closing ─────
   function open() {
+    if (!UI.store.get('labGuide', false) && tour < 0) tourWanted = true; // the first visit starts with the tour
     if (verdict && verdict.right) verdict = null; // a card already read
     if (cur && Lab.has(cur.target.id)) cur = null; // found in the wild while you were away
     if (!verdict && !cur && Date.now() >= wait) newSample();
@@ -408,6 +499,13 @@
     loadState();
     $('#btn-lab').addEventListener('click', open);
     $('#btn-plab').addEventListener('click', open);
+    // the ? runs the tour again (on the bench; with no sample out yet, it waits for the next one)
+    $('#lab-help').addEventListener('click', () => {
+      AudioFX.click();
+      if (tour >= 0) { endTour(true); return; }
+      tourWanted = true;
+      if (cur && !verdict) render();
+    });
     addEventListener('resize', () => { if (isOpen()) tube.resize(); });
   }
 

@@ -2,9 +2,10 @@
 
 A falling-sand alchemy lab. Every grain is simulated: heat diffuses, liquids settle by
 density, fire looks for fuel, current runs through metal, plants grow and fish swim.
-You start with 39 elements (eleven plants and trees, humans, birds, ants, clouds and hail, building
-materials, alcohol and vinegar, explosions, light, and the Paint and Image tools). Experiment to
-discover 38 more, and cast 12 metals into solid blocks.
+You start with 17 elements: wall, soil, stone, wood and metal; sand, dirt, salt and sugar; water, oil
+and lime; steam and fire; a plant, a flower, and a single living **cell**, which grows into every
+animal. Experiment to discover 65 more, and cast 12 metals into solid blocks. Paint, Image, Clone and
+Void open after enough discoveries.
 
 The alchemy table has eight sections: Solids, Powders, Liquids, Gases (clouds and fog among them),
 Energy, Plants, Life and Special.
@@ -164,6 +165,46 @@ and a thirsty plant stops growing. A tree's living trunk carries water up to its
 a tree left hanging in the air, touching no ground at all, dies within three seconds: its leaves
 fall and a tree's wood stays as dead wood.
 
+## Starters, life and the Smash tool
+
+Everything that is not a starter is found in the world, each the way it really comes about:
+
+| Found | How |
+| --- | --- |
+| Clouds, rain, storm and snow clouds | steam rising high into cool air gathers into cloud; packed tight it rains; a rain cloud fed until it towers, or given a spark, becomes a storm cloud; snow thrown into a cloud makes a snow cloud |
+| Fog, hail | steam drifting over snow; a storm cloud in air below 12°C drops hail |
+| Explosion, light | anything blowing up (not a weapon); the first flash of lightning |
+| Oak, pine, palm, willow | a plant's stem grows into a tree where it finds that tree's home: against (dead) wood an oak, in snow a pine, by saltwater a palm, in clay a willow |
+| Grass, cactus, vine | a plant growing into ash (grass comes back first after a fire), by sand, up a brick wall |
+| Water lily | a flower's seed dropped in a pond |
+| Alcohol, vinegar | **sugar** in water ferments to alcohol, bubbling carbon dioxide; a cell (bacteria) sours alcohol to vinegar |
+| Cement, concrete, limestone | **lime** (milk of lime) stirred into sand is mortar, cement, which sets into concrete; carbon dioxide turns lime to limestone, as it clouds lime water in the school test |
+| Every animal | a **cell** grows into what its surroundings call for: in water a fish, in damp earth a worm, on a flower a firefly, at sugar an ant, up in a tree's leaves a bird, on grass a **cow**, beside a cow a **wolf**, beside a fish a **shark**, on clay a person (shaped from clay, as the old stories have it), on a log a mushroom |
+
+Sugar chars black in acid and caramelises to carbon past 190°C; ants carry it off to grow their nest.
+Lime neutralises acid. **Limestone** lies in layers with sharp joints and fossil shells; acid fizzes it
+away, and water seeping down through it from above drips from a cave's ceiling, growing stalactites,
+each a spike of its own, and stalagmites under them.
+
+A cell drifts and divides in water, falls like a grain out of it, and dries up in about half a minute
+on bare rock. **Cows** graze grass and plants, and have calves once well fed; **wolves** hunt cows and
+people and breed after a meal; **sharks** hunt fish and swimmers, and die on dry land. People and cows
+run from wolves and sharks.
+
+**Only half of all people can swim.** A swimmer lies flat at the surface doing the crawl; one who can't
+sinks, thrashing, with bubbles rising, and drowns within **ten seconds** unless the water is shallow.
+A person or animal **buried** under powder or rock with no air beside them suffocates within **five
+seconds** (ants and worms, which live underground, don't).
+
+**Smash** (`X`, beside the Magnet) breaks what is brittle under the brush, the way an earthquake would:
+stone, brick, obsidian, concrete and limestone to rubble of their own colour, glass to shards of its
+colour, ice and hail to snow, wood to splinters, plants to dead leaves. Metal bends and diamond holds. The
+**Magnetic** switch now sits in the Magnet's own box.
+
+When every one of the 23 fire colours is made, **Rainbow** joins the Fire and Explosion colour
+pickers: flames that burn in each fire colour in turn, round the colour wheel, a new one every two
+seconds.
+
 ## The Lab
 
 The periodic table starts locked, with only hydrogen and helium open: the first two elements of
@@ -173,7 +214,9 @@ of the table. The lanthanides and actinides join it through the gap in group 3 (
 barium and hafnium, actinium beside radium and rutherfordium).
 
 Open the **Lab** (in the panel's footer, or from the periodic tab) and it hands you a **mystery
-sample**: one of the ready elements, with three or four candidates it might be. Your master's
+sample** (the first time, a tour walks you through it on the bench itself: the page dims and the sample, the
+handbook, the tests, the tube and the answer buttons light up in turn, and you run a real test when it
+asks; the Lab's **?** runs it again): one of the ready elements, with three or four candidates it might be. Your master's
 handbook lists each candidate's properties roughly; you may run **three tests** on the sample, each
 in a test tube of its own (a separate little world with its own renderer, which never steps with
 the main one; the main world stays paused under the Lab):
@@ -192,7 +235,7 @@ The bench gives the exact reading and the reason behind it. Name the sample righ
 unlocks with a card: when and by whom it was discovered, where its name comes from and what it is
 used for; the first of each family also brings that family's card. Name it wrong and the card says
 what it was and which test would have told the two apart; the element stays locked, and the next
-sample takes ten seconds to prepare. The first ten samples come with three candidates that one
+sample takes ten seconds to prepare (a flask bubbles on the bench while a bar fills). The first ten samples come with three candidates that one
 well-chosen test can settle; after that there are four, and about a third of the samples need two
 tests together. Every sample can be settled in three tests or fewer.
 
@@ -420,20 +463,22 @@ an edit. Saved discoveries and worlds belong to the address, so stick to the one
 | `V` | Air view: pressure in red and blue, wind as streaks (the readout adds wind and pressure) |
 | `L` | Magnifying lens (3× zoom under the cursor) |
 | `M` | Sound on/off |
-| `E` `H` `C` `G` | Erase / Heat / Cool / Magnet tools |
-| Magnetic switch (beside the Magnet) | On: the Magnet picks up only what a real magnet would (iron, cobalt, nickel, neodymium, cold gadolinium, liquid oxygen…) and drops what is heated past its Curie point. Off: it carries any loose matter |
+| `E` `H` `C` `G` `X` | Erase / Heat / Cool / Magnet / Smash tools |
+| Magnetic switch (in the Magnet's box) | On: the Magnet picks up only what a real magnet would (iron, cobalt, nickel, neodymium, cold gadolinium, liquid oxygen…) and drops what is heated past its Curie point. Off: it carries any loose matter |
 | Magnet: hold and drag | Carry what is inside the ring; while the button is down it keeps pulling in every grain and drop that comes inside. It hangs from the cursor on a spring, so it trails, swings and sloshes; flick as you let go to throw it |
 | `1`–`7` | Brush shape: circle, square, pen, spray, line (drag), box (drag), fill (paint bucket) |
 | Shift while dragging a Line or Box | Keep it straight, as in a slides or drawing app: a Line snaps to flat, upright or a true diagonal, and a Box becomes a square |
 | Weapons tab: click the map | Set off the selected catastrophe there; the brush size sets how big (an earthquake's magnitude is set in the box at the top of the tab). Hold the button to steer a tornado toward the cursor |
 | Drag the divider between the map and the panel | Give the panel more room (wider beside the map, taller under it on narrow screens); double-click resets it |
+| `‹` in the panel's header (phones and tablets) | Slide out Journey, Lab, Codex, Hint and Help, which fold away on screens up to 1,024 px wide. On a phone the toolbar is two compact rows: time, undo and zoom, then the views, Weather, Scenes and Map |
 
 **Weather** sets the air temperature and wind, and picks the sky: Natural (clouds only form
 from vapour rising off warm water), Clear, Cloudy, Rain, Thunderstorm, Snow, Blizzard, Fog or
 Heatwave. Rain turns to snow below 0°C, cool storms drop hail, storms throw lightning, wind
 carries clouds and fog across the map, and open water evaporates faster the warmer it is.
 
-**Map** chooses the map size (fit to screen, 256×256, 384×256 or 512×320) and holds the
+**Map** chooses the map size, all four the same 8 : 5 shape (Small 256×160, Fit 320×200, Wide
+384×240 and Large 512×320) and holds the
 save slot. Undo keeps the last few dozen changes (strokes, scenes, clears, loads).
 
 Discoveries are saved in the browser, along with one world slot.
@@ -493,10 +538,10 @@ A few rules that shape what you can discover:
   without them, flowers drop seeds, trees drop acorns, pinecones, coconuts and drifting fluff,
   grass spreads, mushrooms puff spores and rot dead wood into soil, fish eat water plants
   and multiply, worms compost ash back into dirt.
-- **People and animals.** Humans are two cells (body and head), drawn at twice that size so
+- **People and animals.** Humans are two cells (body and head, the head drawn square), drawn at twice that size so
   they read at any zoom, with swinging arms. They walk, climb ledges, avoid cliffs, swim the crawl
-  across water and for the surface when it closes over them (and drown if they can't reach it), plant crops, start families and flee
-  fire, lava, acid and radiation. Birds fly at a comfortable height and perch in trees.
+  across water and for the surface when it closes over them (half of them can; the rest sink and drown), plant crops, start families and flee
+  fire, lava, acid, radiation, wolves and sharks. Birds fly at a comfortable height and perch in trees.
   Ants dig down into packed soil and haul the spoil up into anthills.
 - **Neutrons are rays.** A fissile cell that splits fires two or three neutrons in
   straight lines through matter. Whether they hit another fissile nucleus before escaping
@@ -526,6 +571,7 @@ node tools/groupstest.js
 node tools/casttest.js
 node tools/tintstest.js
 node tools/materialstest.js
+node tools/lifetest.js
 ```
 
 `simtest` runs the simulation headless and checks that every discovery is reachable from the

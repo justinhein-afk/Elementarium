@@ -10,19 +10,19 @@
   const stage = $('#stage');
   const renderer = Renderer.createRenderer(canvas);
 
-  // Map size: "fit" sizes the world to the stage (~4 CSS px per cell); otherwise a fixed W×H.
-  const SIZES = { '256x256': [256, 256], '384x256': [384, 256], '512x320': [512, 320] };
+  // Map size: four sizes, all the same shape (8 : 5), so a scene or a save looks alike in any of
+  // them. Fit, the default, suits most screens. (Older choices map onto the nearest: the square
+  // 256 × 256 is Small now, and "fit" used to follow the screen.)
+  const SIZES = { small: [256, 160], fit: [320, 200], wide: [384, 240], large: [512, 320] };
+  const OLD_SIZES = { '256x256': 'small', '384x256': 'wide', '512x320': 'large' };
   function pickWorldSize(choice) {
-    if (SIZES[choice]) return { W: SIZES[choice][0], H: SIZES[choice][1] };
-    const r = stage.getBoundingClientRect();
-    const cell = r.width < 700 ? 3 : 4;
-    return {
-      W: Math.max(120, Math.min(420, Math.floor(r.width / cell))),
-      H: Math.max(90, Math.min(260, Math.floor(r.height / cell))),
-    };
+    const [W, H] = SIZES[choice] || SIZES.fit;
+    return { W, H };
   }
 
   let mapSize = UI.store.get('mapsize', 'fit');
+  if (OLD_SIZES[mapSize]) { mapSize = OLD_SIZES[mapSize]; UI.store.set('mapsize', mapSize); }
+  if (!SIZES[mapSize]) mapSize = 'fit';
   const size = pickWorldSize(mapSize);
   const game = {
     world: Sim.createWorld(size.W, size.H),
@@ -161,6 +161,7 @@
       if (sel.name === 'erase') use(sel, (max) => w.erase(x, y, r, max));
       else if (sel.name === 'heat') use(sel, () => w.heat(x, y, r, 28 * game.speed));
       else if (sel.name === 'cool') use(sel, () => w.heat(x, y, r, -18 * game.speed));
+      else if (sel.name === 'smash') { if (use(sel, (max) => w.smash(x, y, r, max))) AudioFX.pour('powder'); }
       return; // the magnet acts every tick while held (see tickOnce), not along the stroke
     }
     if (sel.kind === 'weapon') return; // a weapon goes off once, on the press
@@ -589,6 +590,7 @@
     else if (k === 'h') UI.select({ kind: 'tool', name: 'heat' });
     else if (k === 'c') UI.select({ kind: 'tool', name: 'cool' });
     else if (k === 'g') UI.select({ kind: 'tool', name: 'magnet' });
+    else if (k === 'x') UI.select({ kind: 'tool', name: 'smash' });
     else if (k >= '1' && k <= '7') setShape(SHAPES[+k - 1]);
   });
   addEventListener('keyup', (e) => { held.delete(e.key.toLowerCase()); if (e.key === 'Shift') pointer.shift = false; });
@@ -713,7 +715,7 @@
     b.active = pointer.down;
     b.color = sel.kind === 'weapon' ? UI.weaponColor(sel.name)
       : sel.kind === 'tool'
-        ? sel.name === 'heat' ? '#ff7a3d' : sel.name === 'cool' ? '#8fd4ff' : sel.name === 'magnet' ? '#d08cff' : '#ece5d3'
+        ? sel.name === 'heat' ? '#ff7a3d' : sel.name === 'cool' ? '#8fd4ff' : sel.name === 'magnet' ? '#d08cff' : sel.name === 'smash' ? '#e0b070' : '#ece5d3'
         : sel.t === ID.PAINT && UI.paintColor(sel.t) ? `#${UI.paintColor(sel.t).toString(16).padStart(6, '0')}`
           : `rgb(${list[sel.t].rgb[0].join(',')})`;
 
@@ -883,6 +885,27 @@
   }
   brandMin.addEventListener('click', () => setBrandMin(!brand.classList.contains('min')));
   setBrandMin(UI.store.get('brandMin', true));
+
+  // On a phone or a tablet, Journey, Lab, Codex, Hint and Help fold away behind the ‹ in the
+  // panel's header, and slide out over it when you press it; on a wide screen they sit in the footer.
+  const footBtns = $('#foot-btns'), tray = $('#brand-tray'), more = $('#btn-more'), foot = $('.panel-foot');
+  const compact = matchMedia('(max-width: 1024px)');
+  function setTray(open) {
+    brand.classList.toggle('tray-open', open);
+    more.setAttribute('aria-expanded', open);
+    more.firstElementChild.textContent = open ? '›' : '‹';
+    more.title = open ? 'Fold them away' : 'Journey, Lab, Codex, Hint and Help';
+  }
+  function placeFootButtons() {
+    if (compact.matches) tray.append(footBtns); else foot.append(footBtns);
+    setTray(false);
+  }
+  compact.addEventListener('change', placeFootButtons);
+  placeFootButtons();
+  more.addEventListener('click', () => { AudioFX.click(); setTray(!brand.classList.contains('tray-open')); });
+  footBtns.addEventListener('click', (e) => { if (compact.matches && e.target.closest('button')) setTray(false); });
+  document.addEventListener('pointerdown', (e) => { if (brand.classList.contains('tray-open') && !brand.contains(e.target)) setTray(false); });
+  addEventListener('keydown', (e) => { if (e.key === 'Escape' && brand.classList.contains('tray-open')) setTray(false); });
 
   new ResizeObserver(() => renderer.resize()).observe(stage);
   // keep pop-up menus just above the toolbar, however many rows it wraps onto

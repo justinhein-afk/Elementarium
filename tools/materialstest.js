@@ -30,12 +30,13 @@ const isLeaf = (w, i, kind) => w.type[i] === ID.PLANT && (w.flags[i] & Sim.LEAF)
     ELEM.GROUPS.join(', '));
   const seeds = ['seed', 'acorn', 'grassseed', 'cactusseed', 'vineseed', 'spores', 'lilyseed', 'pinecone', 'coconut', 'catkin'];
   const plants = ['plant', 'flower', 'grass', 'cactus', 'vine', 'mushroom', 'lily', 'sapling', 'pine', 'palm', 'willow'];
-  check('Seeds and Ember have no tiles; every plant is on the table from the start',
-    seeds.every((k) => byKey[k].hidden) && byKey.ember.hidden && plants.every((k) => !byKey[k].hidden && byKey[k].starter),
+  // (Plant and Flower are starters; the rest are found when a plant grows into them: see lifetest.js)
+  check('Seeds and Ember have no tiles; every plant has a tile',
+    seeds.every((k) => byKey[k].hidden) && byKey.ember.hidden && plants.every((k) => !byKey[k].hidden) && byKey.plant.starter && byKey.flower.starter,
     `${plants.length} plants, oak tile: ${byKey.sapling.name}`);
   const where = { soil: 'Solids', concrete: 'Solids', cement: 'Liquids', alcohol: 'Liquids', vinegar: 'Liquids',
     explosion: 'Energy', light: 'Energy', pine: 'Plants', palm: 'Plants', willow: 'Plants', paint: 'Special', image: 'Special' };
-  check('The new materials sit in their sections', Object.entries(where).every(([k, gr]) => g(k) === gr && byKey[k].starter),
+  check('The new materials sit in their sections', Object.entries(where).every(([k, gr]) => g(k) === gr),
     `${list.length} element types, ${255 - list.length} free`);
   check('Every solid has its own density', list.filter((d) => d.cat === ELEM.CAT.STATIC && d.key !== 'wall').every((d) => d.density !== 100),
     `stone ${byKey.stone.density}, metal ${byKey.metal.density}, wood ${byKey.wood.density}, concrete ${byKey.concrete.density}`);
