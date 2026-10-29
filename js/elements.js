@@ -445,7 +445,7 @@
       colors: ['#3d6fb6', '#b6463d', '#3d9a5a', '#b68a3d', '#7a4db6', '#3d9ab0'], density: 10, cond: 0.08, cap: 2,
       flam: 0.3, ign: 160, burn: [40, 70], burnTemp: 600, fireEmit: 0.25, burnInto: [['ash', 1]],
       hi: [70, 'ash', 0.05], lo: [-25, 'ice', 0.02], blastRes: 0.05,
-      desc: 'Walks, farms and raises families. Flees danger. Only half of them can swim.',
+      desc: 'Walks, farms and raises families. Flees danger. Nine in ten can swim.',
       recipe: 'A cell touching clay', hint: 'The old stories say people were shaped from clay and given life.', from: ['cell', 'clay'],
     },
     {

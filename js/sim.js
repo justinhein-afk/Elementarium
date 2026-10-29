@@ -32,7 +32,7 @@
   const SMOKE_WHITE = 64, SMOKE_NONE = 128; // what a blast's fire leaves when it dies out
   const BLEACH = 512; // a flower whose petals chlorine has turned white
   const MOLTEN = 1024; // a grain of a castable metal that has melted: it sets solid as it cools
-  const SWIMS = 32; // a person's aux bit: this one can swim (half of everyone); the rest sink and drown
+  const SWIMS = 32; // a person's aux bit: this one can swim (nine in ten); the rest sink and drown
   // fire painted in a colour: its colour (an index into FLAME_EL) rides on the fuel it lights, so the
   // blaze keeps burning in it. A pinch of an element in a fire tints only the flames that touch it.
   const DYE = 0xF800, DYE_SHIFT = 11;
@@ -442,7 +442,7 @@
       type[i] = t; flags[i] = 0; aux[i] = 0; charge[i] = 0; vy[i] = 0; vx[i] = 0; stamp[i] = 0; col[i] = 0;
       data[i] = initData(t); temp[i] = P_TEMP[t]; shade[i] = (rnd() * 256) | 0; sap[i] = P_SAP[t] ? 200 : 0;
       if (t === FISH || t === FIREFLY || t === BIRD || t === COW || t === WOLF || t === SHARK) aux[i] = rnd() < 0.5 ? 1 : 0;
-      else if (t === HUMAN) aux[i] = (((rnd() * 16) | 0) << 1) | (rnd() < 0.5 ? SWIMS : 0) | (rnd() < 0.5 ? 1 : 0); // shirt colour in bits 1–4
+      else if (t === HUMAN) aux[i] = (((rnd() * 16) | 0) << 1) | (rnd() < 0.9 ? SWIMS : 0) | (rnd() < 0.5 ? 1 : 0); // shirt colour in bits 1–4
     }
 
     function swap(a, b) {
@@ -1658,13 +1658,13 @@
     }
     const liquidAt = (j) => { const t = type[j]; return t !== EMPTY && t !== BOUND && catOf(j) === C_LIQUID; };
     const heavyAt = (j) => { const t = type[j]; if (t === BOUND) return true; if (t === EMPTY) return false; const c = catOf(j); return c === C_STATIC || c === C_POWDER; };
-    // A one-cell animal under powder or rock with no air beside it suffocates in five seconds; one
-    // under water drowns in ten (cows and wolves swim up first). aux bits 4–7 count it, a step every
-    // 20 ticks (40 under water); bit 0 is the way it faces and bits 1–3 are free for the animal.
+    // A one-cell animal under powder or rock with no air beside it suffocates in ten seconds, and
+    // one held under water drowns in ten (cows and wolves swim up first). aux bits 4–7 count it, a
+    // step every 40 ticks; bit 0 is the way it faces and bits 1–3 are free for the animal.
     function smothered(i) {
       const up = i - SW, wet = liquidAt(up);
       if (!(wet || heavyAt(up)) || airAt(i - 1) || airAt(i + 1) || airAt(i + SW)) { aux[i] &= 15; return false; }
-      if (tick % (wet ? 40 : 20) === 0) {
+      if (tick % 40 === 0) {
         const c = (aux[i] >> 4) + 1;
         if (c >= 15) return true;
         aux[i] = (aux[i] & 15) | (c << 4);
@@ -1812,8 +1812,8 @@
       if (++data[i] > 30000 + shade[i] * 40) { transform(i, DIRT); return; }
       let wet = 0;
       for (let k = 0; k < 4; k++) if (isWater(type[i + N4[k]])) wet++;
-      if (!wet) { // stranded: it flops about and suffocates
-        if (tick % 10 === 0) { const c = (aux[i] >> 4) + 1; if (c >= 15) { transform(i, DIRT); return; } aux[i] = (aux[i] & 15) | (c << 4); }
+      if (!wet) { // stranded: it flops about and suffocates, in ten seconds
+        if (tick % 40 === 0) { const c = (aux[i] >> 4) + 1; if (c >= 15) { transform(i, DIRT); return; } aux[i] = (aux[i] & 15) | (c << 4); }
         if (open(i + SW)) swap(i, i + SW);
         return;
       }
@@ -4774,6 +4774,14 @@
       return n;
     }
 
+    // Nothing of kind t within r cells of i, so a brush lays creatures out apart rather than in a heap.
+    function roomFor(i, t, r) {
+      for (let dy = -r; dy <= r; dy++) {
+        for (let dx = -r; dx <= r; dx++) { const j = i + dy * SW + dx; if (j >= 0 && j < N && type[j] === t) return false; }
+      }
+      return true;
+    }
+
     // Both return how many cells they changed, and stop after `max` (a story chapter's pouch).
     // `tint`: a colour to paint glass or fire in (the number of the element that gives it); `rgb`: a
     // colour to paint concrete in (0xrrggbb)
@@ -4787,6 +4795,13 @@
         if (ct === t) return;
         if (t === HUMAN) {
           if (rnd() < density && cy(i) > 0 && open(i) && open(i - SW)) { spawnHuman(i); n++; }
+          return;
+        }
+        if (t === COW || t === WOLF || t === SHARK || t === CELL) {
+          // like people: a few at a time, each with room round it, dropped into the air (a shark or a
+          // cell into water too), never a solid heap of them
+          const into = open(i) || ((t === SHARK || t === CELL) && isWater(ct));
+          if (into && rnd() < density && roomFor(i, t, t === CELL ? 1 : 2)) { place(i, t); n++; }
           return;
         }
         if (t === FIRE && P_FLAM[ct] > 0) {

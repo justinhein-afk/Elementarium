@@ -124,7 +124,7 @@
   const CLOUDY = new Set([ID.CLOUD, ID.RAINCLOUD, ID.STORMCLOUD, ID.SNOWCLOUD, ID.FOG]);
   function densityFor(t) {
     const d = list[t];
-    if (t === ID.HUMAN) return 0.006;
+    if (t === ID.HUMAN || t === ID.COW || t === ID.WOLF || t === ID.SHARK || t === ID.CELL) return 0.006; // a few at a time
     if (t === ID.BIRD) return 0.01;
     if (t === ID.FISH || t === ID.WORM || t === ID.FIREFLY || t === ID.ANT) return 0.02;
     if (t === ID.SEED || t === ID.ACORN || t === ID.CACTUSSEED || t === ID.VINESEED || t === ID.LILYSEED) return 0.06;

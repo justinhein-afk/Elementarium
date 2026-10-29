@@ -91,16 +91,23 @@ const s = (ticks) => `${(ticks / 60).toFixed(1)} s`;
     rect(w, 0, 20, w.W - 1, w.H - 5, ID.WATER);
     return w;
   };
-  // drop many people into deep water; half sink and drown within ten seconds, half swim
+  // nine in ten people can swim (counted over many, so it is no matter of luck)
+  const many = world(200, 20);
+  let born = 0, swim = 0;
+  for (let k = 0; k < 2000; k++) { const i = many.idx(k % 200, 5 + ((k / 200) | 0)); many.place(i, ID.HUMAN); born++; if (many.aux[i] & Sim.SWIMS) swim++; }
+  check('Nine in ten people can swim', swim > born * 0.86 && swim < born * 0.94, `${swim} of ${born} (${Math.round((swim / born) * 100)}%)`);
+  // drop people into deep water, some of whom can't swim: they sink and drown within ten seconds
   const w = pond();
   let n = 0;
-  for (let x = 4; x < w.W - 4; x += 3) { const i = w.idx(x, 18); w.place(i, ID.HUMAN); w.place(i - w.SW, ID.HEAD); n++; }
+  for (let x = 4; x < w.W - 4; x += 3) {
+    const i = w.idx(x, 18); w.place(i, ID.HUMAN); w.place(i - w.SW, ID.HEAD); n++;
+    if (n % 4 === 0) w.aux[i] &= ~Sim.SWIMS; // a few who certainly can't
+  }
   const swimmers = cells(w, (t, i) => t === ID.HUMAN && (w.aux[i] & Sim.SWIMS));
   w.rules.births = false;
   run(w, 660);
   const alive = count(w, ID.HUMAN);
   const aliveSwim = cells(w, (t, i) => t === ID.HUMAN && (w.aux[i] & Sim.SWIMS));
-  check('About half of all people can swim', swimmers > n * 0.3 && swimmers < n * 0.7, `${swimmers} of ${n}`);
   check('Those who can\'t sink and drown within ten seconds; swimmers stay up', alive === aliveSwim && aliveSwim >= swimmers * 0.9,
     `after 11 s: ${alive} alive (${aliveSwim} swimmers of ${swimmers}); ${n - swimmers} non-swimmers dropped in`);
   // one non-swimmer: dead by 10 s, not long before either
@@ -124,9 +131,10 @@ const s = (ticks) => `${(ticks / 60).toFixed(1)} s`;
   const bird = bury((w) => { w.place(w.idx(30, 35), ID.BIRD); return ID.BIRD; });
   const cow = bury((w) => { w.place(w.idx(30, 35), ID.COW); return ID.COW; });
   const wolf = bury((w) => { w.place(w.idx(30, 35), ID.WOLF); return ID.WOLF; });
-  const all = { human, bird, cow, wolf };
-  check('A person or animal buried under sand is dead by five seconds', Object.values(all).every((t) => t > 0 && t <= 310),
-    Object.entries(all).map(([k, v]) => `${k} ${v < 0 ? 'ALIVE' : s(v)}`).join(', '));
+  const beasts = { bird, cow, wolf };
+  check('A person buried under sand is dead by five seconds; an animal by ten',
+    human > 0 && human <= 310 && Object.values(beasts).every((t) => t >= 400 && t <= 610),
+    Object.entries({ human, ...beasts }).map(([k, v]) => `${k} ${v < 0 ? 'ALIVE' : s(v)}`).join(', '));
   // …and under rock too
   const w = world(60, 40); ground(w, ID.STONE, 4); w.rules.births = false;
   const i = w.idx(30, 35); w.place(i, ID.HUMAN); w.place(i - w.SW, ID.HEAD);
@@ -177,8 +185,42 @@ const s = (ticks) => `${(ticks / 60).toFixed(1)} s`;
   // stranded on the sand it dies
   const w5 = world(60, 30); ground(w5, ID.SAND, 4); w5.place(w5.idx(30, 25), ID.SHARK);
   const beached = until(w5, 900, (ww) => count(ww, ID.SHARK) === 0);
-  check('A shark eats fish, and dies on dry land', count(w4, ID.FISH) < f0 * 0.8 && count(w4, ID.SHARK) >= 1 && beached > 0 && beached < 300,
+  check('A shark eats fish, and dies on dry land within ten seconds', count(w4, ID.FISH) < f0 * 0.8 && count(w4, ID.SHARK) >= 1 && beached >= 400 && beached <= 610,
     `${f0} fish, ${count(w4, ID.FISH)} after a minute; beached shark dead in ${s(beached)}`);
+}
+
+// ── painting creatures: a few at a time, apart, like people ──
+{
+  // a big brush held down for half a second (a paint every tick, as dragging does), at each one's
+  // own brush density (main.js densityFor)
+  const stroke = (t, density, setup) => {
+    const w = world(120, 60);
+    ground(w, ID.STONE, 4);
+    if (setup) setup(w);
+    for (let k = 0; k < 30; k++) w.paint(60, 30, 20, t, density, false);
+    const at = [];
+    for (let i = 0; i < w.N; i++) if (w.type[i] === t) at.push(i);
+    // the closest two of them, in cells (Chebyshev)
+    let close = Infinity;
+    for (let a = 0; a < at.length; a++) for (let b = a + 1; b < at.length; b++) {
+      const dx = Math.abs((at[a] % w.SW) - (at[b] % w.SW)), dy = Math.abs(((at[a] / w.SW) | 0) - ((at[b] / w.SW) | 0));
+      close = Math.min(close, Math.max(dx, dy));
+    }
+    return { n: at.length, close };
+  };
+  const pond = (w) => rect(w, 0, 20, w.W - 1, w.H - 5, ID.SALTWATER);
+  const r = {
+    cow: stroke(ID.COW, 0.006), wolf: stroke(ID.WOLF, 0.006), shark: stroke(ID.SHARK, 0.006, pond),
+    cell: stroke(ID.CELL, 0.006), 'cell in water': stroke(ID.CELL, 0.006, pond),
+  };
+  // the same stroke of people, for comparison (a disc of radius 20 is about 1,260 cells)
+  const w = world(120, 60);
+  ground(w, ID.STONE, 4);
+  for (let k = 0; k < 30; k++) w.paint(60, 30, 20, ID.HUMAN, 0.006, false);
+  const people = count(w, ID.HUMAN);
+  const ok = Object.entries(r).every(([k, v]) => v.n > 0 && v.n <= people * 1.1 && v.close >= (k.startsWith('cell') ? 2 : 3));
+  check('A brush stroke of cows, wolves, sharks or cells scatters a few, apart, as with people', ok,
+    `${Object.entries(r).map(([k, v]) => `${k} ${v.n} (closest ${v.close})`).join(', ')}; people ${people}`);
 }
 
 // ── sugar and lime ──

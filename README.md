@@ -191,10 +191,12 @@ on bare rock. **Cows** graze grass and plants, and have calves once well fed; **
 people and breed after a meal; **sharks** hunt fish and swimmers, and die on dry land. People and cows
 run from wolves and sharks.
 
-**Only half of all people can swim.** A swimmer lies flat at the surface doing the crawl; one who can't
+**Nine in ten people can swim.** A swimmer lies flat at the surface doing the crawl; one who can't
 sinks, thrashing, with bubbles rising, and drowns within **ten seconds** unless the water is shallow.
-A person or animal **buried** under powder or rock with no air beside them suffocates within **five
-seconds** (ants and worms, which live underground, don't).
+A person **buried** under powder or rock with no air beside them suffocates within **five seconds**; a
+bird, cow or wolf buried or held under water within **ten**, and a shark on dry land within ten (ants
+and worms, which live underground, don't). Cows, wolves, sharks and cells paint a few at a time, each
+with room round it, as people do; sharks and cells go into water too.
 
 **Smash** (`X`, beside the Magnet) breaks what is brittle under the brush, the way an earthquake would:
 stone, brick, obsidian, concrete and limestone to rubble of their own colour, glass to shards of its
@@ -540,7 +542,7 @@ A few rules that shape what you can discover:
   and multiply, worms compost ash back into dirt.
 - **People and animals.** Humans are two cells (body and head, the head drawn square), drawn at twice that size so
   they read at any zoom, with swinging arms. They walk, climb ledges, avoid cliffs, swim the crawl
-  across water and for the surface when it closes over them (half of them can; the rest sink and drown), plant crops, start families and flee
+  across water and for the surface when it closes over them (nine in ten can; the rest sink and drown), plant crops, start families and flee
   fire, lava, acid, radiation, wolves and sharks. Birds fly at a comfortable height and perch in trees.
   Ants dig down into packed soil and haul the spoil up into anthills.
 - **Neutrons are rays.** A fissile cell that splits fires two or three neutrons in
