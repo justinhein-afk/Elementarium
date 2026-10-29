@@ -310,7 +310,7 @@
   // cool, and it sets into a solid block that stands where it is (see periodic() in sim.js). Each one
   // is found the first time it is cast, joins the Solids, does what its metal does (conducts, holds a
   // magnet, glows as a filament, splits) and melts back into the liquid metal at the same melting
-  // point. Only these: there are not type slots enough for every element.
+  // point. Only these twelve, the metals cast for real.
   const CAST = ['Mg', 'Al', 'Fe', 'Ni', 'Cu', 'Zn', 'Ag', 'Sn', 'W', 'Pt', 'Au', 'Pb'];
   // the ones with a catch: any gas counts as air for burning, so magnesium (alight at 600°C, molten
   // at 650°C) has to be packed in with no gas at all, and tungsten, a filament metal, burns away in

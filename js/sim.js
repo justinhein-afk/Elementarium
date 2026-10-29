@@ -24,7 +24,7 @@
     EXPLOSION, SUGAR, LIME, LIMESTONE, CELL, COW, WOLF, SHARK,
   } = ID;
 
-  const BOUND = 255; // invisible border cell, so neighbour lookups never need bounds checks
+  const BOUND = EL.NT - 1; // invisible border cell, so neighbour lookups never need bounds checks
   const C_STATIC = CAT.STATIC, C_POWDER = CAT.POWDER, C_LIQUID = CAT.LIQUID, C_GAS = CAT.GAS, C_LIFE = CAT.LIFE;
 
   // cell flags
@@ -56,7 +56,7 @@
   const PRES_K = 2, PRES_MIN = 1;                // how hard a pressure difference pushes a liquid (÷ its density), and the least that does
 
   // ───────────── compiled property tables ─────────────
-  const NT = 256;
+  const NT = EL.NT; // element numbers (see elements.js): cells hold them in 16 bits
   const P_CAT = new Uint8Array(NT);
   const P_DENS = new Float32Array(NT);
   const P_COND = new Float32Array(NT);
@@ -258,7 +258,7 @@
   for (let t = 0; t < NT; t++) if (P_FLAME[t] && FLAME_EL.length < DYE >> DYE_SHIFT) { FLAME_DYE[t] = FLAME_EL.length << DYE_SHIFT; FLAME_EL.push(t); }
   // Rainbow fire, once every fire colour is made: a fire's aux of RAINBOW (no element has that
   // number) burns in each colour in turn (see render.js). It takes the last dye index.
-  const RAINBOW = 254, RAINBOW_DYE = DYE >> DYE_SHIFT;
+  const RAINBOW = NT - 2, RAINBOW_DYE = DYE >> DYE_SHIFT;
   FLAME_EL[RAINBOW_DYE] = RAINBOW; FLAME_DYE[RAINBOW] = RAINBOW_DYE << DYE_SHIFT;
   P_CAT[BOUND] = C_STATIC; P_DENS[BOUND] = 1e9; P_COND[BOUND] = 0; P_ICAP[BOUND] = 1;
   P_ACIDRES[BOUND] = 1; P_BLASTRES[BOUND] = 99;
@@ -337,11 +337,11 @@
   // ───────────── world ─────────────
   function createWorld(W, H) {
     const SW = W + 2, SH = H + 2, N = SW * SH;
-    const type = new Uint8Array(N);
+    const type = new Uint16Array(N);
     const shade = new Uint8Array(N);
     const flags = new Uint16Array(N);
     const charge = new Uint8Array(N);
-    const aux = new Uint8Array(N);
+    const aux = new Uint16Array(N); // often an element number (a fire's colour, a pane's stain, what rubble was)
     const stamp = new Uint16Array(N);
     const data = new Int32Array(N);
     const temp = new Float32Array(N);
@@ -3829,7 +3829,7 @@
     );
     // cast metal: ductile, like steel, and it breaks back into its own grains
     for (const d of list) if (d.castOf !== undefined) SOLIDS.push([d.id, 10.5, 15.5, 0.15, d.castOf]);
-    const BREAKS = new Uint8Array(NT), TEARS = new Float32Array(NT);
+    const BREAKS = new Uint16Array(NT), TEARS = new Float32Array(NT);
     const QUAKE_FROM = new Float32Array(NT).fill(NEVER), QUAKE_RUIN = new Float32Array(NT).fill(NEVER);
     // a black hole tears the lighter of two equally tough solids apart a little sooner: density
     // nudges it, but toughness decides (wood, light as it is, holds out longer than stone)
@@ -4935,7 +4935,7 @@
     // concrete to rubble of their own colour, glass to shards of its colour, ice and hail to snow,
     // wood to splinters, plants to dead leaves. Metal bends instead, diamond is too hard, and
     // creatures are left be.
-    const CRUSH = new Uint8Array(NT);
+    const CRUSH = new Uint16Array(NT);
     CRUSH[HAIL] = SNOW;
     function smash(x0, y0, r, max = Infinity) {
       let n = 0;
@@ -5028,12 +5028,13 @@
     const VQ = 16; // velocities are saved in sixteenths of a cell per tick
 
     // v3 added velocities and the air field, v4 the water in plants, v5 painted colours and living
-    // trunks; older saves load still, with everything at rest, every plant well watered and every
-    // tree's wood alive.
+    // trunks, v6 16-bit element numbers (rainbow fire's mark moved from 254); older saves load still,
+    // with everything at rest, every plant well watered and every tree's wood alive. Element numbers
+    // are mapped through the save's own list of keys, so adding elements never breaks a save.
     function serialize() {
       const q = (a, k) => Math.round(a[k] * VQ);
       return {
-        v: 5, W, H, ambient, weather: { ...weather },
+        v: 6, W, H, ambient, weather: { ...weather },
         keys: list.map((d) => d.key),
         type: rle(type, (a, k) => a[vis(k)]),
         aux: rle(aux, (a, k) => a[vis(k)]),
@@ -5053,14 +5054,14 @@
       clear();
       let map = null;
       if (s.keys) {
-        map = new Uint8Array(256);
+        map = new Uint16Array(Math.max(NT, s.keys.length + 2));
         s.keys.forEach((key, old) => { const d = EL.byKey[key]; map[old] = d ? d.id : EMPTY; });
-        map[BOUND] = BOUND;
       }
       if (typeof s.ambient === 'number') ambient = s.ambient;
       if (s.weather) Object.assign(weather, s.weather);
       unrle(s.type, (k, v) => { type[vis(k)] = map ? map[v] : v; });
       unrle(s.aux, (k, v) => { aux[vis(k)] = v; });
+      if (!(s.v >= 6)) for (let i = 0; i < N; i++) if (type[i] === FIRE && aux[i] === 254) aux[i] = RAINBOW; // its old mark
       unrle(s.flags, (k, v) => { flags[vis(k)] = v; });
       unrle(s.data, (k, v) => { data[vis(k)] = v; });
       unrle(s.temp, (k, v) => { temp[vis(k)] = v; });

@@ -6,7 +6,7 @@
 
   const { ELEM, Sim } = G;
   const { R, list } = ELEM;
-  const NT = 256;
+  const NT = ELEM.NT;
   const { BURN, LEAF, PETAL, CENTER, BLEACH, EXACT, SWIMS, RAINBOW } = Sim;
 
   const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);

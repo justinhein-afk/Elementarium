@@ -38,7 +38,10 @@ const s = (ticks) => `${(ticks / 60).toFixed(1)} s`;
     found.filter((k) => byKey[k].starter || !byKey[k].hint).join(', ') || `${found.length} elements`);
   check('Paint and Image open after enough discoveries, like Clone and Void', ['clone', 'void', 'paint', 'image'].every((k) => byKey[k].special && byKey[k].unlockAt > 0),
     ['clone', 'void', 'paint', 'image'].map((k) => `${k} ${byKey[k].unlockAt}`).join(', '));
-  check('New types still fit in a byte', list.length <= 254, `${list.length} element types`);
+  const w0 = Sim.createWorld(10, 10);
+  check('Element numbers are 16-bit, with room for 1,022 elements', w0.type instanceof Uint16Array && w0.aux instanceof Uint16Array
+    && Sim.BOUND === ELEM.NT - 1 && Sim.RAINBOW === ELEM.NT - 2 && list.length <= ELEM.NT - 2,
+    `${list.length} of ${ELEM.NT - 2} used, ${ELEM.NT - 2 - list.length} free`);
 }
 
 // ── cells ──
@@ -48,7 +51,7 @@ const s = (ticks) => `${(ticks / 60).toFixed(1)} s`;
     const w = world(40, 30);
     ground(w, ID.STONE, 4);
     setup(w);
-    const before = new Int32Array(256);
+    const before = new Int32Array(ELEM.NT);
     for (let i = 0; i < w.N; i++) before[w.type[i]]++;
     run(w, ticks, (ww) => count(ww, ID.CELL) === 0 ? false : undefined);
     return w;
@@ -341,6 +344,28 @@ const s = (ticks) => `${(ticks / 60).toFixed(1)} s`;
   };
   check('Explosions, light, fog and every kind of cloud and hail are found when the world makes them', Object.values(r).every(Boolean),
     Object.entries(r).map(([k, v]) => `${k} ${v ? 'yes' : 'NO'}`).join(', '));
+}
+
+// ── saves with 16-bit element numbers ──
+{
+  const w = world(60, 40);
+  ground(w, ID.STONE, 4);
+  rect(w, 10, 30, 20, 35, ID.WOOD); rect(w, 30, 30, 40, 35, ID.LIMESTONE); rect(w, 45, 30, 50, 35, ID.SHARK);
+  for (let i = 0; i < w.N; i++) if (w.type[i] === ID.WOOD) w.aux[i] = ID.EL_CU; // an element number kept in aux
+  const s = JSON.parse(JSON.stringify(w.serialize()));
+  const w2 = world(60, 40); w2.load(s);
+  const same = (a, b) => { for (let i = 0; i < a.N; i++) if (a.type[i] !== b.type[i] || a.aux[i] !== b.aux[i]) return false; return true; };
+  check('A world saves and loads unchanged', s.v === 6 && same(w, w2), `save v${s.v}`);
+  // a save from before: its element list was shorter, and rainbow fire was marked 254
+  const old = world(60, 40);
+  rect(old, 10, 10, 12, 12, ID.FIRE); rect(old, 20, 10, 22, 12, ID.SAND);
+  for (let i = 0; i < old.N; i++) if (old.type[i] === ID.FIRE) old.aux[i] = 254;
+  const os = JSON.parse(JSON.stringify(old.serialize()));
+  os.v = 5; os.keys = os.keys.slice(0, ID.SUGAR); // as an older version wrote it
+  const w3 = world(60, 40); w3.load(os);
+  const fires = cells(w3, (t, i) => t === ID.FIRE), rainbow = cells(w3, (t, i) => t === ID.FIRE && w3.aux[i] === Sim.RAINBOW);
+  check('…and an older save loads, its rainbow fire still rainbow', fires === 9 && rainbow === 9 && count(w3, ID.SAND) === 9,
+    `${fires} fire, ${rainbow} of them rainbow, ${count(w3, ID.SAND)} sand`);
 }
 
 let fail = 0;

@@ -158,7 +158,8 @@
   };
 
   // ───── each experiment as tests the watcher can run fast ─────
-  const EXP = new Array(256).fill(null);
+  const NT = ELEM.NT;
+  const EXP = new Array(NT).fill(null);
   function compile(d, spec) {
     if (spec.any) return { any: spec.any.map((s) => compile(d, s)) };
     const c = { ...spec };
@@ -176,7 +177,7 @@
   }
 
   // ───── progress ─────
-  const done = new Uint8Array(256);
+  const done = new Uint8Array(NT);
   let store = null;
   function init(s) {
     store = s;
@@ -192,7 +193,7 @@
   // colour of its stained glass or campfires.
   const setAside = new WeakMap();
   function staged(w) {
-    const s = new Uint8Array(256), { type, aux, N } = w;
+    const s = new Uint8Array(NT), { type, aux, N } = w;
     for (let i = 0; i < N; i++) {
       const t = type[i];
       if (list[t] && list[t].periodic) s[t] = 1;
@@ -202,8 +203,8 @@
   }
   let onDone = () => {};
   let lastScan = -1, fission = 0, scanned = null, neutrons = 0; // neutrons: tracks seen at the last scan
-  let counts = new Uint32Array(256); // grains of each element at the last scan
-  let peak = new Float32Array(256);  // …and the most there have been lately, fading over a few seconds
+  let counts = new Uint32Array(NT); // grains of each element at the last scan
+  let peak = new Float32Array(NT);  // …and the most there have been lately, fading over a few seconds
   const since = new Map(); // when an experiment that has to hold first came true
   let lastTick = 0;
   const prev = new Map(); // where each element waiting to turn into something was at the last scan
@@ -256,7 +257,7 @@
     }
     for (const t of ev.fused) if (open(t, w) && EXP[t].spec.fused) complete(t, w.W >> 1, w.H >> 1);
     fission += ev.fission;
-    if (w !== scanned) { prev.clear(); since.clear(); scanned = w; lastScan = -1; neutrons = 0; counts = new Uint32Array(256); peak = new Float32Array(256); } // a different world (a chapter, a new map)
+    if (w !== scanned) { prev.clear(); since.clear(); scanned = w; lastScan = -1; neutrons = 0; counts = new Uint32Array(NT); peak = new Float32Array(NT); } // a different world (a chapter, a new map)
     if (w.tick - lastScan >= 5 || w.tick < lastScan) { scan(w); lastScan = w.tick; }
   }
 
@@ -264,7 +265,7 @@
     const { type, aux, N, SW } = w;
     const A = { type, aux, SW, temp: w.temp, charge: w.charge, flags: w.flags, fission, neutrons, counts, peak };
     // which elements, and which kinds of leftover, are worth looking for
-    const want = new Uint8Array(256), byAux = new Uint8Array(256); // byAux: 1 flame, 2 spark, 4 glass
+    const want = new Uint8Array(NT), byAux = new Uint8Array(NT); // byAux: 1 flame, 2 spark, 4 glass
     let any = false;
     for (const d of P) {
       if (!open(d.id, w)) continue;
@@ -284,7 +285,7 @@
     }
     prev.clear();
     if (!any) { fission = 0; neutrons = 0; since.clear(); return; }
-    const seen = new Uint8Array(256), now = new Uint32Array(256), held = new Map();
+    const seen = new Uint8Array(NT), now = new Uint32Array(NT), held = new Map();
     let tracks = 0;
     for (let i = 0; i < N; i++) {
       const t = type[i];
@@ -305,12 +306,12 @@
         }
       } else if (t === FIRE || t === MSPARK || t === GLASS || t === MGLASS) {
         const a = aux[i], bit = t === FIRE ? 1 : t === MSPARK ? 2 : 4;
-        if (a < 256 && (byAux[a] & bit) && !done[a]) complete(a, i % SW, (i / SW) | 0);
+        if (a < NT && (byAux[a] & bit) && !done[a]) complete(a, i % SW, (i / SW) | 0);
       } else if (t === RAD && aux[i] === 1) tracks++; // a neutron's track
     }
     neutrons = tracks;
     counts = now;
-    for (let t = 0; t < 256; t++) peak[t] = Math.max(now[t], peak[t] * 0.97);
+    for (let t = 0; t < NT; t++) peak[t] = Math.max(now[t], peak[t] * 0.97);
     lastTick = w.tick;
     // a chain reaction: credit the fissile elements in the world while it runs
     // an experiment that has to hold: true at every look since it first came true

@@ -6,6 +6,11 @@
 
   const CAT = { EMPTY: 0, STATIC: 1, POWDER: 2, LIQUID: 3, GAS: 4, LIFE: 5, SPECIAL: 6 };
   const AMBIENT = 20;
+  // How many element numbers there are. A cell's element is a 16-bit number; the last two numbers
+  // are taken (NT − 1 is the invisible map border, NT − 2 marks rainbow fire), so 1,022 elements
+  // fit. Tables indexed by a pair of elements (contact reactions) are NT × NT, which is why this
+  // isn't 65,536.
+  const NT = 1024;
 
   // How the renderer colors a cell.
   const R = {
@@ -638,10 +643,11 @@
   list.forEach(prepare);
 
   const ELEM = {
-    CAT, R, GROUPS, AMBIENT, list, ID, byKey, hexToRgb,
+    CAT, R, GROUPS, AMBIENT, NT, list, ID, byKey, hexToRgb,
     discoverable: [], starters: [],
     // Add more elements (e.g. the periodic table). Must run before sim.js compiles its tables.
     extend(defs) {
+      if (list.length + defs.length > NT - 2) throw new Error(`Too many elements: ${list.length + defs.length} of ${NT - 2}`);
       for (const d of defs) { list.push(d); register(d); }
       for (const d of defs) prepare(d);
       refresh();

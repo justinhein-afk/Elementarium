@@ -305,7 +305,7 @@ Periodic-table solids are loose grains. Melt one past its melting point and let 
 sets into a **solid block** that stands where it is, the way molten metal is cast for real. The first
 time you cast each one it is discovered and joins the **Solids** on the Alchemy tab (so you need its
 metal unlocked in the Lab first). Twelve metals cast: magnesium, aluminium, iron, nickel, copper,
-zinc, silver, tin, tungsten, platinum, gold and lead (each takes one of the game's 255 type slots).
+zinc, silver, tin, tungsten, platinum, gold and lead (each is an element of its own; there is room for 1,022).
 Melt the ones above 1,000°C on a floor of Wall, which never melts, since stone turns to lava first.
 Two have a catch, as in real foundries: magnesium catches fire at 600°C, just before it melts at
 650°C, so it has to be packed into a sealed capsule with no room for air; and tungsten burns away in
@@ -510,6 +510,10 @@ everything at once.
 | `js/journey.js` | The journey on screen: map, journal pages, the goals card and the pouch, and running a chapter in its own world |
 | `js/labview.js` | The Lab on screen: the sample, the test tube with its own renderer and loop, the handbook, and the cards |
 | `js/main.js` | Boot, fixed-timestep loop (60 ticks/s), pointer and keyboard input |
+
+Each cell's element is a 16-bit number, with room for 1,022 elements (`ELEM.NT` in `elements.js` sets
+the limit; the last two numbers are the map's invisible border and the mark for rainbow fire). Saves
+list their elements by name, so a world saved before new elements were added still loads.
 
 A few rules that shape what you can discover:
 

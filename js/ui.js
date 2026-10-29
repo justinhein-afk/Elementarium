@@ -56,7 +56,7 @@
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   let game = null;
-  const known = new Uint8Array(256);   // persisted discoveries (starters always known)
+  const known = new Uint8Array(ELEM.NT);   // persisted discoveries (starters always known)
   const fresh = new Set();             // discovered but not yet selected
 
   const swatchFor = (t, w = 12, h = 13) => {
@@ -99,7 +99,7 @@
   }
   function syncWorldDisc(world) {
     world.disc.fill(0);
-    for (let t = 0; t < 256; t++) if (known[t]) world.disc[t] = 1;
+    for (let t = 0; t < ELEM.NT; t++) if (known[t]) world.disc[t] = 1;
     // air and the specials are never "discovered" by the simulation. A locked periodic element
     // is: if the world makes it (radium decaying to radon, uranium splitting), it unlocks. Not in
     // sandbox mode, where everything can be painted.

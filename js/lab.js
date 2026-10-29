@@ -21,7 +21,7 @@
   const AIR_GL = 1.29;        // air at 0°C in g/L (periodic.js gives gas densities at 0°C too)
 
   // ───── what is open ─────
-  const open = new Uint8Array(256);
+  const open = new Uint8Array(ELEM.NT);
   let store = null;
   function restore(syms) {
     open.fill(0);

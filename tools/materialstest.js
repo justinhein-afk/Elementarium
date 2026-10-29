@@ -37,7 +37,7 @@ const isLeaf = (w, i, kind) => w.type[i] === ID.PLANT && (w.flags[i] & Sim.LEAF)
   const where = { soil: 'Solids', concrete: 'Solids', cement: 'Liquids', alcohol: 'Liquids', vinegar: 'Liquids',
     explosion: 'Energy', light: 'Energy', pine: 'Plants', palm: 'Plants', willow: 'Plants', paint: 'Special', image: 'Special' };
   check('The new materials sit in their sections', Object.entries(where).every(([k, gr]) => g(k) === gr),
-    `${list.length} element types, ${255 - list.length} free`);
+    `${list.length} element types, ${ELEM.NT - 2 - list.length} free`);
   check('Every solid has its own density', list.filter((d) => d.cat === ELEM.CAT.STATIC && d.key !== 'wall').every((d) => d.density !== 100),
     `stone ${byKey.stone.density}, metal ${byKey.metal.density}, wood ${byKey.wood.density}, concrete ${byKey.concrete.density}`);
 }
