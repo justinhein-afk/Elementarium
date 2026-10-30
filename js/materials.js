@@ -166,5 +166,62 @@
       desc: 'Hunts fish, and swimmers. Dies on dry land.',
       recipe: 'A cell touching a fish', hint: 'Where fish swim, a hunter evolves: put a cell beside a fish.', from: ['cell', 'fish'],
     },
+    // ───── machines: they open once you have made a battery ─────
+    {
+      key: 'wire', name: 'Wire', group: 'Machines', cat: CAT.STATIC, render: R.WIRE, special: true, needs: 'battery',
+      colors: ['#b8683a', '#c47442', '#a95f34'], density: 89, cond: 0.6, hi: [1085, 'mmetal', 0.03],
+      conduct: true, acidRes: 0.6, blastRes: 0.6,
+      desc: 'Insulated copper wire. Carries current without rusting, without warming up, and without leaking it into water.',
+    },
+    {
+      // aux: 1 on, 0 off
+      key: 'switch', name: 'Switch', group: 'Machines', cat: CAT.STATIC, render: R.SWITCH, special: true, needs: 'battery',
+      colors: ['#3c4148', '#43484f'], density: 40, cond: 0.2, conduct: true, hi: [1200, 'mmetal', 0.02], acidRes: 0.6, blastRes: 0.6,
+      desc: 'Lets current through while it is on. With Switch selected, click a switch to flip it, and every switch joined to it.',
+    },
+    {
+      // aux: bit 0 set off, bits 1–2 what it senses (0 touch, 1 hotter than, 2 colder than); data: its temperature setting
+      key: 'sensor', name: 'Sensor', group: 'Machines', cat: CAT.STATIC, render: R.SENSOR, special: true, needs: 'battery',
+      colors: ['#2e3438', '#353b40'], density: 40, cond: 0.5, hi: [1400, 'mmetal', 0.02], acidRes: 0.6, blastRes: 0.6,
+      desc: 'Sends current into wire beside it while something rests against it (a heap, a pool, a creature, but not a drop falling past), or while what touches it is hotter (or colder) than its setting.',
+    },
+    {
+      // aux: what it holds (an element, or 0); data: bits 0–1 the way it is going, the rest the push it has left
+      key: 'pipe', name: 'Pipe', group: 'Machines', cat: CAT.STATIC, render: R.PIPE, special: true, needs: 'battery',
+      colors: ['#6b7480', '#737c88', '#646d78'], density: 60, cond: 0.25, cap: 4, hi: [1500, 'mmetal', 0.02], acidRes: 0.7, blastRes: 0.6, // cap: it holds as much heat as the water in it
+      desc: 'Carries liquids, gases and powders. Draw it any width: each stroke is one pipe, walled in on every edge. Erase a bit of wall where you want it open; it joins a pump, tank or valve it touches. Liquid runs down it; only a pump pushes it uphill.',
+    },
+    {
+      key: 'valve', name: 'Valve', group: 'Machines', cat: CAT.STATIC, render: R.PIPE, special: true, needs: 'battery',
+      colors: ['#a8823a', '#b48e44', '#9c7632'], density: 60, cond: 0.25, cap: 4, conduct: true, hi: [1500, 'mmetal', 0.02], acidRes: 0.7, blastRes: 0.6,
+      desc: 'A tap in a pipe: it lets things through only while powered. Under a tank or a pool it is a plug.',
+    },
+    {
+      // aux: the way it pushes (0 up, 1 right, 2 down, 3 left)
+      key: 'pump', name: 'Pump', group: 'Machines', cat: CAT.STATIC, render: R.PUMP, special: true, needs: 'battery',
+      colors: ['#3f5f7a', '#46688a', '#3a5670'], density: 70, cond: 0.4, conduct: true, hi: [1500, 'mmetal', 0.02], acidRes: 0.7, blastRes: 0.6,
+      desc: 'Powered, it draws in what touches it and pushes it out of the side it faces, into a pipe and uphill if need be. A blob of pump is one big pump.',
+    },
+    {
+      // aux: what it holds; data: how much of it (up to 40 cells' worth)
+      key: 'tank', name: 'Tank', group: 'Machines', cat: CAT.STATIC, render: R.TANK, special: true, needs: 'battery',
+      colors: ['#5c646c', '#646c74'], density: 70, cond: 0.3, cap: 12, hi: [1500, 'mmetal', 0.02], acidRes: 0.8, blastRes: 0.7, // cap: a tankful warms slowly
+      desc: 'Holds forty cells’ worth of one liquid or gas. Fill it from a pipe or by pouring on top; a pipe below draws from it.',
+    },
+    {
+      // aux: the way it pushes (0 up, 1 right, 2 down, 3 left); data: ticks to its next stroke
+      key: 'piston', name: 'Piston', group: 'Machines', cat: CAT.STATIC, render: R.PISTON, special: true, needs: 'battery',
+      colors: ['#4a4f57', '#52575f'], density: 80, cond: 0.4, conduct: true, hi: [1500, 'mmetal', 0.02], acidRes: 0.7, blastRes: 0.8,
+      desc: 'Powered, it pushes out a rod, shoving whatever is in front along, up to 16 cells. Unpowered, it pulls the rod back in.',
+    },
+    {
+      key: 'rod', name: 'Piston rod', group: 'Machines', cat: CAT.STATIC, render: R.ROD, hidden: true,
+      colors: ['#c4ccd4', '#b8c0c8'], density: 80, cond: 0.4, hi: [1500, 'mmetal', 0.02], acidRes: 0.7, blastRes: 0.8,
+    },
+    {
+      // the walls built round a pipe when it is drawn (see encase() in sim.js); erase some to make a hole
+      key: 'casing', name: 'Pipe wall', group: 'Machines', cat: CAT.STATIC, render: R.CASING, hidden: true,
+      colors: ['#6e7884', '#76808c', '#68727e'], density: 60, cond: 0.25, cap: 4, hi: [1500, 'mmetal', 0.02], acidRes: 0.7, blastRes: 0.6,
+    },
   ]);
 })(globalThis);

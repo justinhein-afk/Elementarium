@@ -166,6 +166,7 @@
     }
     if (sel.kind === 'weapon') return; // a weapon goes off once, on the press
     const t = sel.t;
+    Object.assign(w.machine, game.machine); // which way new pistons and pumps face, what new sensors sense
     if (t === ID.LIGHTNING) {
       if (pointer.boltCd <= 0) { w.spawnBolt(x, y, false); pointer.boltCd = 9; }
       return;
@@ -302,12 +303,20 @@
     checkpoint();
     pointer.down = true;
     pointer.button = e.button;
+    // a pipe drawn in one stroke is one pipe, walled in on every side when the stroke ends
+    pointer.pipe = e.button === 0 && game.selected.kind === 'element' && game.selected.t === ID.PIPE;
+    if (pointer.pipe) game.world.beginStroke();
     pointer.lastX = pointer.x; pointer.lastY = pointer.y;
     pointer.boltCd = 0; pointer.boomCd = 0; pointer.placed = false;
     if (isMagnet() && e.button === 0) { // pick up what is within reach, and keep pulling while held
       hand.trail = [];
       game.world.grab(pointer.x, pointer.y, magnetReach(), game.magnetOnly);
       hand.gx = pointer.x; hand.gy = pointer.y;
+      return;
+    }
+    if (e.button === 0 && game.selected.kind === 'element' && game.selected.t === ID.SWITCH && game.world.flip(pointer.x, pointer.y)) {
+      AudioFX.click(); // a click on a switch flips it (and those joined to it) instead of painting more
+      pointer.down = false;
       return;
     }
     if (isWeapon() && e.button === 0) { // one click sets the disaster off
@@ -319,7 +328,8 @@
       game.world.setBrush('fill');
       applyAt(pointer.x, pointer.y, e.button === 2, 0);
       game.world.setBrush('circle');
-      pointer.down = false;
+      if (pointer.pipe) game.world.encase(); // a pipe poured with the bucket is walled in at once
+      pointer.down = false; pointer.pipe = false;
       return;
     }
     game.world.setBrush(game.shape === 'square' || game.shape === 'spray' ? game.shape : 'circle');
@@ -347,7 +357,10 @@
         if (c && c.t !== ID.EMPTY && UI.unlocked(c.t) && !list[c.t].hidden) UI.select({ kind: 'element', t: c.t });
       }
     }
+    const piping = pointer.pipe && pointer.down;
     if (pointer.down && pointer.anchor) finishShape();
+    if (piping) game.world.encase(); // walled in on every edge: erase a bit of wall to let things in or out
+    pointer.pipe = false;
     if (game.world.gripping) handThrow();
     if (pointer.weapon) { game.world.steer(pointer.weapon, -1); pointer.weapon = 0; }
     pointer.down = false;

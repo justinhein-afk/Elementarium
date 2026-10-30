@@ -207,6 +207,38 @@ When every one of the 23 fire colours is made, **Rainbow** joins the Fire and Ex
 pickers: flames that burn in each fire colour in turn, round the colour wheel, a new one every two
 seconds.
 
+## Machines
+
+The **Machines** section holds the Battery and, once you have made a battery, the machine parts.
+Whatever you draw in one brush stroke is one machine: a blob of pump is one big pump, a thick
+valve one valve, and power reaching any cell of a machine runs all of it. Valves, pumps and
+pistons run on current (each pulse keeps one going for 24 ticks, longer than a battery's 16 between
+pulses) and pass none on, so each needs a wire touching it.
+
+| Part | What it does |
+| --- | --- |
+| Wire | Insulated copper: carries current without rusting, warming or leaking it into water |
+| Switch | Lets current through while on (green). Select Switch and click one to flip it and every switch joined to it |
+| Sensor | Sends current into wire beside it while something loose rests against it (a heap, a pool, a creature, but not a drop falling past), or while what touches it is hotter (or colder) than its setting |
+| Pipe | Draw it any width with any brush (circle, square, pen, spray, line, box or bucket): each stroke is one pipe, walled in on every edge. Erase a bit of its wall where you want it open; drawn onto a pump, a tank or a valve, it joins it. Liquid drains in at an opening, runs down or along, never up unless pumped, and pours out of the other end; gases go in only by a pump. What it carries boils, condenses or freezes with the pipe's temperature |
+| Valve | Passes things only while powered: a tap in a pipe (drawn over a pipe, it takes the place of its bore and keeps its walls), or a plug under a pool |
+| Pump | Faces a way (set in the panel); powered, it draws in what touches it on its other sides and drives it out of the side it faces: into a pipe with the push to climb about 240 cells, into a tank, or out as a jet |
+| Tank | Holds 40 cells' worth of one liquid or gas, shows its level, settles and levels out across several cells, and feeds a pipe below or beside it |
+| Piston | Faces a way; powered, it pushes a rod out up to 16 cells, shoving what is in front along; unpowered, it pulls it back |
+
+The **Waterworks** scene puts every part to work, left to right:
+
+- **A house with a fire sprinkler.** Light the logs in the hearth: the heat sensor beside them opens
+  the valve under the tank on the roof, and the sprinkler across the room puts the fire out.
+- **A water tower.** A pump on the bottom of the pond drives the water up a pipe into the tower's tank
+  (its switch, under the tower, starts on).
+- **A garden.** Flip the other switch under the tower to open the valve on the side of the tank and
+  water the garden. Whatever the house and the garden spill runs back into the pond.
+- **A reservoir.** The sluice gate over the outlet in the dam is a piston's rod: switch it off to drop
+  the gate and let the water out into the basin, and on again to shut it. Pour more water in and it
+  rises to the touch sensor at the high-water mark, which starts the overflow pump sending it over
+  the dam.
+
 ## The Lab
 
 The periodic table starts locked, with only hydrogen and helium open: the first two elements of
@@ -578,6 +610,7 @@ node tools/casttest.js
 node tools/tintstest.js
 node tools/materialstest.js
 node tools/lifetest.js
+node tools/machinetest.js
 ```
 
 `simtest` runs the simulation headless and checks that every discovery is reachable from the

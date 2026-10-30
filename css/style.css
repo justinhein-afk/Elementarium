@@ -552,6 +552,19 @@ kbd {
   font: 500 14px/1 var(--f-mono);
 }
 .mag-note { grid-column: 1 / -1; font-size: 12px; color: var(--bone-faint); }
+/* how new machines are set: a piston's or a pump's facing, a sensor's sense */
+.machine-set { display: grid; gap: 6px; padding: 8px 10px; border-radius: var(--r); background: rgba(78, 154, 136, 0.08); border: 1px solid rgba(78, 154, 136, 0.3); font-size: 13px; color: var(--bone-dim); }
+.machine-set[hidden], .machine-set [hidden] { display: none; }
+.ms-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ms-lbl { font-weight: 600; color: #9fe3cf; min-width: 52px; }
+.ms-btns { display: flex; gap: 4px; }
+.ms-btns button { width: 32px; height: 28px; padding: 0; border-radius: 6px; background: var(--patina-800); border: 1px solid rgba(78, 154, 136, 0.25); color: var(--bone-dim); font: 700 15px/1 var(--f-ui); }
+.ms-btns button:hover { border-color: var(--verdigris); color: var(--bone); }
+.ms-btns button[aria-checked="true"] { border-color: var(--brass); color: var(--brass); background: rgba(214, 168, 79, 0.12); }
+.machine-set select, .machine-set input { background: var(--patina-900); border: 1px solid rgba(78, 154, 136, 0.3); color: var(--bone); border-radius: 6px; padding: 4px 6px; font: 500 13px/1.2 var(--f-ui); }
+.machine-set input { width: 70px; }
+.ms-unit { color: var(--bone-faint); }
+.ms-note { font-size: 12px; color: var(--bone-faint); }
 .mag-note b { color: var(--bone); text-transform: capitalize; }
 .weapons-note kbd { font: 500 11px/1 var(--f-mono); color: var(--bone-dim); }
 

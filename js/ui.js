@@ -20,6 +20,7 @@
     soil: 'So', concrete: 'Cc', cement: 'Cm', alcohol: 'Et', vinegar: 'Vg', explosion: 'Ex', light: 'Lx',
     sapling: 'Qr', pine: 'Pi', palm: 'Pm', willow: 'Sx', pinecone: 'Pc', coconut: 'Cn', catkin: 'Ck', paint: 'Pa', image: 'Im',
     sugar: 'Su', lime: 'Cx', limestone: 'Lp', cell: 'Cel', cow: 'Bo', wolf: 'Wf', shark: 'Sk',
+    wire: 'Wr', switch: 'Swt', sensor: 'Sen', pipe: 'Ppe', valve: 'Vlv', pump: 'Pmp', tank: 'Tnk', piston: 'Pst',
   };
 
   for (const d of list) if (d.castOf !== undefined) SYM[d.key] = list[d.castOf].sym; // a solid metal shows its metal's symbol
@@ -36,7 +37,7 @@
   // cast metals, lightest first, with diamond, the hardest of all, last.
   const FIRST = {
     Solids: ['wall', 'soil', 'stone', 'wood', 'metal'], Powders: ['sand', 'dirt', 'salt', 'sugar'],
-    Liquids: ['water', 'oil', 'lime'], Plants: ['plant', 'flower'], Life: ['cell'],
+    Liquids: ['water', 'oil', 'lime'], Plants: ['plant', 'flower'], Life: ['cell'], Machines: ['battery'],
   };
   const tableOrder = [];
   for (const g of GROUPS) {
@@ -82,9 +83,12 @@
     // whatever a chapter puts in the pouch can be used, discovered or not
     if (G.Journey && G.Journey.active && G.Journey.allows({ kind: 'element', t })) return true;
     if (d.periodic) return Lab.has(t); // identified in the Lab
-    if (d.special) return foundCount() >= d.unlockAt;
+    if (d.special) return d.needs ? !!known[ELEM.byKey[d.needs].id] : foundCount() >= d.unlockAt;
     return !!known[t];
   }
+  // what opens a special element, in a few words and in a sentence
+  const opensWith = (d) => (d.needs ? ELEM.byKey[d.needs].name : `${d.unlockAt} finds`);
+  const opensWhen = (d) => (d.needs ? `Unlocks once you have made a ${ELEM.byKey[d.needs].name.toLowerCase()}` : `Unlocks after ${d.unlockAt} discoveries`);
   function near(t) {
     const d = list[t];
     return !known[t] && !d.special && d.fromIds.length > 0 && d.fromIds.every((f) => known[f] || (list[f].periodic && Lab.has(f)));
@@ -334,10 +338,10 @@
     b.classList.toggle('new', !codex && fresh.has(d.id));
     b.querySelector('canvas').style.display = isOpen ? '' : 'none';
     b.querySelector('.sym').textContent = isOpen ? SYM[d.key] : '?';
-    b.querySelector('.nm').textContent = isOpen ? d.name : d.special ? `${d.unlockAt} finds` : '';
+    b.querySelector('.nm').textContent = isOpen ? d.name : d.special ? opensWith(d) : '';
     let title;
     if (isOpen) title = `${d.name} — ${d.desc}`;
-    else if (d.special) title = `Unlocks after ${d.unlockAt} discoveries`;
+    else if (d.special) title = opensWhen(d);
     else if (near(d.id)) title = `Within reach: ${d.hint}`;
     else title = d.castOf !== undefined ? `Not within reach yet — unlock ${list[d.castOf].name.toLowerCase()} in the Lab first`
       : 'Not within reach yet — discover its ingredients first';
@@ -378,6 +382,7 @@
     const box = $('#magnitude');
     if (box) box.hidden = !(game.selected.kind === 'weapon' && game.selected.name === 'quake');
     for (const [t, b] of tiles) b.classList.toggle('on', game.selected.kind === 'element' && game.selected.t === t);
+    paintMachineBox();
     paintPeriodic();
     renderInspect();
     if (G.Journey) G.Journey.refreshPouch();
@@ -520,6 +525,49 @@
     renderInspect();
   }
 
+  // ───── machine settings ─────
+  // How newly painted machines are set: which way a piston or a pump faces, and what a sensor senses
+  // (touch, or hotter or colder than a temperature). Shown in the tools while one is selected.
+  const DIRS = [['↑', 'Up'], ['→', 'Right'], ['↓', 'Down'], ['←', 'Left']];
+  const SENSES = [['Touch', 'anything loose landing on it'], ['Hotter than', ''], ['Colder than', '']];
+  function buildMachineBox() {
+    const box = $('#machine-set');
+    box.innerHTML = `<div class="ms-row ms-dir"><span class="ms-lbl">Faces</span><div class="ms-btns" role="radiogroup" aria-label="Which way it faces">${
+      DIRS.map(([g, n], k) => `<button type="button" role="radio" data-dir="${k}" title="${n}" aria-label="${n}">${g}</button>`).join('')}</div></div>
+      <div class="ms-row ms-sense"><span class="ms-lbl">Senses</span><select id="ms-mode" aria-label="What it senses">${
+      SENSES.map(([n], k) => `<option value="${k}">${n}</option>`).join('')}</select>
+      <input id="ms-temp" type="number" step="10" aria-label="Temperature, °C" inputmode="numeric"><span class="ms-unit">°C</span></div>
+      <div class="ms-note" id="ms-note"></div>`;
+    box.querySelectorAll('[data-dir]').forEach((b) => b.addEventListener('click', () => { AudioFX.click(); setMachine({ dir: +b.dataset.dir }); }));
+    $('#ms-mode').addEventListener('change', (e) => setMachine({ mode: +e.target.value }));
+    const temp = $('#ms-temp'), typed = () => { const v = parseFloat(temp.value); setMachine({ set: Number.isFinite(v) ? Math.max(-273, Math.min(9000, Math.round(v))) : game.machine.set }); };
+    temp.addEventListener('change', typed);
+    temp.addEventListener('keydown', (e) => { if (e.key === 'Enter') typed(); });
+  }
+  function setMachine(o) {
+    Object.assign(game.machine, o);
+    store.set('machine', game.machine);
+    paintMachineBox();
+  }
+  function paintMachineBox() {
+    const box = $('#machine-set');
+    const t = game.selected.kind === 'element' ? game.selected.t : -1;
+    const k = t === ID.PISTON || t === ID.PUMP ? 'dir' : t === ID.SENSOR ? 'sense' : t === ID.SWITCH ? 'switch' : '';
+    box.hidden = !k;
+    if (!k) return;
+    const m = game.machine;
+    box.querySelector('.ms-dir').hidden = k !== 'dir';
+    box.querySelector('.ms-sense').hidden = k !== 'sense';
+    box.querySelectorAll('[data-dir]').forEach((b) => b.setAttribute('aria-checked', +b.dataset.dir === m.dir));
+    $('#ms-mode').value = m.mode;
+    $('#ms-temp').value = m.set;
+    $('#ms-temp').hidden = box.querySelector('.ms-unit').hidden = m.mode === 0;
+    $('#ms-note').textContent = k === 'dir' ? (t === ID.PISTON ? `New pistons push ${DIRS[m.dir][1].toLowerCase()}.` : `New pumps push ${DIRS[m.dir][1].toLowerCase()}, drawing in from the other sides.`)
+      : k === 'sense' ? (m.mode === 0 ? 'New sensors fire while anything loose rests against them: a heap, a pool, a creature (not a drop falling past).'
+        : `New sensors fire while what touches them is ${m.mode === 1 ? 'hotter' : 'colder'} than ${m.set}°C.`)
+        : 'New switches start on. Click a switch to flip it, and every switch joined to it.';
+  }
+
   function select(sel) {
     // in a story chapter only what is in the pouch can be picked up
     if (G.Journey && G.Journey.active && !G.Journey.allows(sel)) {
@@ -530,7 +578,7 @@
       if (!unlocked(sel.t)) {
         const d = list[sel.t];
         if (d.periodic) note(`${d.name} is locked`, Lab.ready(d.id) ? 'Identify it in the Lab to use it.' : 'Unlock an element beside it on the table first.');
-        else if (d.special) note(`${d.name} unlocks after ${d.unlockAt} discoveries`, `You have ${foundCount()}.`);
+        else if (d.special) note(`${d.name} is locked`, d.needs ? `${opensWhen(d)}.` : `${opensWhen(d)}. You have ${foundCount()}.`);
         else if (near(sel.t)) note('Within reach', d.hint);
         else note('Not within reach yet', d.castOf !== undefined ? `Unlock ${list[d.castOf].name.toLowerCase()} in the Lab first.` : 'Discover its ingredients first.');
         return;
@@ -701,7 +749,7 @@ ${tried ? '★ Done' : 'Try it'}: ${TryIt.text(d.id)}` : ''}`
 
     const after = foundCount();
     for (const s of list) {
-      if (s.special && before < s.unlockAt && after >= s.unlockAt) {
+      if (s.special && !s.needs && before < s.unlockAt && after >= s.unlockAt) {
         setTimeout(() => {
           AudioFX.unlock();
           toast({ eyebrow: 'Unlocked', name: s.name, how: s.desc, t: s.id, ms: 6000 });
@@ -709,6 +757,16 @@ ${tried ? '★ Done' : 'Try it'}: ${TryIt.text(d.id)}` : ''}`
           refreshTable();
         }, 1400);
       }
+    }
+    // the machine parts, once their battery is made
+    const opened = list.filter((s) => s.special && s.needs === d.key && !s.hidden);
+    if (opened.length) {
+      setTimeout(() => {
+        AudioFX.unlock();
+        toast({ eyebrow: 'Machines unlocked', name: 'Machine parts', how: `${opened.map((s) => s.name).join(', ')}: in the Machines section.`, t: opened[0].id, ms: 7000 });
+        for (const s of opened) fresh.add(s.id);
+        refreshTable();
+      }, 1400);
     }
     if (totalKnown() === tableTotal) {
       setTimeout(() => {
@@ -823,14 +881,14 @@ ${tried ? '★ Done' : 'Try it'}: ${TryIt.text(d.id)}` : ''}`
     if (!open) {
       const isNear = near(d.id);
       box.innerHTML = `<h3>Unknown</h3><div class="kind">${d.group}</div>
-        <p>${d.special ? `Unlocks after ${d.unlockAt} discoveries. You have ${foundCount()}.` : isNear ? 'Within reach. Its ingredients are all on your table.' : d.castOf !== undefined ? `Not within reach yet. Unlock ${list[d.castOf].name.toLowerCase()} in the Lab first.` : 'Not within reach yet. Discover its ingredients first.'}</p>
+        <p>${d.special ? `${opensWhen(d)}.${d.needs ? '' : ` You have ${foundCount()}.`}` : isNear ? 'Within reach. Its ingredients are all on your table.' : d.castOf !== undefined ? `Not within reach yet. Unlock ${list[d.castOf].name.toLowerCase()} in the Lab first.` : 'Not within reach yet. Discover its ingredients first.'}</p>
         ${isNear ? `<dl><dt>Hint</dt><dd></dd></dl>` : ''}`;
       if (isNear) box.querySelector('dd').textContent = d.hint;
       return;
     }
     box.append(cloneCanvas(swatchFor(d.id, 60, 18)));
     const rows = [];
-    rows.push(['Found by', d.starter ? 'Starter element' : d.special ? `${d.unlockAt} discoveries` : d.recipe]);
+    rows.push(['Found by', d.starter ? 'Starter element' : d.special ? (d.needs ? `Making a ${ELEM.byKey[d.needs].name.toLowerCase()}` : `${d.unlockAt} discoveries`) : d.recipe]);
     if (d.hi && d.hi[1] >= 0) rows.push(['Above', `${fmtT(d.hi[0])} → ${list[d.hi[1]].name}`]);
     if (d.lo && d.lo[1] >= 0) rows.push(['Below', `${fmtT(d.lo[0])} → ${list[d.lo[1]].name}`]);
     if (d.flam > 0) rows.push(['Ignites', d.explode ? `${fmtT(d.ign)} — explodes` : fmtT(d.ign)]);
@@ -1011,6 +1069,8 @@ ${tried ? '★ Done' : 'Try it'}: ${TryIt.text(d.id)}` : ''}`
     Tints.onOpen = tintMade;
     game.sandbox = store.get('sandbox', false);
     game.magnitude = store.get('magnitude', 7);
+    game.machine = Object.assign({ dir: 0, mode: 1, set: 100 }, store.get('machine', {}));
+    buildMachineBox();
     syncWorldDisc(game.world);
 
     document.querySelectorAll('.tool').forEach((b) => {

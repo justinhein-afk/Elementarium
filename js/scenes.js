@@ -328,6 +328,172 @@
       for (let x = bx + 3; x <= bx + 7; x++) w.place(w.idx(x, floor), ID.EL_BI);
     },
 
+    // The waterworks: every machine part, drawn big, doing a useful job. Laid out for a 256 × 160
+    // map and scaled up with the map (s); every joint is worked out from the part it joins, so the
+    // wires and pipes meet at any size. Left to right:
+    //   a house with a fire sprinkler: a heat sensor against the logs in the hearth opens a valve under
+    //     a tank on the roof, and water sprays from a pipe across the room (light the logs);
+    //   a pond with a pump at the bottom, driving water up a pipe into a tank on a tower (its switch,
+    //     under the tower, starts on);
+    //   a garden watered from the tower's tank through a valve on its side (its switch, also under
+    //     the tower, starts off);
+    //   a reservoir: a sluice gate (a piston's rod) over the outlet in the foot of the dam (switch it
+    //     off to drop the gate and let the water out into the basin), and a touch sensor at the
+    //     high-water mark that starts a pump sending the overflow over the dam (pour in water to see it).
+    // Whatever the house and the garden spill runs back into the pond. Wires run inside walls and
+    // under the ground.
+    machines(w) {
+      w.clear();
+      const { W, H } = w;
+      const s = H / 160, P = (v) => Math.max(1, Math.round(v * s));
+      const rect = (x0, y0, x1, y1, t) => {
+        for (let y = Math.max(0, y0); y <= Math.min(H - 1, y1); y++) {
+          for (let x = Math.max(0, x0); x <= Math.min(W - 1, x1); x++) w.place(w.idx(x, y), t);
+        }
+      };
+      const each = (x0, y0, x1, y1, f) => {
+        for (let y = Math.max(0, y0); y <= Math.min(H - 1, y1); y++) for (let x = Math.max(0, x0); x <= Math.min(W - 1, x1); x++) f(w.idx(x, y));
+      };
+      const tint = (x0, y0, x1, y1, t, hex) => each(x0, y0, x1, y1, (i) => { if (w.type[i] === t) w.col[i] = G.Sim.PAINTED | parseInt(hex.slice(1), 16); });
+      const part = (x0, y0, x1, y1, t, set) => { rect(x0, y0, x1, y1, t); if (set) each(x0, y0, x1, y1, set); };
+      const facing = (d) => (i) => { w.data[i] = d; };           // a pump: the way it pushes (0 up)
+      const pushing = (d) => (i) => { w.aux[i] = d; w.sap[i] = 255; }; // a piston: the way it pushes (0 up), powered until its battery's current arrives
+      const switched = (v) => (i) => { w.aux[i] = v; };          // a switch: on (1) or off (0)
+      const senses = (mode, T) => (i) => { w.aux[i] = mode << 1; w.data[i] = T; }; // 0 touch, 1 hotter than T
+      const holding = (c, n) => (i) => { w.aux[i] = c; w.data[i] = n; }; // a tank cell: what it holds, and how much
+      // a thick pipe of half-width r along a path of points, walled in, open at the caps given
+      const pipe = (pts, r, caps) => {
+        w.beginStroke();
+        w.setBrush('square');
+        for (let k = 1; k < pts.length; k++) {
+          const [x0, y0] = pts[k - 1], [x1, y1] = pts[k], n = Math.max(1, Math.abs(x1 - x0), Math.abs(y1 - y0));
+          for (let q = 0; q <= n; q++) w.paint(Math.round(x0 + ((x1 - x0) * q) / n), Math.round(y0 + ((y1 - y0) * q) / n), r, ID.PIPE, 1, true);
+        }
+        w.setBrush('circle');
+        w.encase(caps || []);
+      };
+      const r1 = P(1), r2 = P(2);           // half-widths: a pipe 3 or 5 cells across (more on a big map)
+      const pw = r2 + 1;                    // a pump's half-width: its pipe's, walls and all
+      const gy = H - P(30);                 // the top of the ground
+
+      // ── the ground: soil over stone, grass on top ──
+      rect(0, gy, W - 1, H - 1, ID.STONE);
+      rect(0, gy, W - 1, gy + P(3), ID.SOIL);
+      for (let x = 0; x < W; x++) if (Math.random() < 0.8) w.place(w.idx(x, gy - 1), ID.GRASS);
+
+      // ── the house with a fire sprinkler ──
+      const h0 = P(4), h1 = P(56), hTop = gy - P(32), wall = P(3), ceil = hTop + wall;
+      rect(h0, hTop, h1, gy - 1, ID.WOOD);
+      rect(h0 + wall, ceil, h1 - wall, gy - 1, ID.EMPTY);
+      const roofTop = hTop - P(2), roofBot = hTop + P(1);
+      rect(h0 - P(2), roofTop, h1 + P(2), roofBot, ID.BRICK);                // the roof
+      rect(h0, gy - P(20), h0 + wall - 1, gy - P(12), ID.GLASS);             // a window
+      rect(h1 - wall + 1, gy - P(14), h1, gy - 1, ID.EMPTY);                 // the door, towards the pond
+      const f0 = h0 + P(18), f1 = h0 + P(34);
+      rect(f0 - P(3), gy - P(1), f1 + P(3), gy - 1, ID.BRICK);               // the hearth, with logs on it
+      rect(f0, gy - P(6), f1, gy - P(1) - 1, ID.WOOD);
+      const tb0 = f1 + P(5), tb1 = tb0 + P(5);                               // a table
+      rect(tb0, gy - P(7), tb1, gy - P(6), ID.WOOD);
+      rect(tb0 + 1, gy - P(5), tb0 + 1, gy - 1, ID.WOOD); rect(tb1 - 1, gy - P(5), tb1 - 1, gy - 1, ID.WOOD);
+      const rt0 = h0 + P(14), rt1 = h1 - P(14), rc = (rt0 + rt1) >> 1, rtTop = roofTop - P(4);
+      part(rt0, rtTop, rt1, roofTop - 1, ID.TANK);                           // a tank on the roof, some water in it
+      each(rt0, roofTop - 1, rt1, roofTop - 1, holding(ID.WATER, G.Sim.TANK_CAP));
+      part(rc - P(2), roofTop, rc + P(2), roofBot, ID.VALVE);               // a valve through the roof
+      const head = gy - P(17), hx0 = h0 + wall + P(3), hx1 = h1 - wall - P(3), outlets = [];
+      for (let x = hx0 + P(2); x <= hx1 - P(2); x += P(6)) outlets.push([x, head + r1 + 1, 0]);
+      pipe([[rc, roofBot + 1 + r1], [rc, head], [hx0, head], [hx1, head]], r1, outlets); // the sprinkler: down, then across the room
+      const sH0 = f0 - P(3), sH1 = f0 - 1;                                   // the heat sensor, against the logs
+      part(sH0, gy - P(5), sH1, gy - P(3), ID.SENSOR, senses(1, 120));
+      // wired along the floor to the wall, up the wall, along the ceiling and up into the valve
+      const wx = h0 + wall, vw = rc - P(2) - 1;
+      rect(wx, gy - P(4), sH0 - 1, gy - P(4), ID.WIRE);
+      rect(wx, ceil, wx, gy - P(4), ID.WIRE);
+      rect(wx, ceil, vw, ceil, ID.WIRE);
+      rect(vw, roofBot, vw, ceil, ID.WIRE);
+
+      // ── the pond, with a pump on its bottom facing up ──
+      const p0 = P(60), p1 = P(102), pb = gy + P(24);
+      rect(p0, gy - 1, p1, pb + P(2), ID.STONE);
+      rect(p0 + P(2), gy - 1, p1 - P(2), pb, ID.EMPTY);
+      rect(p0 + P(2), gy, p1 - P(2), pb, ID.WATER);
+      const pc = (p0 + p1) >> 1, pumpTop = pb - P(4);
+      part(pc - pw, pumpTop, pc + pw, pb, ID.PUMP, facing(0));
+
+      // ── the water tower: a tank on a concrete platform on two pillars ──
+      const t0 = P(136), t1 = P(162), tc = (t0 + t1) >> 1, k0 = tc - P(7), k1 = tc + P(7);
+      const tTop = gy - P(67), tBot = gy - P(62), plat = tBot + 1, platBot = plat + P(2);
+      rect(t0 - P(8), plat, t1 + P(4), platBot, ID.CONCRETE);
+      rect(t0 - P(2), platBot + 1, t0 + P(1), gy - 1, ID.CONCRETE);
+      rect(t1 - P(1), platBot + 1, t1 + P(2), gy - 1, ID.CONCRETE);
+      tint(t0 - P(8), plat, t1 + P(4), gy - 1, ID.CONCRETE, '#cfcac0');
+      rect(k0, tTop, k1, tBot, ID.TANK);                                     // empty: the pump fills it
+      const over = tTop - P(10);
+      pipe([[pc, pumpTop - 1 - r2], [pc, over], [tc, over], [tc, tTop - 1 - r2]], r2); // up out of the pond, over, into the tank
+      // the pump's battery and switch (on), under the tower; the wire runs down, under the garden and the pond, up to the pump
+      const bA = tc + P(1), sA = bA + P(5), sA1 = sA + P(3), wA = sA1 + 1, under = pb + P(3);
+      part(bA, gy - P(5), sA - 1, gy - 1, ID.BATTERY);
+      part(sA, gy - P(4), sA1, gy - 1, ID.SWITCH, switched(1));
+      rect(wA, gy - P(2), wA + r1, under + r1, ID.WIRE);
+      rect(pc - r1, under, wA + r1, under + r1, ID.WIRE);
+      rect(pc - r1, pb + 1, pc + r1, under, ID.WIRE);
+
+      // ── the garden, watered from the tower's tank through a valve on its side ──
+      const g0 = P(104), g1 = P(126), gc = (g0 + g1) >> 1;
+      rect(g0, gy - P(3), g1, gy - 1, ID.SOIL);
+      w.paint(gc - P(7), gy - P(6), P(4), ID.FLOWER, 1, false);
+      w.paint(gc + P(7), gy - P(6), P(4), ID.PLANT, 1, false);
+      w.paint(gc, gy - P(6), P(3), ID.FLOWER, 1, false);
+      const vx0 = k0 - P(5), vx1 = k0 - 1;
+      part(vx0, tBot - P(4), vx1, tBot, ID.VALVE);
+      const shower = gy - P(20);
+      pipe([[vx0 - 1 - r2, tBot - r2], [gc, tBot - r2], [gc, shower]], r2, [[gc, shower, r2]]); // out of the valve and down to a shower over the garden
+      // its switch (off), under the tower: wired through the platform and down inside the left pillar
+      const sG = t0 + P(2), sG1 = sG + P(3), bG = sG1 + 1, wG = t0 - 1;
+      rect(vx1, plat, vx1, platBot, ID.WIRE);
+      rect(wG, platBot, vx1, platBot, ID.WIRE);
+      rect(wG, platBot, wG, gy - P(2), ID.WIRE);
+      rect(wG, gy - P(2), sG - 1, gy - P(2), ID.WIRE);
+      part(sG, gy - P(4), sG1, gy - 1, ID.SWITCH, switched(0));
+      part(bG, gy - P(5), bG + P(4), gy - 1, ID.BATTERY);
+
+      // ── the reservoir ──
+      const r0 = P(178), d0 = P(216), d1 = P(227), rTop = gy - P(28), level = gy - P(14);
+      rect(r0, gy, d1, gy + P(1), ID.CONCRETE);                              // its floor…
+      rect(r0, gy - P(22), r0 + P(3), gy - 1, ID.CONCRETE);                  // …far wall…
+      rect(d0, rTop, d1, gy - 1, ID.CONCRETE);                               // …and dam
+      tint(r0, rTop, d1, gy + P(1), ID.CONCRETE, '#aaa59b');
+      rect(r0 + P(4), level, d0 - 1, gy - 1, ID.WATER);
+      // the sluice: an outlet through the foot of the dam, shut by the rod of a piston under the ground
+      // on the far side; switch the piston off and the rod drops back into it, letting the water out
+      const gh = P(4), q0 = d1 + 1, q1 = d1 + P(2);
+      rect(d0, gy - gh, d1, gy - 1, ID.WATER);                               // the outlet, full up to the gate
+      part(q0, gy, q1, gy + P(2), ID.PISTON, pushing(0));                    // the piston, facing up…
+      rect(q0, gy - 16, q1, gy - 1, ID.ROD);                                 // …with its rod out, shutting the outlet
+      const b0 = q1 + 1, b1 = W - P(3), bb = gy + P(22);                     // the basin it lets out into
+      rect(b0, gy, b1 + 1, bb + P(2), ID.STONE);
+      rect(b1 + 1, gy - 1, b1 + 1, gy - 1, ID.STONE);
+      rect(b0 + 1, gy - 1, b1, bb, ID.EMPTY);
+      rect(b0, gy - 1, b0, gy - 1, ID.EMPTY);                                // nothing on its lip, so the water runs straight in
+      // its battery and switch (on, so the sluice starts shut), between the tower and the reservoir;
+      // the wire runs down, under the reservoir, up to the piston
+      const bS = P(167), sS = bS + P(5), sS1 = sS + P(3), wS = sS1 + 1, deep = gy + P(8);
+      part(bS, gy - P(5), sS - 1, gy - 1, ID.BATTERY);
+      part(sS, gy - P(4), sS1, gy - 1, ID.SWITCH, switched(1));
+      rect(wS, gy - P(2), wS + r1, deep + r1, ID.WIRE);
+      rect(wS, deep, q0 + r1, deep + r1, ID.WIRE);
+      rect(q0, gy + P(2) + 1, q0 + r1, deep, ID.WIRE);
+      // the overflow pump, hung against the dam just above the water, and a touch sensor on its open
+      // side at the high-water mark (under a hood, so drips off the dam don't set it off): water rising
+      // to the sensor starts the pump, which sends what is over the mark across the dam
+      const oc = d0 - 1 - pw, oTop = level - P(5), sx0 = oc - pw - P(3), sx1 = oc - pw - 1;
+      part(oc - pw, oTop, oc + pw, level - 1, ID.PUMP, facing(0));
+      part(sx0, oTop, sx1, level - P(3), ID.SENSOR, senses(0, 0));
+      rect(sx0 - 1, oTop - 1, sx1, oTop - 1, ID.CONCRETE);
+      tint(sx0 - 1, oTop - 1, sx1, oTop - 1, ID.CONCRETE, '#aaa59b');
+      const top = rTop - P(6), out = (b0 + b1) >> 1;
+      pipe([[oc, oTop - 1 - r2], [oc, top], [out, top], [out, gy - P(6)]], r2, [[out, gy - P(6), r2]]);
+    },
+
     // Solid rock riddled with tunnels: pockets of water and oil, veins of metal, a sand drift.
     caves(w) {
       w.clear();

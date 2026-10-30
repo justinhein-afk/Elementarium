@@ -7,7 +7,7 @@
   const { ELEM, Sim } = G;
   const { R, list } = ELEM;
   const NT = ELEM.NT;
-  const { BURN, LEAF, PETAL, CENTER, BLEACH, EXACT, SWIMS, RAINBOW } = Sim;
+  const { BURN, LEAF, PETAL, CENTER, BLEACH, EXACT, SWIMS, RAINBOW, TANK_CAP } = Sim;
 
   const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
   const hex = ELEM.hexToRgb;
@@ -422,6 +422,61 @@
               if (yy - bed * 3 < 0.55 && (bh & 3) === 0) { r -= 28; g -= 28; b -= 26; } // a bedding plane
               if ((x + (bh >> 5)) % 17 === 0) { r -= 24; g -= 24; b -= 22; } // a joint
               if ((hash(i * 13) & 127) === 0) { r += 24; g += 22; b += 16; } // a shell
+              break;
+            }
+            // ── machines ──
+            case R.WIRE: {
+              if ((x + y) & 1) { r -= 12; g -= 8; b -= 5; } // twisted copper
+              break;
+            }
+            case R.SWITCH: {
+              const on = aux[i] !== 0, f = 0.55; // a lamp in it: green while on, red while off
+              r = r * (1 - f) + (on ? 80 : 215) * f; g = g * (1 - f) + (on ? 214 : 74) * f; b = b * (1 - f) + (on ? 120 : 64) * f;
+              if (on) gl = 0.25;
+              break;
+            }
+            case R.SENSOR: {
+              const lit = aux[i] & 1, f = lit ? 0.7 : 0.35; // amber while it is set off, a dim teal while it waits
+              r = r * (1 - f) + (lit ? 255 : 70) * f; g = g * (1 - f) + (lit ? 186 : 160) * f; b = b * (1 - f) + (lit ? 74 : 150) * f;
+              if (lit) gl = 0.55;
+              break;
+            }
+            case R.PIPE: {
+              // a pipe's bore is dark and hollow inside its walls; a valve is brass, shining while open
+              if (t === ID.PIPE) { r = 30 + (s & 7); g = 35 + (s & 7); b = 42 + (s & 7); }
+              else if (sap[i] > 0) { r += 26; g += 22; b += 10; }
+              if (aux[i]) { // what is flowing through it shows through
+                const q = aux[i] * 16 + (s >> 4), f = t === ID.PIPE ? 0.82 : 0.58;
+                r = r * (1 - f) + PR[q] * f; g = g * (1 - f) + PG[q] * f; b = b * (1 - f) + PB[q] * f;
+              }
+              break;
+            }
+            case R.CASING: {
+              // the pipe's walls: brushed steel, lit along the side that faces out
+              const outer = type[i - SW] === 0 || type[i - 1] === 0;
+              if (outer) { r += 22; g += 22; b += 24; }
+              if (((x + y) & 3) === 0) { r -= 8; g -= 8; b -= 8; }
+              break;
+            }
+            case R.PUMP: {
+              if (aux[i]) { const q = aux[i] * 16 + (s >> 4); r = r * 0.5 + PR[q] * 0.5; g = g * 0.5 + PG[q] * 0.5; b = b * 0.5 + PB[q] * 0.5; }
+              if (sap[i] > 0 && ((x + y + (tick >> 1)) & 3) === 0) { r += 46; g += 52; b += 60; gl = 0.15; } // whirring
+              break;
+            }
+            case R.TANK: {
+              if (aux[i] && data[i] > 0) { // filled to its level with what it holds
+                const q = aux[i] * 16 + (s >> 4), f = 0.25 + 0.6 * Math.min(1, data[i] / TANK_CAP);
+                r = r * (1 - f) + PR[q] * f; g = g * (1 - f) + PG[q] * f; b = b * (1 - f) + PB[q] * f;
+              }
+              if ((x & 3) === 0) { r -= 10; g -= 10; b -= 10; } // riveted plates
+              break;
+            }
+            case R.PISTON: {
+              if (sap[i] > 0) { r += 30; g += 26; b += 10; gl = 0.12; }
+              break;
+            }
+            case R.ROD: {
+              if (((x + y) & 3) === 0) { r += 20; g += 20; b += 22; } // polished
               break;
             }
             case R.CELL: {

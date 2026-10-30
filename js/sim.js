@@ -22,6 +22,7 @@
     LITTER, BRICK, RUBBLE, SPLINTERS, SHARDS,
     SOIL, CONCRETE, CEMENT, ALCOHOL, VINEGAR, LIGHT, PINE, PINECONE, PALM, COCONUT, WILLOW, CATKIN,
     EXPLOSION, SUGAR, LIME, LIMESTONE, CELL, COW, WOLF, SHARK,
+    WIRE, SWITCH, SENSOR, PIPE, VALVE, PUMP, TANK, PISTON, ROD, CASING,
   } = ID;
 
   const BOUND = EL.NT - 1; // invisible border cell, so neighbour lookups never need bounds checks
@@ -218,6 +219,15 @@
   P_BLAST[GUNPOWDER] = BL_SMOKY; P_BLAST[NITRO] = BL_CLEAN; P_BLAST[METHANE] = BL_STEAM;
   const IS_CLOUD = new Uint8Array(NT);
   for (const t of [CLOUD, RAINCLOUD, STORMCLOUD, SNOWCLOUD]) IS_CLOUD[t] = 1;
+  // machines that run on current (it powers them for POWER_TICKS, and they pass it no further), and
+  // what a pipe won't carry
+  const P_CONSUMER = new Uint8Array(NT), NOPIPE = new Uint8Array(NT), POWER_TICKS = 24;
+  for (const t of [VALVE, PUMP, PISTON]) P_CONSUMER[t] = 1;
+  // the plumbing: what a pipe's bore is sealed by, and what keeps matter in (anything else beside a
+  // pipe's bore is an opening)
+  const PLUMBING = new Uint8Array(NT);
+  for (const t of [PIPE, VALVE, PUMP, TANK, CASING]) PLUMBING[t] = 1;
+  for (const t of [FIRE, PLASMA, SPARK, LIGHT, RAD, MSPARK, EMBER, LIGHTNING, EXPLOSION]) NOPIPE[t] = 1;
   for (const d of list) {
     if (d.flameColor) P_FLAME[d.id] = 1;
     if (!d.periodic && d.castOf === undefined) continue;
@@ -388,7 +398,10 @@
     const disasters = [];
     // hbomb is x, y, radius for each hydrogen bomb that went off, and whistle how far down a
     // falling one has come (0 when none is falling)
-    Object.assign(events, { rumble: 0, cracks: 0, surge: 0, howl: 0, flash: 0, shake: 0, hbomb: [], whistle: 0 });
+    Object.assign(events, { rumble: 0, cracks: 0, surge: 0, howl: 0, flash: 0, shake: 0, hbomb: [], whistle: 0, pump: 0, piston: 0 });
+    // how newly painted machines are set (the panel's machine settings): which way a piston or a pump
+    // faces, and what a sensor senses and at what temperature
+    const machine = { dir: 0, mode: 1, set: 100 };
 
     let now = 1;
     let tick = 0;
@@ -736,6 +749,10 @@
     function electric(i, t) {
       const c = charge[i];
       if (!P_CONDUCT[t]) { charge[i] = 0; return; }
+      // a valve, a pump or a piston runs on the current and passes it no further; a switch that is
+      // off lets none in
+      if (P_CONSUMER[t]) { if (c === CH_ACTIVE) sap[i] = POWER_TICKS; charge[i] = c - 1; return; }
+      if (t === SWITCH && !aux[i]) { charge[i] = 0; return; }
       if (c === CH_ACTIVE) {
         if (P_CAPAC[t]) { capacitor(i); charge[i] = c - 1; return; }
         // a cold superconductor hands the pulse on at once, and feels no heat from it
@@ -743,7 +760,9 @@
         for (let k = 0; k < 4; k++) {
           const n = i + N4[k], nt = type[n];
           // a filament keeps its current to itself and its wires: the argon in a bulb stays dark
-          if (P_CONDUCT[nt]) { if (charge[n] === 0 && !(P_OHM[t] && catOf(n) === C_GAS)) charge[n] = sc && superconducting(n) ? CH_ACTIVE : CH_NEW; }
+          // and insulated wire keeps its current from the water round it, both ways
+          const insulated = (t === WIRE && catOf(n) === C_LIQUID) || (nt === WIRE && catOf(i) === C_LIQUID);
+          if (P_CONDUCT[nt]) { if (charge[n] === 0 && !(P_OHM[t] && catOf(n) === C_GAS) && !insulated) charge[n] = sc && superconducting(n) ? CH_ACTIVE : CH_NEW; }
           else if (nt !== EMPTY && nt !== BOUND) zap(n, nt);
         }
         if (!sc) {
@@ -751,7 +770,7 @@
           const oh = P_OHM[t];
           let heater = oh > 0;
           if (oh) { if (temp[i] < P_OHMMAX[t]) temp[i] += oh; }
-          else temp[i] += t === METAL ? 3 : 0.5;
+          else if (t !== WIRE) temp[i] += t === METAL ? 3 : 0.5;
           if ((t === EL_NI || t === EL_CR) && touches(i, t === EL_NI ? EL_CR : EL_NI)) {
             if (temp[i] < 1100) temp[i] += 80;
             heater = true;
@@ -1841,6 +1860,313 @@
         } else aux[i] = (aux[i] & ~14) | (Math.min(7, meals) << 1);
         break;
       }
+    }
+
+    // ───── machines ─────
+    // Pipes and valves carry matter: each holds one cell's worth of something (aux: its element;
+    // data: bits 0–1 the way it is going, an N4 index, and the rest the push it has left) and hands
+    // it on to the next each tick. With no push, liquids and powders only run down or along and gases
+    // only up or along; a pump's push carries them uphill for PUSH cells. A valve passes nothing while
+    // it is unpowered. Matter only gets in or out at an open end (a cell with one pipe beside it).
+    // What a pipe or a tank holds keeps the temperature of the cell, so water boils to steam in a hot
+    // pipe and steam condenses in a cold one.
+    const UP = 0, DOWN = 1;            // N4 indices
+    const OPP4 = [1, 0, 3, 2];
+    const SIDES = [[2, 3], [2, 3], [0, 1], [0, 1]];
+    const DIR_N4 = [0, 3, 1, 2];       // a piston's or a pump's facing (up, right, down, left) as an N4 index
+    const PUSH = 240, TANK_CAP = 40, ROD_MAX = 16, SHOVE_MAX = 12;
+    const isConduit = (t) => t === PIPE || t === VALVE;
+    const flows = (j) => type[j] === PIPE || (type[j] === VALVE && sap[j] > 0); // a conduit that will pass things on
+    // the state something would be in at temperature T, without a cell to ask
+    function stateOf(t, T) {
+      if (!P_PERIODIC[t]) return P_CAT[t];
+      return T >= P_BP[t] ? C_GAS : T >= P_MP[t] ? C_LIQUID : P_SOLID[t] ? C_STATIC : C_POWDER;
+    }
+    // can the matter in cell j go into a pipe? liquids, gases and powders; not air, flame or creatures
+    function carriable(j) {
+      const t = type[j];
+      if (t === EMPTY || t === BOUND || NOPIPE[t]) return false;
+      const c = catOf(j);
+      return c === C_LIQUID || c === C_GAS || c === C_POWDER;
+    }
+    function holdsState(i) { // boiling, condensing or freezing inside
+      const c = aux[i], T = temp[i];
+      let to = -1;
+      if (T > P_HI_T[c]) to = P_HI_TO[c];
+      else if (T < P_LO_T[c]) to = P_LO_TO[c];
+      if (to >= 0 && !NOPIPE[to]) { aux[i] = to; if (to === EMPTY && type[i] === TANK) data[i] = 0; } // alcohol boils away to nothing
+    }
+    // Is cell n outside the plumbing, open: air, or loose matter (a liquid, a gas, a powder)? Walls,
+    // creatures and the plumbing itself are not.
+    function outside(n) {
+      const t = type[n];
+      if (t === EMPTY) return true;
+      if (t === BOUND || PLUMBING[t]) return false;
+      const c = catOf(n);
+      return c !== C_STATIC && c !== C_LIFE;
+    }
+    // A bore cell open to the outside. A pipe is drawn walled in (encase()), so it is open only at its
+    // two ends, or wherever a hole has been made in its walls.
+    function opening(i) {
+      for (let k = 0; k < 4; k++) if (outside(i + N4[k])) return true;
+      return false;
+    }
+    // A valve, pump, piston or sensor drawn as a blob is one machine: power reaching any cell of it
+    // spreads to the rest (and dies away from all of them together).
+    function share(i, t) {
+      const p = sap[i];
+      for (let k = 0; k < 4; k++) { const n = i + N4[k]; if (type[n] === t && sap[n] < p) sap[n] = p; }
+    }
+    const goes = (st, d, push) => push > 0 || (st === C_GAS ? d !== DOWN : d !== UP);
+    const INTAKE_L = [UP, 2, 3], INTAKE_R = [UP, 3, 2]; // where an opening draws a liquid from: above, then beside
+    function fill(j, c, d, push, T) { aux[j] = c; data[j] = d | (push << 2); temp[j] = T; stamp[j] = now; }
+    function conduit(i, t) {
+      if (t === VALVE && sap[i] > 0) { sap[i]--; share(i, VALVE); }
+      const open = t === PIPE || sap[i] > 0;
+      if (!aux[i]) { // empty: an opening drains in a liquid or a powder above it or beside it (gases go in only by a pump)
+        if (!open || rnd() > 0.5) return;
+        for (const d of rnd() < 0.5 ? INTAKE_L : INTAKE_R) {
+          const u = i + N4[d];
+          if (carriable(u) && catOf(u) !== C_GAS) { fill(i, type[u], OPP4[d], 0, temp[u]); place(u, EMPTY); temp[u] = ambient; return; }
+        }
+        return;
+      }
+      holdsState(i);
+      const c = aux[i];
+      if (!c || !open) return;
+      const st = stateOf(c, temp[i]);
+      if (st === C_STATIC) return; // frozen solid in the pipe
+      const d0 = data[i] & 3, push = data[i] >> 2, r = rnd() < 0.5 ? 0 : 1;
+      const order = [d0, SIDES[d0][r], SIDES[d0][1 - r], OPP4[d0]];
+      // with nothing pushing it, a liquid falls into any branch below it first (a gas rises), then goes on
+      const fall = push > 0 ? -1 : st === C_GAS ? UP : DOWN;
+      if (fall >= 0 && order[0] !== fall) { order.splice(order.indexOf(fall), 1); order.unshift(fall); }
+      for (let q = 0; q < 4; q++) { // on along the pipe, into a tank, or out of an open end the way it is going
+        const d = order[q];
+        if (!goes(st, d, push)) continue;
+        const j = i + N4[d], jt = type[j];
+        if (jt === TANK) { if (tankTake(j, c, temp[i])) { aux[i] = 0; data[i] = 0; return; } continue; } // a full tank: try another way
+        if (q === 0 && outside(j) && (jt === EMPTY || (st !== C_GAS && catOf(j) === C_GAS))) { pour(i, j, c, d, st, push); return; }
+        if (isConduit(jt) && !aux[j] && flows(j)) {
+          const T = temp[j]; fill(j, c, d, push > 0 ? push - 1 : 0, temp[i]); temp[i] = T; aux[i] = 0; data[i] = 0;
+          return;
+        }
+        // a bubble of gas and the liquid over it trade places: the liquid sinks on, the bubble rises
+        if (isConduit(jt) && aux[j] && flows(j) && stamp[j] !== now) {
+          const sj = stateOf(aux[j], temp[j]);
+          if ((st !== C_GAS && sj === C_GAS && d !== UP) || (st === C_GAS && sj !== C_GAS && sj !== C_STATIC && d !== DOWN)) {
+            const a = aux[j], dj = data[j], T = temp[j];
+            aux[j] = c; data[j] = d | (push << 2); temp[j] = temp[i]; aux[i] = a; data[i] = dj; temp[i] = T; stamp[j] = now;
+            return;
+          }
+        }
+        // pressure: pushed into a full stretch of pipe, it passes its push on to what blocks the way,
+        // so a pump drives a whole column of water along, not just the cell in front of it
+        if (q === 0 && push > 1 && isConduit(jt) && aux[j] && flows(j) && (data[j] >> 2) < push - 1) data[j] = d | ((push - 1) << 2);
+      }
+      if (opening(i)) {
+        for (let q = 0; q < 4; q++) { // out of an open end
+          const d = order[q], j = i + N4[d], jt = type[j];
+          // into open air; a liquid or a powder pours through smoke or flame too, putting it out
+          if (!goes(st, d, push) || !(jt === EMPTY || (st !== C_GAS && jt !== BOUND && catOf(j) === C_GAS))) continue;
+          pour(i, j, c, d, st, push);
+          return;
+        }
+      }
+      if (push > 0) data[i] = d0 | ((push >> 1) << 2); // stuck: the push fades unless a pump keeps it up
+    }
+    function pour(i, j, c, d, st, push) {
+      place(j, c); temp[j] = temp[i]; aux[i] = 0; data[i] = 0;
+      if (push > 0 && st !== C_GAS) { vx[j] = N4[d] === 1 ? 1.5 : N4[d] === -1 ? -1.5 : 0; if (d === UP) vy[j] = -2; } // a jet from a pumped pipe
+    }
+    // a tank takes one cell's worth of c at temperature T, if it has room and holds c or nothing
+    function tankTake(j, c, T) {
+      const n = data[j];
+      if (n > 0 && aux[j] !== c && P_LO_TO[c] === aux[j]) c = aux[j]; // steam reaching a tank of water condenses into it
+      if (n >= TANK_CAP || (n > 0 && aux[j] !== c)) return false;
+      temp[j] = n > 0 ? (temp[j] * n + T) / (n + 1) : T; aux[j] = c; data[j] = n + 1;
+      return true;
+    }
+    function tank(i) {
+      if (data[i] <= 0) { data[i] = 0; aux[i] = 0; }
+      // poured in from above (gases go in only by a pump or a pipe)
+      if (data[i] < TANK_CAP && rnd() < 0.5) {
+        const u = i - SW;
+        if (carriable(u) && catOf(u) !== C_GAS && tankTake(i, type[u], temp[u])) { place(u, EMPTY); temp[u] = ambient; }
+      }
+      if (!data[i]) return;
+      holdsState(i);
+      const c = aux[i];
+      if (!c) return;
+      const st = stateOf(c, temp[i]), gas = st === C_GAS;
+      // it settles through a tank of several cells: liquid to the bottom, gas to the top, and levels out
+      const v = gas ? i - SW : i + SW;
+      if (type[v] === TANK && (!data[v] || aux[v] === c) && data[v] < TANK_CAP) {
+        const m = Math.min(data[i], TANK_CAP - data[v]);
+        temp[v] = data[v] ? (temp[v] * data[v] + temp[i] * m) / (data[v] + m) : temp[i];
+        aux[v] = c; data[v] += m; data[i] -= m;
+        if (!data[i]) { aux[i] = 0; return; }
+      }
+      const s = i + (rnd() < 0.5 ? -1 : 1);
+      if (type[s] === TANK && (!data[s] || aux[s] === c) && data[i] > data[s] + 1) { aux[s] = c; data[s]++; data[i]--; temp[s] = temp[i]; }
+      if (st === C_STATIC) return; // frozen
+      // an empty pipe (or an open valve) below it draws a liquid out, one above it a gas, one beside it either
+      const ways = gas ? [UP, 2, 3] : [DOWN, 2, 3];
+      for (let q = 0; q < 3; q++) {
+        const d = ways[q], j = i + N4[d];
+        if (!isConduit(type[j]) || aux[j] || !flows(j)) continue;
+        fill(j, c, d, 0, temp[i]);
+        if (--data[i] <= 0) { data[i] = 0; aux[i] = 0; }
+        return;
+      }
+    }
+    // A pump (aux: what it holds; data: the way it faces, 0 up, 1 right, 2 down, 3 left) is a conduit
+    // that drives things the way it faces. Powered, an empty pump cell draws in one cell's worth from
+    // any side but the one it faces (loose matter, what a pipe or a tank beside it holds), and a full
+    // one hands it on that way: to the next cell of the pump, into a pipe with the push to climb, into
+    // a tank, or out into the open as a jet. A blob of pump is one big pump.
+    function pump(i) {
+      if (sap[i] <= 0) return;
+      sap[i]--; share(i, PUMP);
+      const od = DIR_N4[data[i] & 3];
+      if (aux[i]) {
+        holdsState(i);
+        const c = aux[i];
+        if (!c || rnd() > 0.7) return;
+        const o = i + N4[od], ot = type[o], st = stateOf(c, temp[i]);
+        if (st === C_STATIC) return;
+        if (ot === PUMP && !aux[o] && stamp[o] !== now) { aux[o] = c; const T = temp[o]; temp[o] = temp[i]; temp[i] = T; stamp[o] = now; aux[i] = 0; return; }
+        if (isConduit(ot) && !aux[o] && flows(o)) { fill(o, c, od, PUSH, temp[i]); aux[i] = 0; events.pump++; return; }
+        if (isConduit(ot) && aux[o] && flows(o)) { data[o] = od | (PUSH << 2); return; } // a full pipe in front: press on it
+        if (ot === TANK) { if (tankTake(o, c, temp[i])) { aux[i] = 0; events.pump++; } return; }
+        if (outside(o) && (ot === EMPTY || (st !== C_GAS && catOf(o) === C_GAS))) {
+          place(o, c); temp[o] = temp[i]; stamp[o] = now; aux[i] = 0; events.pump++;
+          if (od === UP) vy[o] = -3; else if (od >= 2) vx[o] = od === 3 ? 2 : -2; // a jet
+        }
+        return;
+      }
+      if (rnd() > 0.6) return;
+      const k0 = (rnd() * 4) | 0;
+      for (let q = 0; q < 4; q++) {
+        const d = (k0 + q) & 3;
+        if (d === od) continue;
+        const j = i + N4[d], jt = type[j];
+        if (carriable(j)) { aux[i] = jt; temp[i] = temp[j]; place(j, EMPTY); temp[j] = ambient; }
+        else if (isConduit(jt) && aux[j]) { aux[i] = aux[j]; temp[i] = temp[j]; aux[j] = 0; data[j] = 0; }
+        else if (jt === TANK && data[j] > 0 && aux[j]) { aux[i] = aux[j]; temp[i] = temp[j]; if (--data[j] <= 0) { data[j] = 0; aux[j] = 0; } }
+        else if (jt === PUMP && aux[j] && stamp[j] !== now) { aux[i] = aux[j]; const T = temp[j]; temp[j] = temp[i]; temp[i] = T; aux[j] = 0; } // passed in from the rest of the pump, so a wide pump draws through its whole body
+        else continue;
+        stamp[i] = now;
+        return;
+      }
+    }
+    // A pipe's casing: walls built round the cells of a pipe just drawn (or round every pipe), on
+    // every edge where it meets air or loose matter. So a pipe of any width drawn in one stroke is one
+    // sealed run: erase a bit of its wall to let things in or out, or draw it onto a pump, a tank or a
+    // valve, which it joins. caps ([x, y, r] each) leave openings there instead (the scenes use them);
+    // `onlyAir` walls in only the edges open to the air (mending an older pipe).
+    const strokeCells = [];
+    function beginStroke() { strokeCells.length = 0; }
+    function encase(caps, all = false, onlyAir = false) {
+      const cells = all ? [] : strokeCells.slice();
+      if (all) for (let i = 0; i < N; i++) if (type[i] === PIPE) cells.push(i);
+      strokeCells.length = 0;
+      if (!cells.length) return 0;
+      const mine = new Set(cells);
+      const open = (caps || []).filter(([x, y, r]) => { // a cap on old plumbing is a joint, not an opening
+        for (let dy = -r - 2; dy <= r + 2; dy++) for (let dx = -r - 2; dx <= r + 2; dx++) {
+          const xx = x + dx, yy = y + dy;
+          if (xx < 0 || yy < 0 || xx >= W || yy >= H || dx * dx + dy * dy > (r + 2) * (r + 2)) continue;
+          const j = idx(xx, yy);
+          if (PLUMBING[type[j]] && !mine.has(j)) return false;
+        }
+        return true;
+      });
+      const capped = (n) => { const x = cx(n), y = cy(n); return open.some(([a, b, r]) => (x - a) * (x - a) + (y - b) * (y - b) <= (r + 1.2) * (r + 1.2)); };
+      let n = 0;
+      for (const i of cells) { // walls on the four sides, as matter moves (a diagonal wall would only block a pump's intake)
+        if (type[i] !== PIPE) continue;
+        for (let k = 0; k < 4; k++) {
+          const j = i + N4[k];
+          if (!outside(j) || capped(j) || (onlyAir && type[j] !== EMPTY)) continue;
+          place(j, CASING); n++;
+        }
+      }
+      return n;
+    }
+    // A piston, powered, pushes its rod out a cell every few ticks, shoving the line of whatever is in
+    // front along into the first gap (up to SHOVE_MAX cells; walls, other pistons and their rods stop
+    // it), up to ROD_MAX cells out. Unpowered, it pulls the rod back in, a cell at a time.
+    const unshovable = (t) => t === BOUND || t === WALL || t === VOID || t === CLONE || t === PISTON || t === ROD;
+    function piston(i) {
+      const on = sap[i] > 0;
+      if (on) { sap[i]--; share(i, PISTON); }
+      if (tick % 3) return; // every cell of a piston strokes together
+      const d = N4[DIR_N4[aux[i] & 3]];
+      let j = i + d, L = 0;
+      while (type[j] === ROD && L < ROD_MAX) { j += d; L++; }
+      if (on) {
+        if (L >= ROD_MAX) return;
+        let e = j, n = 0;
+        while (type[e] !== EMPTY && !(type[e] !== BOUND && catOf(e) === C_GAS)) {
+          if (unshovable(type[e]) || ++n > SHOVE_MAX) return;
+          e += d;
+        }
+        for (let k = e; k !== j; k -= d) swap(k, k - d);
+        become(j, ROD);
+        events.piston++;
+      } else if (L > 0) {
+        place(j - d, EMPTY); temp[j - d] = ambient;
+        events.piston++;
+      }
+    }
+    // A sensor checks what touches it: anything loose (a grain, a drop, a creature) in touch mode,
+    // or how hot (or cold) the things against it are. While it is set off, it sends a pulse into the
+    // wire beside it as often as a battery would.
+    function sensor(i) {
+      const mode = (aux[i] >> 1) & 3;
+      let on = false;
+      if (mode === 0) {
+        for (let k = 0; k < 4; k++) {
+          const n = i + N4[k], nt = type[n];
+          if (nt === EMPTY || nt === BOUND) continue;
+          const c = catOf(n);
+          if (c === C_LIFE) { on = true; break; }
+          // a grain or a drop counts once it rests against it, on top of it or held up from below
+          // (a pool rising to it, a heap beside it), not as it falls past or drips off it
+          if ((c === C_POWDER || c === C_LIQUID) && (n + SW === i || (type[n + SW] !== EMPTY && catOf(n + SW) !== C_GAS))) { on = true; break; }
+        }
+      } else {
+        let T = temp[i];
+        for (let k = 0; k < 4; k++) {
+          const n = i + N4[k];
+          if (type[n] === BOUND) continue;
+          T = mode === 1 ? Math.max(T, temp[n]) : Math.min(T, temp[n]);
+        }
+        on = mode === 1 ? T > data[i] : T < data[i];
+      }
+      // a blob of sensor is one sensor: one cell set off lights it all (sap: how long it stays lit)
+      if (on) sap[i] = 20; else if (sap[i] > 0) sap[i]--;
+      share(i, SENSOR);
+      on = sap[i] > 0;
+      aux[i] = (aux[i] & ~1) | (on ? 1 : 0);
+      if (on && ((tick + i) & 15) === 0) {
+        for (let k = 0; k < 4; k++) { const n = i + N4[k]; if (P_CONDUCT[type[n]]) energize(n); }
+      }
+    }
+    // a click on a switch flips it and every switch joined to it; returns how many flipped
+    function flip(x, y) {
+      if (x < 0 || y < 0 || x >= W || y >= H) return 0;
+      const i0 = idx(x, y);
+      if (type[i0] !== SWITCH) return 0;
+      const to = aux[i0] ? 0 : 1, q = [i0], seen = new Set(q);
+      for (let k = 0; k < q.length; k++) {
+        const i = q[k];
+        aux[i] = to;
+        if (!to) charge[i] = 0;
+        for (let m = 0; m < 4; m++) { const n = i + N4[m]; if (type[n] === SWITCH && !seen.has(n)) { seen.add(n); q.push(n); } }
+      }
+      return q.length;
     }
 
     // ───── limestone ─────
@@ -3254,6 +3580,12 @@
         case WORM: worm(i); return;
         case FIREFLY: firefly(i); return;
         case CELL: microbe(i); return;
+        case PIPE: case VALVE: conduit(i, t); return;
+        case TANK: tank(i); return;
+        case PUMP: pump(i); return;
+        case PISTON: piston(i); return;
+        case SENSOR: sensor(i); return;
+        case WIRE: case SWITCH: case ROD: case CASING: return;
         case COW: cow(i); return;
         case WOLF: wolf(i); return;
         case SHARK: shark(i); return;
@@ -4811,7 +5143,11 @@
           }
           return;
         }
-        if (!replace && ct !== EMPTY && !(catOf(i) === C_GAS && tcat !== C_GAS)) {
+        // a pipe drawn over another pipe's casing joins it; a valve or a pump drawn over a pipe takes the
+        // place of its bore but leaves its casing
+        if ((t === VALVE || t === PUMP) && ct === CASING) return;
+        const intoPipe = (t === PIPE && ct === CASING) || ((t === VALVE || t === PUMP) && ct === PIPE);
+        if (!replace && !intoPipe && ct !== EMPTY && !(catOf(i) === C_GAS && tcat !== C_GAS)) {
           if (t === FIRE) temp[i] += 40;
           return;
         }
@@ -4820,6 +5156,11 @@
         if (tint) { aux[i] = tint; flags[i] |= dyed; }
         if (rgb) col[i] = PAINTED | rgb;
         if (t === LIGHT) aux[i] = rayDir(cx(i) - x0, cy(i) - y0); // rays fly out from the brush
+        else if (t === PISTON) aux[i] = machine.dir & 3;
+        else if (t === PUMP) data[i] = machine.dir & 3;
+        if (t === PIPE) strokeCells.push(i);
+        else if (t === SENSOR) { aux[i] = (machine.mode & 3) << 1; data[i] = machine.set | 0; }
+        else if (t === SWITCH) aux[i] = 1; // a new switch is on
         n++;
       });
       return n;
@@ -5000,7 +5341,7 @@
     function resetEvents() {
       events.sizzle = 0; events.ignite = 0; events.fizz = 0; events.zap = 0; events.fission = 0; events.decay = 0; events.rad = 0;
       events.rumble = 0; events.cracks = 0; events.surge = 0; events.howl = 0; events.flash = 0; events.shake = 0;
-      events.hbomb.length = 0; events.whistle = 0;
+      events.hbomb.length = 0; events.whistle = 0; events.pump = 0; events.piston = 0;
       events.booms.length = 0; events.bolts.length = 0; events.found.length = 0; events.rx.length = 0;
       events.fused.length = 0;
     }
@@ -5084,7 +5425,7 @@
       air: { W: AW, H: AH, S: AS, vx: avx, vy: avy, p: ap, blocked: ablk },
       disc, counts, events,
       get tick() { return tick; },
-      idx, step, clear, place, transform, paint, erase, smash, heat, sparkPaint, spawnBolt, explode, blastPaint, tintPaint, placeImage, livenTrees,
+      idx, step, clear, place, transform, paint, erase, smash, flip, machine, beginStroke, encase, heat, sparkPaint, spawnBolt, explode, blastPaint, tintPaint, placeImage, livenTrees,
       cell, resetEvents, serialize, load, rnd, ignite, snapshot, restore, weather, rules, setBrush, grab, holdTo, release,
       get holding() { return hand.on ? hand.n : 0; },
       get gripping() { return hand.on; },
@@ -5096,7 +5437,7 @@
   }
 
   G.Sim = {
-    createWorld, BOUND, BURN, LEAF, PETAL, CENTER, BLEACH, CH_ACTIVE, PAINTED, EXACT, SWIMS, RAINBOW,
+    createWorld, BOUND, BURN, LEAF, PETAL, CENTER, BLEACH, CH_ACTIVE, PAINTED, EXACT, SWIMS, RAINBOW, TANK_CAP: 40,
     P: { CAT: P_CAT, DENS: P_DENS, CONDUCT: P_CONDUCT, FLAM: P_FLAM, PERIODIC: P_PERIODIC, MP: P_MP, BP: P_BP },
   };
 })(globalThis);

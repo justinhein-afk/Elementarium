@@ -20,9 +20,10 @@
     GLASS: 27, ICE: 28, CLOUD: 29, FOG: 30, FOAM: 31, SPARKLE: 32, CO2: 33,
     GRASS: 34, CACTUS: 35, VINE: 36, MUSHROOM: 37, LILY: 38, MSPARK: 39, LIGHT: 40,
     CELL: 41, COW: 42, WOLF: 43, SHARK: 44, LIMESTONE: 45, CONCRETE: 46,
+    WIRE: 47, SWITCH: 48, SENSOR: 49, PIPE: 50, VALVE: 51, PUMP: 52, TANK: 53, PISTON: 54, ROD: 55, CASING: 56,
   };
 
-  const GROUPS = ['Solids', 'Powders', 'Liquids', 'Gases', 'Energy', 'Plants', 'Life', 'Special'];
+  const GROUPS = ['Solids', 'Powders', 'Liquids', 'Gases', 'Energy', 'Plants', 'Life', 'Machines', 'Special'];
 
   // hi / lo: [temperature, becomes, probability per tick]
   // burnInto: [[element, weight], ...]
@@ -350,7 +351,7 @@
       recipe: 'Coal sealed away from air at 2500°C', hint: 'Crush carbon with unbearable heat, sealed away from air.', from: ['coal'],
     },
     {
-      key: 'battery', name: 'Battery', group: 'Energy', cat: CAT.STATIC, density: 30, render: R.BATTERY,
+      key: 'battery', name: 'Battery', group: 'Machines', cat: CAT.STATIC, density: 30, render: R.BATTERY,
       colors: ['#d9c22a', '#2a2a2e'], cond: 0.3, hi: [1500, 'mmetal', 0.02], acidRes: 0.5, blastRes: 0.5,
       desc: 'Pulses electricity into conductors it touches.',
       recipe: 'Acid eating into metal', hint: 'Pour something corrosive onto metal.', from: ['acid', 'metal'],
