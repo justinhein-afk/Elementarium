@@ -279,19 +279,45 @@
       bgctx.fillRect(0, 0, cw, ch);
     }
 
-    // The vessel the world sits in, drawn each frame because the camera moves.
-    // Its sky tint follows the weather: colder is bluer, hotter is warmer, storms are darker.
-    function drawVessel(sx, sy, weather) {
+    // The vessel the world sits in, drawn each frame because the camera moves. Behind the map is a sky
+    // (only where nothing is: it changes no cell's colour): a day sky, blue overhead and hazy toward the
+    // horizon with the sun high in a corner; dusk, indigo to an orange glow low on the horizon; or the
+    // dark of night. Its tint follows the weather: colder is bluer, hotter is warmer, storms are darker.
+    const SKIES = {
+      day: [[0, '#2c64a8'], [0.45, '#5b97d0'], [0.8, '#a9d0ea'], [1, '#d4e8f2']],
+      dusk: [[0, '#14122c'], [0.35, '#3b2349'], [0.65, '#8c3a45'], [0.85, '#d2683a'], [1, '#f0a35a']],
+    };
+    function drawVessel(sx, sy, weather, sky) {
       const { ox, oy, s } = view;
-      ctx.fillStyle = '#0a1013';
-      ctx.fillRect(ox + sx, oy + sy, W * s, H * s);
+      const x0 = ox + sx, y0 = oy + sy, w = W * s, h = H * s;
+      const stops = SKIES[sky];
+      if (stops) {
+        const g = ctx.createLinearGradient(0, y0, 0, y0 + h);
+        for (const [f, c] of stops) g.addColorStop(f, c);
+        ctx.fillStyle = g;
+        ctx.fillRect(x0, y0, w, h);
+        // the sun: high to the left by day, low and large at dusk
+        const day = sky === 'day', cx = x0 + w * (day ? 0.18 : 0.72), cy = y0 + h * (day ? 0.12 : 0.62), r = h * (day ? 0.35 : 0.55);
+        const sun = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+        sun.addColorStop(0, day ? 'rgba(255,250,225,0.55)' : 'rgba(255,196,120,0.5)');
+        sun.addColorStop(day ? 0.08 : 0.12, day ? 'rgba(255,248,220,0.35)' : 'rgba(255,170,90,0.3)');
+        sun.addColorStop(1, 'rgba(255,240,210,0)');
+        ctx.fillStyle = sun;
+        ctx.fillRect(x0, y0, w, h);
+      } else {
+        ctx.fillStyle = '#0a1013';
+        ctx.fillRect(x0, y0, w, h);
+      }
       if (weather) {
         const a = weather.ambient;
         let tint = null;
         if (a < 5) tint = `rgba(120,170,255,${Math.min(0.16, (5 - a) / 45 * 0.16)})`;
         else if (a > 28) tint = `rgba(255,150,70,${Math.min(0.14, (a - 28) / 25 * 0.14)})`;
         if (tint) { ctx.fillStyle = tint; ctx.fillRect(ox + sx, oy + sy, W * s, H * s); }
-        if (weather.gloom > 0) {
+        if (weather.gloom > 0 && stops) { // a day or dusk sky clouds over grey: a storm darkens it the most
+          ctx.fillStyle = `rgba(78,86,98,${Math.min(0.85, weather.gloom * 2.4)})`;
+          ctx.fillRect(x0, y0, w, h);
+        } else if (weather.gloom > 0) {
           const g = ctx.createLinearGradient(0, oy, 0, oy + H * s);
           g.addColorStop(0, `rgba(30,34,42,${weather.gloom})`);
           g.addColorStop(1, 'rgba(30,34,42,0)');
@@ -473,10 +499,15 @@
             }
             case R.PISTON: {
               if (sap[i] > 0) { r += 30; g += 26; b += 10; gl = 0.12; }
+              if (aux[i] & 4) { // sticky: its front face is coated in green glue
+                const q = aux[i] & 3;
+                if (type[i + (q === 0 ? -SW : q === 1 ? 1 : q === 2 ? SW : -1)] !== t) { r = r * 0.4 + 96 * 0.6; g = g * 0.4 + 190 * 0.6; b = b * 0.4 + 84 * 0.6; }
+              }
               break;
             }
             case R.ROD: {
               if (((x + y) & 3) === 0) { r += 20; g += 20; b += 22; } // polished
+              if (aux[i] & 1) { r = r * 0.4 + 96 * 0.6; g = g * 0.4 + 190 * 0.6; b = b * 0.4 + 84 * 0.6; } // a sticky piston's glued tip
               break;
             }
             case R.THRUSTER: {
@@ -917,7 +948,7 @@
       }
       shakeAmt *= 0.86;
 
-      drawVessel(sx, sy, opts.weather);
+      drawVessel(sx, sy, opts.weather, opts.sky);
       ctx.imageSmoothingEnabled = false;
       ctx.drawImage(wc, ox + sx, oy + sy, W * s, H * s);
 

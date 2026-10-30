@@ -495,7 +495,25 @@
     for (const b of menus.world.querySelectorAll('[data-size]')) b.setAttribute('aria-pressed', b.dataset.size === mapSize);
   }
   markSize();
+  // The sky behind the map. Auto suits the scene: day over the outdoor ones, dusk round the volcano and
+  // the nuclear plant, night in the city, indoors, in a story chapter and in the Thermal and Air views.
+  // The Map menu can pin it to one (store 'sky').
+  const SCENE_SKY = { island: 'day', canyon: 'day', forest: 'day', caves: 'day', village: 'day', machines: 'day', volcano: 'dusk', reactor: 'dusk' };
+  let skyPick = UI.store.get('sky', 'auto');
+  const skyNow = () => (game.thermal || game.air ? 'night'
+    : skyPick !== 'auto' ? skyPick : Journey.active ? 'night' : SCENE_SKY[game.scene] || 'night');
+  function markSky() {
+    for (const b of menus.world.querySelectorAll('[data-sky]')) b.setAttribute('aria-pressed', b.dataset.sky === skyPick);
+  }
+  markSky();
   menus.world.addEventListener('click', (e) => {
+    const k = e.target.closest('[data-sky]');
+    if (k) {
+      skyPick = k.dataset.sky;
+      UI.store.set('sky', skyPick);
+      markSky();
+      return;
+    }
     const b = e.target.closest('[data-size]');
     if (!b) return;
     checkpoint();
@@ -742,7 +760,7 @@
     const w = game.world;
     renderer.draw(w.tick, {
       thermal: game.thermal, air: game.air, reducedMotion, lens: game.lens,
-      weather: { ambient: w.ambient, gloom: GLOOM[w.weather.mode] || 0 },
+      weather: { ambient: w.ambient, gloom: GLOOM[w.weather.mode] || 0 }, sky: skyNow(),
       disasters: w.disasters,
     });
     const z = `${Math.round(renderer.zoom * 100)}%`;

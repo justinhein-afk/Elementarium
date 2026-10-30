@@ -212,7 +212,7 @@
       // aux: the way it pushes (0 up, 1 right, 2 down, 3 left); data: ticks to its next stroke
       key: 'piston', name: 'Piston', group: 'Machines', cat: CAT.STATIC, render: R.PISTON, special: true, needs: 'battery',
       colors: ['#4a4f57', '#52575f'], density: 80, cond: 0.4, conduct: true, hi: [1500, 'mmetal', 0.02], acidRes: 0.7, blastRes: 0.8,
-      desc: 'Powered, it pushes out a rod, shoving whatever is in front along, up to 16 cells. Unpowered, it pulls the rod back in.',
+      desc: 'Powered, it pushes out a rod, shoving whatever is in front along, up to 16 cells. Unpowered, it pulls the rod back in. Made sticky (in the panel), it pulls back what it pushed.',
     },
     {
       key: 'rod', name: 'Piston rod', group: 'Machines', cat: CAT.STATIC, render: R.ROD, hidden: true,

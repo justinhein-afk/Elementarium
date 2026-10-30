@@ -536,12 +536,14 @@
   function buildMachineBox() {
     const box = $('#machine-set');
     box.innerHTML = `<div class="ms-row ms-dir"><span class="ms-lbl">Faces</span><div class="ms-btns" role="radiogroup" aria-label="Which way it faces">${
-      DIRS.map(([g, n], k) => `<button type="button" role="radio" data-dir="${k}" title="${n}" aria-label="${n}">${g}</button>`).join('')}</div></div>
+      DIRS.map(([g, n], k) => `<button type="button" role="radio" data-dir="${k}" title="${n}" aria-label="${n}">${g}</button>`).join('')}</div>
+      <button type="button" class="ms-toggle" id="ms-sticky" aria-pressed="false" title="A sticky piston pulls back what it pushed">Sticky</button></div>
       <div class="ms-row ms-sense"><span class="ms-lbl">Senses</span><select id="ms-mode" aria-label="What it senses">${
       SENSES.map(([n], k) => `<option value="${k}">${n}</option>`).join('')}</select>
       <input id="ms-temp" type="number" step="10" aria-label="Temperature, °C" inputmode="numeric"><span class="ms-unit">°C</span></div>
       <div class="ms-note" id="ms-note"></div>`;
     box.querySelectorAll('[data-dir]').forEach((b) => b.addEventListener('click', () => { AudioFX.click(); setMachine({ dir: +b.dataset.dir }); }));
+    $('#ms-sticky').addEventListener('click', () => { AudioFX.click(); setMachine({ sticky: !game.machine.sticky }); });
     $('#ms-mode').addEventListener('change', (e) => setMachine({ mode: +e.target.value }));
     const temp = $('#ms-temp'), typed = () => { const v = parseFloat(temp.value); setMachine({ set: Number.isFinite(v) ? Math.max(-273, Math.min(9000, Math.round(v))) : game.machine.set }); };
     temp.addEventListener('change', typed);
@@ -562,10 +564,12 @@
     box.querySelector('.ms-dir').hidden = k !== 'dir';
     box.querySelector('.ms-sense').hidden = k !== 'sense';
     box.querySelectorAll('[data-dir]').forEach((b) => b.setAttribute('aria-checked', +b.dataset.dir === m.dir));
+    $('#ms-sticky').hidden = t !== ID.PISTON;
+    $('#ms-sticky').setAttribute('aria-pressed', !!m.sticky);
     $('#ms-mode').value = m.mode;
     $('#ms-temp').value = m.set;
     $('#ms-temp').hidden = box.querySelector('.ms-unit').hidden = m.mode === 0;
-    $('#ms-note').textContent = k === 'dir' ? (t === ID.PISTON ? `New pistons push ${DIRS[m.dir][1].toLowerCase()}.`
+    $('#ms-note').textContent = k === 'dir' ? (t === ID.PISTON ? (m.sticky ? `New pistons push ${DIRS[m.dir][1].toLowerCase()}, and are sticky: they pull back what they pushed.` : `New pistons push ${DIRS[m.dir][1].toLowerCase()}.`)
       : t === ID.THRUSTER ? `New thrusters push their ship ${DIRS[m.dir][1].toLowerCase()}, firing out of the ${['bottom', 'left side', 'top', 'right side'][m.dir]}.`
         : `New pumps push ${DIRS[m.dir][1].toLowerCase()}, drawing in from the other sides.`)
       : k === 'sense' ? (m.mode === 0 ? 'New sensors fire while anything loose rests against them: a heap, a pool, a creature (not a drop falling past).'
@@ -1080,7 +1084,7 @@ ${tried ? '★ Done' : 'Try it'}: ${TryIt.text(d.id)}` : ''}`
     Tints.onOpen = tintMade;
     game.sandbox = store.get('sandbox', false);
     game.magnitude = store.get('magnitude', 7);
-    game.machine = Object.assign({ dir: 0, mode: 1, set: 100 }, store.get('machine', {}));
+    game.machine = Object.assign({ dir: 0, mode: 1, set: 100, sticky: false }, store.get('machine', {}));
     buildMachineBox();
     syncWorldDisc(game.world);
 

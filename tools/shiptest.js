@@ -75,6 +75,25 @@ const check = (label, ok, detail) => out.push({ label, ok, detail });
   check('A piston\'s rod shoves another piston, and what is on it', b1 <= b0 - 8 && count(w, ID.PISTON) === 45, `the block rose from y=${b0} to y=${b1}; ${count(w, ID.PISTON)} of 45 piston cells`);
 }
 {
+  // a sticky piston pulls back what it pushed; a plain one leaves it there
+  const home = (sticky) => {
+    const w = world(60, 40);
+    rect(w, 0, 35, 59, 39, ID.WALL);
+    rect(w, 5, 28, 8, 34, ID.PISTON, (i) => { w.aux[i] = 1 | (sticky ? 4 : 0); }); // facing right
+    w.place(w.idx(4, 31), ID.BATTERY);
+    rect(w, 9, 30, 13, 34, ID.STONE);
+    run(w, 120);
+    const left = () => { let m = 99; for (let i = 0; i < w.N; i++) if (w.type[i] === ID.STONE) m = Math.min(m, (i % w.SW) - 1); return m; };
+    const out = left();
+    w.place(w.idx(4, 31), ID.EMPTY);
+    run(w, 120);
+    return [out, left()];
+  };
+  const plain = home(false), sticky = home(true);
+  check('A sticky piston pulls back what it pushed', plain[0] >= 24 && plain[1] === plain[0] && sticky[0] >= 24 && sticky[1] === 9,
+    `plain: pushed to x=${plain[0]}, left at x=${plain[1]}; sticky: pushed to x=${sticky[0]}, pulled back to x=${sticky[1]}`);
+}
+{
   // a thick piston strokes from its front face only and stays in one piece
   const w = world();
   rect(w, 0, 110, 159, 119, ID.WALL);

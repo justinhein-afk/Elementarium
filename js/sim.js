@@ -407,8 +407,8 @@
     // falling one has come (0 when none is falling)
     Object.assign(events, { rumble: 0, cracks: 0, surge: 0, howl: 0, flash: 0, shake: 0, hbomb: [], whistle: 0, pump: 0, piston: 0 });
     // how newly painted machines are set (the panel's machine settings): which way a piston or a pump
-    // faces, and what a sensor senses and at what temperature
-    const machine = { dir: 0, mode: 1, set: 100 };
+    // faces, whether a piston is sticky, and what a sensor senses and at what temperature
+    const machine = { dir: 0, mode: 1, set: 100, sticky: false };
 
     let now = 1;
     let tick = 0;
@@ -2104,8 +2104,10 @@
     // A piston, powered, pushes its rod out a cell every few ticks, shoving the line of whatever is in
     // front along into the first gap (up to SHOVE_MAX cells, other machines and other pistons with their
     // rods too; only walls stop it), up to ROD_MAX cells out. Unpowered, it pulls the rod back in, a cell
-    // at a time.
+    // at a time. A sticky piston (aux STICKY) pulls back with it the line of whatever its rod's tip is
+    // pressed against, so what it pushed comes home with it; the tip of its rod (aux 1) shows the glue.
     const unshovable = (t) => t === BOUND || t === WALL || t === VOID || t === CLONE;
+    const STICKY = 4;
     function piston(i) {
       const on = sap[i] > 0;
       if (on) { sap[i]--; share(i, PISTON); }
@@ -2125,9 +2127,16 @@
         }
         for (let k = e; k !== j; k -= d) carry(k, k - d);
         become(j, ROD);
+        if (aux[i] & STICKY) { aux[j] = 1; if (L > 0) aux[j - d] = 0; } // the glue moves out to the new tip
         events.piston++;
       } else if (L > 0) {
         place(j - d, EMPTY); temp[j - d] = ambient;
+        if (aux[i] & STICKY) {
+          if (L > 1) aux[j - 2 * d] = 1;
+          let e = j, n = 0; // the line pressed against the tip, as far as a push would shove
+          while (n < SHOVE_MAX && type[e] !== EMPTY && !unshovable(type[e]) && catOf(e) !== C_GAS) { e += d; n++; }
+          for (let k = j; k !== e; k += d) carry(k - d, k);
+        }
         events.piston++;
       }
     }
@@ -5352,7 +5361,8 @@
         if (tint) { aux[i] = tint; flags[i] |= dyed; }
         if (rgb) col[i] = PAINTED | rgb;
         if (t === LIGHT) aux[i] = rayDir(cx(i) - x0, cy(i) - y0); // rays fly out from the brush
-        else if (t === PISTON || t === THRUSTER) aux[i] = machine.dir & 3;
+        else if (t === PISTON) aux[i] = (machine.dir & 3) | (machine.sticky ? STICKY : 0);
+        else if (t === THRUSTER) aux[i] = machine.dir & 3;
         else if (t === PUMP) data[i] = machine.dir & 3;
         if (t === PIPE) strokeCells.push(i);
         else if (t === SENSOR) { aux[i] = (machine.mode & 3) << 1; data[i] = machine.set | 0; }
