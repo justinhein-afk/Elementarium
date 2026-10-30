@@ -76,6 +76,9 @@
   const foundCount = () => ELEM.discoverable.reduce((n, d) => n + (known[d.id] ? 1 : 0), 0);
   const totalKnown = () => tableOrder.filter((d) => !d.special && known[d.id]).length;
   const tableTotal = tableOrder.filter((d) => !d.special).length;
+  // the plants and creatures there are to find: the last of them grows the Island scene into the tropical one
+  const LIFE = ELEM.discoverable.filter((d) => d.group === 'Plants' || d.group === 'Life');
+  const lifeFound = () => LIFE.reduce((n, d) => n + (known[d.id] ? 1 : 0), 0);
 
   function unlocked(t) {
     const d = list[t];
@@ -552,7 +555,7 @@
   function paintMachineBox() {
     const box = $('#machine-set');
     const t = game.selected.kind === 'element' ? game.selected.t : -1;
-    const k = t === ID.PISTON || t === ID.PUMP ? 'dir' : t === ID.SENSOR ? 'sense' : t === ID.SWITCH ? 'switch' : '';
+    const k = t === ID.PISTON || t === ID.PUMP || t === ID.THRUSTER ? 'dir' : t === ID.SENSOR ? 'sense' : t === ID.SWITCH ? 'switch' : '';
     box.hidden = !k;
     if (!k) return;
     const m = game.machine;
@@ -562,7 +565,9 @@
     $('#ms-mode').value = m.mode;
     $('#ms-temp').value = m.set;
     $('#ms-temp').hidden = box.querySelector('.ms-unit').hidden = m.mode === 0;
-    $('#ms-note').textContent = k === 'dir' ? (t === ID.PISTON ? `New pistons push ${DIRS[m.dir][1].toLowerCase()}.` : `New pumps push ${DIRS[m.dir][1].toLowerCase()}, drawing in from the other sides.`)
+    $('#ms-note').textContent = k === 'dir' ? (t === ID.PISTON ? `New pistons push ${DIRS[m.dir][1].toLowerCase()}.`
+      : t === ID.THRUSTER ? `New thrusters push their ship ${DIRS[m.dir][1].toLowerCase()}, firing out of the ${['bottom', 'left side', 'top', 'right side'][m.dir]}.`
+        : `New pumps push ${DIRS[m.dir][1].toLowerCase()}, drawing in from the other sides.`)
       : k === 'sense' ? (m.mode === 0 ? 'New sensors fire while anything loose rests against them: a heap, a pool, a creature (not a drop falling past).'
         : `New sensors fire while what touches them is ${m.mode === 1 ? 'hotter' : 'colder'} than ${m.set}°C.`)
         : 'New switches start on. Click a switch to flip it, and every switch joined to it.';
@@ -767,6 +772,12 @@ ${tried ? '★ Done' : 'Try it'}: ${TryIt.text(d.id)}` : ''}`
         for (const s of opened) fresh.add(s.id);
         refreshTable();
       }, 1400);
+    }
+    if (LIFE.includes(d) && lifeFound() === LIFE.length) {
+      setTimeout(() => {
+        AudioFX.unlock();
+        toast({ eyebrow: 'Scene unlocked', name: 'A new Island', how: 'Every plant and creature found: the Island in Scenes is now a tropical one, with palm beaches, a jungle, a coral reef and a hut on stilts.', ms: 8000 });
+      }, 2000);
     }
     if (totalKnown() === tableTotal) {
       setTimeout(() => {
@@ -1145,6 +1156,7 @@ ${tried ? '★ Done' : 'Try it'}: ${TryIt.text(d.id)}` : ''}`
     refreshInspect: () => renderInspect(),
     focusSearch: () => { $('#search').focus(); $('#search').select(); },
     unlocked: (t) => unlocked(t),
+    lifeFound: () => ({ found: game.sandbox ? LIFE.length : lifeFound(), total: LIFE.length }),
     symbol: (t) => SYM[list[t].key],
     swatch: (t, w, h) => cloneCanvas(swatchFor(t, w, h)),
     toolName: (name) => TOOL_INFO[name][0],

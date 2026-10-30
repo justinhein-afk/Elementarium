@@ -50,7 +50,11 @@
 
   UI.init(game);
   LabView.init(game);
-  Scenes.island(game.world);
+  // The Island is the plain one (sea, sand and a garden) until every plant and creature has been found;
+  // then it grows into the tropical one. Every game starts on it.
+  const islandGrown = () => { const f = UI.lifeFound(); return f.found >= f.total; };
+  const build = (name) => Scenes[name === 'island' && !islandGrown() ? 'islandClassic' : name];
+  build('island')(game.world);
 
   // ───── undo / redo ─────
   // Whole-world snapshots taken just before each change you make (a stroke, a scene, a clear…).
@@ -456,7 +460,7 @@
   function loadScene(name) {
     checkpoint();
     game.scene = name;
-    Scenes[name](game.world);
+    build(name)(game.world);
     TryIt.staged(game.world); // what the scene set up doesn't count toward Try it
   }
   // A scene built from periodic elements opens once every one of them is unlocked.
@@ -470,6 +474,9 @@
       b.classList.toggle('locked', miss.length > 0);
       b.setAttribute('aria-disabled', miss.length > 0);
     }
+    const f = UI.lifeFound(), island = menus.scenes.querySelector('[data-scene="island"] small');
+    island.textContent = islandGrown() ? 'palm beaches, a jungle hill, a coral reef and a hut on stilts'
+      : `sea, sand and a garden: it turns tropical once every plant and creature is found (${f.found} of ${f.total})`;
   }
   menus.scenes.addEventListener('click', (e) => {
     const b = e.target.closest('[data-scene]');
@@ -496,7 +503,7 @@
     UI.store.set('mapsize', mapSize);
     const s = pickWorldSize(mapSize);
     setWorld(Sim.createWorld(s.W, s.H));
-    Scenes[game.scene](game.world);
+    build(game.scene)(game.world);
     TryIt.staged(game.world);
     markSize();
     menus.world.hidden = true;

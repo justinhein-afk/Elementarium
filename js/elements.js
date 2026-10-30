@@ -21,6 +21,7 @@
     GRASS: 34, CACTUS: 35, VINE: 36, MUSHROOM: 37, LILY: 38, MSPARK: 39, LIGHT: 40,
     CELL: 41, COW: 42, WOLF: 43, SHARK: 44, LIMESTONE: 45, CONCRETE: 46,
     WIRE: 47, SWITCH: 48, SENSOR: 49, PIPE: 50, VALVE: 51, PUMP: 52, TANK: 53, PISTON: 54, ROD: 55, CASING: 56,
+    THRUSTER: 57, LEGS: 58,
   };
 
   const GROUPS = ['Solids', 'Powders', 'Liquids', 'Gases', 'Energy', 'Plants', 'Life', 'Machines', 'Special'];

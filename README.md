@@ -213,7 +213,10 @@ The **Machines** section holds the Battery and, once you have made a battery, th
 Whatever you draw in one brush stroke is one machine: a blob of pump is one big pump, a thick
 valve one valve, and power reaching any cell of a machine runs all of it. Valves, pumps and
 pistons run on current (each pulse keeps one going for 24 ticks, longer than a battery's 16 between
-pulses) and pass none on, so each needs a wire touching it.
+pulses) and pass none on, so each needs a wire touching it. Machines are solid things like any
+other: a hard earthquake shakes them apart, the Smash tool breaks them, a black hole tears them up and
+a blast wrecks them. They break into **Scrap** the colour of what broke (a pump’s blue, a wire’s copper,
+a battery’s yellow and black: batteries break the same way), which melts back into molten metal.
 
 | Part | What it does |
 | --- | --- |
@@ -224,7 +227,23 @@ pulses) and pass none on, so each needs a wire touching it.
 | Valve | Passes things only while powered: a tap in a pipe (drawn over a pipe, it takes the place of its bore and keeps its walls), or a plug under a pool |
 | Pump | Faces a way (set in the panel); powered, it draws in what touches it on its other sides and drives it out of the side it faces: into a pipe with the push to climb about 240 cells, into a tank, or out as a jet |
 | Tank | Holds 40 cells' worth of one liquid or gas, shows its level, settles and levels out across several cells, and feeds a pipe below or beside it |
-| Piston | Faces a way; powered, it pushes a rod out up to 16 cells, shoving what is in front along; unpowered, it pulls it back |
+| Piston | Faces a way; powered, it pushes a rod out up to 16 cells, shoving what is in front along (up to 28 cells of it, other machines and other pistons with their rods too; only walls stop it); unpowered, it pulls it back. Pistons that touch are one machine, pushing from its front face, so to have one piston shove another, leave a gap for the rod |
+| Thruster | Faces a way; powered, it burns fuel (oil, methane, alcohol, napalm or hydrogen) from a tank, pipe or pool it touches and pushes its ship that way, flame out of its other side. Each cell’s worth of fuel burns for 24 ticks per thruster cell |
+| Landing legs | Struts for a ship to land on: where they touch down first, a hard landing breaks nothing |
+
+### Ships
+
+A thruster flies whatever it is built into. Everything joined to it through machine parts, metal,
+cast metal or glass (touching side to side) is one ship, and moves as one: build a hull of metal, put
+a tank of fuel against the thruster and a battery and a switch inside, wired to it (with insulated
+wire: a battery touching the metal hull powers the whole hull, switch or no switch). Flip the switch
+and it lifts off; point thrusters left and right on switches of their own to steer. What rides inside
+goes with it: a passenger standing on the floor is lifted, water and sand it ploughs through slip past
+to its rear. A ship falls when its thrusters stop (out of fuel or switched off) and stops against
+anything solid. Faster than a gentle touchdown, its front breaks into scrap, and very fast it goes off
+with a bang, unless landing legs touch down first. A ship built into something huge (over 6,000
+cells, like a slab of metal floor) stays put. Its speed is kept in its thrusters, and `tools/shiptest.js`
+checks all of this.
 
 The **Waterworks** scene puts every part to work, left to right:
 
@@ -238,6 +257,17 @@ The **Waterworks** scene puts every part to work, left to right:
   the gate and let the water out into the basin, and on again to shut it. Pour more water in and it
   rises to the touch sensor at the high-water mark, which starts the overflow pump sending it over
   the dam.
+
+The **Nuclear plant** scene runs on its own. A low uranium core, cut into sections with a radium and
+beryllium neutron source in each, simmers below critical; its heat comes up through glass into a
+diamond hot plate, walled over except for a window where a strip of tellurium lies in the open air.
+Hot below and cold above, the tellurium makes current (as in a space probe's nuclear battery), which
+runs under the ground to light the town's houses and street lamps and play the fountain. A heat
+sensor on the hot plate drives pistons that push hafnium columns up between the sections when it
+runs too hot, cutting the chain reaction to a third, and lets them drop out as it cools. The SCRAM
+switch outside drives them in by hand (the lights fade over a minute as the core cools), and the
+breaker on the vessel cuts the town off at once. The fuel lasts a few minutes: every fission uses up
+a grain of uranium.
 
 ## The Lab
 
@@ -275,8 +305,8 @@ tests together. Every sample can be settled in three tests or fewer.
 
 If the world itself makes a locked element (radon decaying to polonium, uranium splitting into
 barium and krypton, calcium fusing into elements 112 to 118), that element is **found in the wild**
-and unlocks at once (not in sandbox mode). Scenes built from periodic elements (Reactor, Gas lamps,
-Chemistry lab, Electric workshop, Magnet lab) open once every element in them is unlocked. Sandbox
+and unlocks at once (not in sandbox mode). Scenes built from periodic elements (Nuclear plant, City,
+Electric workshop, Magnet lab) open once every element in them is unlocked. Sandbox
 mode still opens everything, and Reset discoveries locks the table again.
 
 ### Try it
@@ -305,7 +335,7 @@ element in the right state (melted, boiled, frozen, carrying current, white-hot,
 right thing), what it leaves behind (a fire in its colour, its sparks, stained glass, what it
 decays into) or what it sets off (a blast in its colour, a chain reaction, a fusion). Only
 unlocked elements count, and whatever a scene or a chapter set up in the world is set aside there,
-so the Electric workshop's light bulb or the Gas lamps' neon earn nothing: the experiment has to be
+so the Electric workshop's light bulb or the City's neon earn nothing: the experiment has to be
 your own. Reset discoveries clears the stars too.
 
 ### Element Groups
@@ -516,7 +546,7 @@ carries clouds and fog across the map, and open water evaporates faster the warm
 save slot. Undo keeps the last few dozen changes (strokes, scenes, clears, loads).
 
 Discoveries are saved in the browser, along with one world slot.
-**Scenes** offers thirteen starting worlds: Island, Canyon, Volcano (a magma chamber kept molten by the hot world floor), Forest, Caves, Workshop, Village (people, huts, a farm, birds and an anthill), Reactor (pull the cadmium rods out), Gas lamps, Chemistry lab (phosphors lit by batteries, radium paint, sodium burning in a jar of chlorine and six campfires coloured by copper, strontium, sodium, potassium and barium), Electric workshop (a stained-glass window, a light bulb, a carbon arc lamp, an electric sparkler, and neon signs run off a lemon battery and a solar panel), Magnet lab (a magnet sorting iron from sand, an electromagnet, chilled gadolinium and bismuth) and an empty bench. **Hint** names something you can make with what you already have. The **Codex** lists
+**Scenes** offers thirteen starting worlds: Island (every game starts on the plain one, sea, sand and a garden; once every plant and creature has been found it grows into a tropical island with palm beaches, a jungle hill, a coral reef, a hut on stilts and a sea stack), Canyon (rock layers in the Grand Canyon’s real colours, from pale limestone at the rim down through red shales and the Redwall to dark schist, a green river and a rope bridge), Volcano (a dark brown cone with a red-hot mouth holding a lava lake, fed up a pipe from a chamber on the hot world floor: deep magma stays molten until it meets the open air. Fire the Volcano weapon into the middle of the mountain and its magma climbs the pipe and erupts out of the mouth: magma already in its way costs it none of its reach), Forest (dense tall pines and broad oaks, willows over a lily pond, bushes, flowers, a fallen log and mushrooms), Caves (a limestone cavern hung with stalactites under an underground lake, iron, copper and gold ores, a coal seam, an amethyst geode, diamonds round a magma pocket, a lake and an oil pocket), Workshop (jars, blocks and pots of every starter, and a fire in the grate), Village (a limestone church with a spire and rose window, brick, timber and wooden houses, a red barn, cows in a fenced pasture, a well, a pond, crops and a windmill), Nuclear plant (a reactor that runs itself and lights a town), City (skyscrapers whose floors are lit by tubes of helium, neon, argon, krypton and xenon, stained-glass crowns, a spire with a red beacon, neon signs and street lamps), Electric workshop (three benches of working circuits: a light bulb, a carbon arc, a sparkler, a solar panel, lemon and car batteries, a tantalum capacitor firing a xenon flash, a red-green-blue phosphor screen, and switched machines: a lamp, a kettle, a pumped fountain, a piston lift and a fire alarm), Magnet lab (three floors: a separator pulling iron out of falling sand, which metals a magnet takes, bismuth pushed away, an electromagnet crane, neodymium and samarium magnets on heaters, iron dropping out of a fire past its Curie point, chilled gadolinium and filings drawn up in a jar), Waterworks and an empty bench. **Hint** names something you can make with what you already have. The **Codex** lists
 everything found so far, with recipes and the temperatures where each element changes.
 Clone unlocks after 8 discoveries and Void after 16. Sandbox mode in the Codex unlocks
 everything at once.
@@ -611,6 +641,7 @@ node tools/tintstest.js
 node tools/materialstest.js
 node tools/lifetest.js
 node tools/machinetest.js
+node tools/shiptest.js
 ```
 
 `simtest` runs the simulation headless and checks that every discovery is reachable from the

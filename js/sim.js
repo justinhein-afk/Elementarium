@@ -22,7 +22,7 @@
     LITTER, BRICK, RUBBLE, SPLINTERS, SHARDS,
     SOIL, CONCRETE, CEMENT, ALCOHOL, VINEGAR, LIGHT, PINE, PINECONE, PALM, COCONUT, WILLOW, CATKIN,
     EXPLOSION, SUGAR, LIME, LIMESTONE, CELL, COW, WOLF, SHARK,
-    WIRE, SWITCH, SENSOR, PIPE, VALVE, PUMP, TANK, PISTON, ROD, CASING,
+    WIRE, SWITCH, SENSOR, PIPE, VALVE, PUMP, TANK, PISTON, ROD, CASING, THRUSTER, LEGS, SCRAP,
   } = ID;
 
   const BOUND = EL.NT - 1; // invisible border cell, so neighbour lookups never need bounds checks
@@ -222,7 +222,14 @@
   // machines that run on current (it powers them for POWER_TICKS, and they pass it no further), and
   // what a pipe won't carry
   const P_CONSUMER = new Uint8Array(NT), NOPIPE = new Uint8Array(NT), POWER_TICKS = 24;
-  for (const t of [VALVE, PUMP, PISTON]) P_CONSUMER[t] = 1;
+  for (const t of [VALVE, PUMP, PISTON, THRUSTER]) P_CONSUMER[t] = 1;
+  // what a ship is built of: whatever is joined to a thruster through these flies with it (see ships())
+  const SHIPPY = new Uint8Array(NT);
+  for (const t of [WIRE, SWITCH, SENSOR, PIPE, VALVE, PUMP, TANK, PISTON, ROD, CASING, BATTERY, THRUSTER, LEGS, METAL, GLASS]) SHIPPY[t] = 1;
+  for (const d of list) if (d.castOf !== undefined) SHIPPY[d.id] = 1; // cast metal
+  // what a thruster burns
+  const FUEL = new Uint8Array(NT);
+  for (const t of [OIL, METHANE, ALCOHOL, NAPALM, EL_H]) FUEL[t] = 1;
   // the plumbing: what a pipe's bore is sealed by, and what keeps matter in (anything else beside a
   // pipe's bore is an opening)
   const PLUMBING = new Uint8Array(NT);
@@ -1874,7 +1881,7 @@
     const OPP4 = [1, 0, 3, 2];
     const SIDES = [[2, 3], [2, 3], [0, 1], [0, 1]];
     const DIR_N4 = [0, 3, 1, 2];       // a piston's or a pump's facing (up, right, down, left) as an N4 index
-    const PUSH = 240, TANK_CAP = 40, ROD_MAX = 16, SHOVE_MAX = 12;
+    const PUSH = 240, TANK_CAP = 40, ROD_MAX = 16, SHOVE_MAX = 28; // a piston can shove another with its rod out
     const isConduit = (t) => t === PIPE || t === VALVE;
     const flows = (j) => type[j] === PIPE || (type[j] === VALVE && sap[j] > 0); // a conduit that will pass things on
     // the state something would be in at temperature T, without a cell to ask
@@ -2095,14 +2102,18 @@
       return n;
     }
     // A piston, powered, pushes its rod out a cell every few ticks, shoving the line of whatever is in
-    // front along into the first gap (up to SHOVE_MAX cells; walls, other pistons and their rods stop
-    // it), up to ROD_MAX cells out. Unpowered, it pulls the rod back in, a cell at a time.
-    const unshovable = (t) => t === BOUND || t === WALL || t === VOID || t === CLONE || t === PISTON || t === ROD;
+    // front along into the first gap (up to SHOVE_MAX cells, other machines and other pistons with their
+    // rods too; only walls stop it), up to ROD_MAX cells out. Unpowered, it pulls the rod back in, a cell
+    // at a time.
+    const unshovable = (t) => t === BOUND || t === WALL || t === VOID || t === CLONE;
     function piston(i) {
       const on = sap[i] > 0;
       if (on) { sap[i]--; share(i, PISTON); }
       if (tick % 3) return; // every cell of a piston strokes together
       const d = N4[DIR_N4[aux[i] & 3]];
+      // pistons that touch are one machine, so only its front face strokes: a cell with piston right in
+      // front of it is inside the blob (it must not shove its own body along)
+      if (type[i + d] === PISTON) return;
       let j = i + d, L = 0;
       while (type[j] === ROD && L < ROD_MAX) { j += d; L++; }
       if (on) {
@@ -2112,13 +2123,185 @@
           if (unshovable(type[e]) || ++n > SHOVE_MAX) return;
           e += d;
         }
-        for (let k = e; k !== j; k -= d) swap(k, k - d);
+        for (let k = e; k !== j; k -= d) carry(k, k - d);
         become(j, ROD);
         events.piston++;
       } else if (L > 0) {
         place(j - d, EMPTY); temp[j - d] = ambient;
         events.piston++;
       }
+    }
+    // swap two cells along with their sap (a machine's power, a plant's water), for things shoved or
+    // carried whole: a piston pushed by another keeps its power, a flying ship its current
+    function carry(a, b) { swap(a, b); const s = sap[a]; sap[a] = sap[b]; sap[b] = s; }
+
+    // ───── ships ─────
+    // Whatever is joined to a thruster through what ships are built of (machine parts, metal, cast
+    // metal, glass: SHIPPY) is one ship, worked out afresh each tick and moved as a whole. A thruster
+    // that is powered and has fuel pushes its ship the way it faces and blows flame out of its other
+    // side; the ship's speed is kept in its thrusters' vx and vy (they are static, so those are free).
+    // It falls when nothing holds it up, ploughs through loose matter (shoving it along, or letting it
+    // slip past to its rear), and stops against anything solid: hard, its front breaks into scrap,
+    // unless landing legs take the blow.
+    const SHIP_MAX = 6000, THRUST = 1.5, G_SHIP = 0.02, V_MAX = 0.6, SAFE_LANDING = 0.4, FUEL_TICKS = 24;
+    const shipMark = new Int32Array(N), moveMark = new Int32Array(N);
+    let shipNo = 0, moveNo = 0, shipQ = new Int32Array(1024);
+    // A thruster, every tick: power spreads through its blob as through a pump's; powered, it takes fuel
+    // when it runs out (FUEL_TICKS of burning for each cell's worth) from a tank, pipe or pool it touches,
+    // or from the next thruster cell; and while it has fuel, it fires (its flame shows where there is
+    // room for it: standing on a launch pad, it still lifts off).
+    function thruster(i) {
+      if (sap[i] > 0) { sap[i]--; share(i, THRUSTER); }
+      let firing = false;
+      if (sap[i] > 0) {
+        if (data[i] <= 0) refuel(i);
+        if (data[i] > 0) {
+          data[i]--; firing = true;
+          const back = OPP4[DIR_N4[aux[i] & 3]], e = i + N4[back];
+          if (type[e] !== THRUSTER) exhaust(e, back);
+        }
+      }
+      aux[i] = (aux[i] & 3) | (firing ? 4 : 0);
+    }
+    function refuel(i) {
+      for (let k = 0; k < 4; k++) {
+        const n = i + N4[k], nt = type[n];
+        if (nt === TANK && FUEL[aux[n]] && data[n] > 0) { if (--data[n] <= 0) { data[n] = 0; aux[n] = 0; } }
+        else if (isConduit(nt) && FUEL[aux[n]]) { aux[n] = 0; data[n] = 0; }
+        else if (FUEL[nt] && catOf(n) !== C_STATIC) { place(n, EMPTY); temp[n] = ambient; }
+        else if (nt === THRUSTER && data[n] >= 2) { const h = data[n] >> 1; data[n] -= h; data[i] = h; return; }
+        else continue;
+        data[i] = FUEL_TICKS;
+        return;
+      }
+    }
+    // a jet of flame out of the nozzle, a few cells long, that blows the air along with it
+    function exhaust(e, back) {
+      const d = N4[back], L = 3 + ((rnd() * 6) | 0);
+      for (let k = 0, j = e; k < L; k++, j += d) {
+        const t = type[j];
+        if (t === BOUND || (t !== EMPTY && catOf(j) !== C_GAS)) break;
+        place(j, FIRE); temp[j] = 900 + rnd() * 400; data[j] = 3 + ((rnd() * 5) | 0);
+      }
+      const a = AIRMAP[e];
+      if (back === UP || back === DOWN) avy[a] += (back === UP ? -1 : 1) * 0.6; else avx[a] += (d > 0 ? 1 : -1) * 0.6;
+      events.rumble = Math.max(events.rumble, 0.3);
+    }
+    // the ship cell i belongs to: every SHIPPY cell joined to it, or null if it is too big to fly
+    // (built into something huge); marks all of them either way
+    function gatherShip(i0) {
+      let n = 0, head = 0, big = false;
+      shipMark[i0] = shipNo; shipQ[n++] = i0;
+      while (head < n) {
+        const i = shipQ[head++];
+        for (let k = 0; k < 4; k++) {
+          const j = i + N4[k];
+          if (shipMark[j] === shipNo || !SHIPPY[type[j]]) continue;
+          shipMark[j] = shipNo;
+          if (n >= SHIP_MAX) { big = true; continue; }
+          if (n === shipQ.length) { const q = new Int32Array(n * 2); q.set(shipQ); shipQ = q; }
+          shipQ[n++] = j;
+        }
+      }
+      if (big) { // go on marking the rest, so its other thrusters don't gather it again this tick
+        const stack = [];
+        for (let k = 0; k < n; k++) stack.push(shipQ[k]);
+        while (stack.length) {
+          const i = stack.pop();
+          for (let k = 0; k < 4; k++) { const j = i + N4[k]; if (shipMark[j] !== shipNo && SHIPPY[type[j]]) { shipMark[j] = shipNo; stack.push(j); } }
+        }
+        return null;
+      }
+      return shipQ.slice(0, n);
+    }
+    // Move a ship one cell by d. Anything solid in the way (or, going down, a heap or a creature to land
+    // on) stops it: returns the ship cells that ran into something, or null once it has moved.
+    function moveShip(cells, d) {
+      const m = ++moveNo;
+      for (const c of cells) moveMark[c] = m;
+      const hit = [];
+      for (const c of cells) {
+        const t = c + d, tt = type[t];
+        if (moveMark[t] === m || tt === EMPTY) continue;
+        const cat = tt === BOUND ? C_STATIC : catOf(t);
+        if (cat === C_STATIC || (d === SW && (cat === C_POWDER || cat === C_LIFE))) hit.push(c);
+      }
+      if (hit.length) return hit;
+      // each line of ship cells along d moves on a cell, front first; what was in front of it (air, or
+      // matter that couldn't be shoved on ahead) ends up behind it
+      for (const c of cells) {
+        const t = c + d;
+        if (moveMark[t] === m) continue;
+        if (type[t] !== EMPTY && catOf(t) !== C_GAS) shoveOn(t, d);
+        for (let k = c; moveMark[k] === m; k -= d) carry(k + d, k);
+      }
+      for (let k = 0; k < cells.length; k++) { cells[k] += d; stamp[cells[k]] = 0; } // still worked this tick, where it now is
+      return null;
+    }
+    // shove the loose things lined up from t along d on a cell, if a gap opens up within a few cells
+    function shoveOn(t, d) {
+      let e = t;
+      for (let n = 0; n < 8; n++, e += d) {
+        const et = type[e];
+        if (et === EMPTY || (et !== BOUND && catOf(e) === C_GAS)) {
+          for (let k = e; k !== t; k -= d) carry(k, k - d);
+          return;
+        }
+        if (et === BOUND || catOf(e) === C_STATIC) return;
+      }
+    }
+    // A ship stopped by what its cells `hit`, going at speed v along d: landing legs touching down
+    // take any blow; otherwise past SAFE_LANDING its front breaks up, and fast, it goes off with a bang.
+    function crash(hit, d, v) {
+      if (v < SAFE_LANDING || hit.some((c) => type[c] === LEGS)) return;
+      const f = Math.min(1, (v - SAFE_LANDING) * 2.5);
+      let n = 0;
+      for (const c of hit) {
+        if (rnd() > f) continue;
+        if (type[c] === GLASS) crumble(c);
+        else { // scrap of its own colour (the hull's steel grey, a tank's, a thruster's), paint and all
+          const from = type[c], paint = col[c];
+          become(c, SCRAP); aux[c] = from; if (paint) col[c] = paint;
+          if (!disc[SCRAP]) discover(SCRAP, c);
+        }
+        const o = c + d;
+        if (type[o] !== BOUND && BREAKS[type[o]] && rnd() < f * 0.5) crumble(o);
+        n++;
+      }
+      events.shake += 2 + 6 * f; events.cracks += n;
+      if (v > 0.7 && hit.length) { const c = hit[(rnd() * hit.length) | 0]; explode(cx(c), cy(c), 2 + Math.round(3 * f), 0.6); }
+    }
+    function ships() {
+      for (let i = SW; i < N - SW; i++) if (type[i] === THRUSTER && stamp[i] !== now) thruster(i);
+      shipNo++;
+      for (let i = SW; i < N - SW; i++) {
+        if (type[i] !== THRUSTER || shipMark[i] === shipNo) continue;
+        const cells = gatherShip(i);
+        if (cells) flyShip(cells);
+      }
+    }
+    function flyShip(cells) {
+      // its speed, and the push of every thruster firing
+      let vxs = 0, vys = 0, nt = 0, fx = 0, fy = 0;
+      for (const c of cells) {
+        if (type[c] !== THRUSTER) continue;
+        nt++; vxs += vx[c]; vys += vy[c];
+        if (aux[c] & 4) { const d = N4[DIR_N4[aux[c] & 3]]; if (d === -SW) fy--; else if (d === SW) fy++; else fx += d; }
+      }
+      let u = vxs / nt, v = vys / nt;
+      u += (fx * THRUST) / cells.length; v += (fy * THRUST) / cells.length + G_SHIP;
+      u = Math.max(-V_MAX, Math.min(V_MAX, u * 0.995)); v = Math.max(-V_MAX, Math.min(V_MAX, v));
+      // it goes a cell at a time, as often as its speed says
+      if (rnd() < Math.abs(v)) {
+        const d = v > 0 ? SW : -SW, hit = moveShip(cells, d);
+        if (hit) { crash(hit, d, Math.abs(v)); v = 0; u *= 0.8; } // stopped: and on the ground it drags
+      }
+      if (rnd() < Math.abs(u)) {
+        const d = u > 0 ? 1 : -1, hit = moveShip(cells, d);
+        if (hit) { crash(hit, d, Math.abs(u)); u = 0; }
+      }
+      // where it is now is claimed too, so the scan for thrusters doesn't find it again further on
+      for (const c of cells) { shipMark[c] = shipNo; if (type[c] === THRUSTER) { vx[c] = u; vy[c] = v; } }
     }
     // A sensor checks what touches it: anything loose (a grain, a drop, a creature) in touch mode,
     // or how hot (or cold) the things against it are. While it is set off, it sends a pulse into the
@@ -3474,8 +3657,12 @@
           break;
         }
         case LAVA:
-          // geothermal: lava resting on the world's floor stays molten, but never hot enough to melt stone
-          if (type[i + SW] === BOUND && temp[i] < 1080) temp[i] = 1080;
+          // geothermal: lava resting on the world's floor stays molten, but never hot enough to melt stone;
+          // so does deep magma (CENTER: the Volcano scene's pipe and lake) until it meets the open air
+          if (flags[i] & CENTER) {
+            for (let k = 0; k < 4; k++) { const n = i + N4[k]; if (type[n] === EMPTY || catOf(n) === C_GAS) { flags[i] &= ~CENTER; break; } }
+          }
+          if ((type[i + SW] === BOUND || (flags[i] & CENTER)) && temp[i] < 1080) temp[i] = 1080;
           if (rnd() < 0.0015 && type[i - SW] === EMPTY) transform(i - SW, rnd() < 0.6 ? SMOKE : FIRE);
           break;
         case WATER:
@@ -3584,6 +3771,7 @@
         case TANK: tank(i); return;
         case PUMP: pump(i); return;
         case PISTON: piston(i); return;
+        case THRUSTER: case LEGS: return; // a thruster is worked by ships(), before everything else moves
         case SENSOR: sensor(i); return;
         case WIRE: case SWITCH: case ROD: case CASING: return;
         case COW: cow(i); return;
@@ -3829,6 +4017,7 @@
       if (disasters.length) disasterTick();
       if (hand.on) handPhysics();
       if ((tick & 15) === 0) rootPass();
+      if (counts[THRUSTER]) ships();
       const ltr = tick & 1;
       for (let y = H; y >= 1; y--) {
         const row = y * SW;
@@ -4148,7 +4337,7 @@
       [STONE,           7,     10.5,   0.6,   RUBBLE],    // cliffs shed rock at VII; bedrock breaks up at X and over
       [WOOD,            8.5,   11.5,   0.3,   SPLINTERS], // timber frames ride out VIII and are wrecked at X–XI
       [SAPLING,         9,     12,     0.5,   SPLINTERS],
-      [BATTERY,         11,    16,     0.2,   EL_FE],     // a metal case
+      [BATTERY,         10,    14.5,   0.25,  SCRAP],     // its case bursts open, like any machine's
       [METAL,           11,    16,     0.15,  EL_FE],     // rails bend at X; steel seldom snaps even at XII
       [DIAMOND,         NEVER, NEVER,  0.12,  EL_C],      // the hardest thing there is: no earthquake breaks it
     ];
@@ -4161,6 +4350,10 @@
     );
     // cast metal: ductile, like steel, and it breaks back into its own grains
     for (const d of list) if (d.castOf !== undefined) SOLIDS.push([d.id, 10.5, 15.5, 0.15, d.castOf]);
+    // machines are solid things too: shaken hard, smashed or torn, they break into scrap (thin pipe and
+    // the lighter fittings first, the heavy pumps, tanks, pistons and thrusters last)
+    for (const t of [WIRE, SWITCH, SENSOR, PIPE, VALVE, CASING, LEGS]) SOLIDS.push([t, 9, 13, 0.35, SCRAP]);
+    for (const t of [PUMP, TANK, PISTON, ROD, THRUSTER]) SOLIDS.push([t, 10, 14.5, 0.25, SCRAP]);
     const BREAKS = new Uint16Array(NT), TEARS = new Float32Array(NT);
     const QUAKE_FROM = new Float32Array(NT).fill(NEVER), QUAKE_RUIN = new Float32Array(NT).fill(NEVER);
     // a black hole tears the lighter of two equally tough solids apart a little sooner: density
@@ -4230,7 +4423,7 @@
         const tint = from === GLASS ? aux[i] : 0, c = col[i]; // stained glass breaks into shards of its colour
         become(i, to);
         if (tint) aux[i] = tint;
-        else if (to === RUBBLE) aux[i] = from; // rubble looks like what it broke from: brick red, concrete grey
+        else if (to === RUBBLE || to === SCRAP) aux[i] = from; // rubble and scrap look like what they broke from: brick red, a pump's blue
         if (c) col[i] = c; // and paint stays on the pieces
         if (!disc[to]) discover(to, i); // rubble, glass shards: found when something breaks up
       }
@@ -4599,9 +4792,12 @@
     function volcanoRise(d) {
       events.shake += 0.15;
       events.rumble = Math.max(events.rumble, 0.45);
-      const top = H - d.reach, next = Math.max(top, d.head - VOLCANO_RISE);
+      const next = Math.max(H - d.reach, d.head - VOLCANO_RISE);
       for (let y = Math.ceil(d.head) - 1; y >= Math.ceil(next); y--) { // the rows it climbs into this tick
         const i = idx(d.x, y);
+        // magma already standing in its way (a volcano's own pipe) is pushed up ahead of it, so climbing
+        // through that costs none of its reach: it comes out wherever that magma meets the air
+        if (type[i] === LAVA) { d.reach++; d.life += 1.5; continue; }
         if (airAt(i) || catOf(i) === C_LIQUID) { volcanoErupt(d, y + 1); return; } // through to the surface
         if (unbreakable(type[i])) { volcanoSpent(d); return; }                        // nothing gets through that
         meltPipe(d, y, y);
@@ -4611,7 +4807,7 @@
         }
       }
       d.head = next;
-      if (d.head <= top) volcanoSpent(d);
+      if (d.head <= H - d.reach) volcanoSpent(d);
     }
     function volcanoErupt(d, vent) {
       d.phase = 'erupt'; d.vent = vent; d.at = d.age;
@@ -5156,7 +5352,7 @@
         if (tint) { aux[i] = tint; flags[i] |= dyed; }
         if (rgb) col[i] = PAINTED | rgb;
         if (t === LIGHT) aux[i] = rayDir(cx(i) - x0, cy(i) - y0); // rays fly out from the brush
-        else if (t === PISTON) aux[i] = machine.dir & 3;
+        else if (t === PISTON || t === THRUSTER) aux[i] = machine.dir & 3;
         else if (t === PUMP) data[i] = machine.dir & 3;
         if (t === PIPE) strokeCells.push(i);
         else if (t === SENSOR) { aux[i] = (machine.mode & 3) << 1; data[i] = machine.set | 0; }
@@ -5274,8 +5470,8 @@
 
     // The Smash tool: what is brittle breaks, as an earthquake would break it: stone, brick and
     // concrete to rubble of their own colour, glass to shards of its colour, ice and hail to snow,
-    // wood to splinters, plants to dead leaves. Metal bends instead, diamond is too hard, and
-    // creatures are left be.
+    // wood to splinters, plants to dead leaves, machines and batteries to scrap of their own colour.
+    // Metal bends instead, diamond is too hard, and creatures are left be.
     const CRUSH = new Uint16Array(NT);
     CRUSH[HAIL] = SNOW;
     function smash(x0, y0, r, max = Infinity) {
@@ -5283,7 +5479,7 @@
       forCircle(x0, y0, r, (i) => {
         if (n >= max || rnd() > 0.35) return;
         const t = type[i];
-        if (t === EMPTY || t === METAL || t === BATTERY || t === DIAMOND || P_SOLID[t] || unbreakable(t)) return;
+        if (t === EMPTY || t === METAL || t === DIAMOND || P_SOLID[t] || unbreakable(t)) return;
         if (BREAKS[t] && P_CAT[t] === C_STATIC) { if (crumble(i)) n++; return; }
         const to = CRUSH[t];
         if (to) { const c = col[i]; become(i, to); if (c) col[i] = c; if (!disc[to]) discover(to, i); n++; }

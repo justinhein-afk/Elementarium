@@ -223,5 +223,25 @@
       key: 'casing', name: 'Pipe wall', group: 'Machines', cat: CAT.STATIC, render: R.CASING, hidden: true,
       colors: ['#6e7884', '#76808c', '#68727e'], density: 60, cond: 0.25, cap: 4, hi: [1500, 'mmetal', 0.02], acidRes: 0.7, blastRes: 0.6,
     },
+    // ───── spaceships: a thruster flies whatever it is built into ─────
+    {
+      // aux: bits 0–1 the way it pushes its ship (0 up, 1 right, 2 down, 3 left), bit 2 set while it fires;
+      // data: ticks of fuel it has left; vx, vy: its ship's speed (see ships() in sim.js)
+      key: 'thruster', name: 'Thruster', group: 'Machines', cat: CAT.STATIC, render: R.THRUSTER, special: true, needs: 'battery',
+      colors: ['#555b64', '#5f656e', '#4c5159'], density: 70, cond: 0.3, conduct: true, hi: [2200, 'mmetal', 0.02], acidRes: 0.7, blastRes: 0.7,
+      desc: 'A rocket engine. Powered, it burns fuel (oil, methane, alcohol, napalm or hydrogen) from a tank, pipe or pool it touches and pushes the way it faces, blowing flame out of its other side. Whatever it is joined to in metal, glass or machine parts is one ship, and flies as one.',
+    },
+    {
+      key: 'legs', name: 'Landing legs', group: 'Machines', cat: CAT.STATIC, render: R.LEGS, special: true, needs: 'battery',
+      colors: ['#9ba1a9', '#8d939b', '#a7adb5'], density: 50, cond: 0.3, hi: [1500, 'mmetal', 0.02], acidRes: 0.7, blastRes: 0.7,
+      desc: 'Sprung struts to land a ship on. Where they touch down first, a hard landing breaks nothing.',
+    },
+    {
+      key: 'scrap', name: 'Scrap', group: 'Powders', cat: CAT.POWDER,
+      colors: ['#6f757c', '#7d838a', '#5f646a', '#8a6a4e'], density: 40, cond: 0.5, slide: 0.3, conduct: true,
+      hi: [1538, 'mmetal', 0.03], acidRes: 0.5, blastRes: 0.4,
+      desc: 'Twisted bits of broken machines and batteries, in the colours of what they broke from. Melts back into molten metal.',
+      recipe: 'A machine broken to pieces', hint: 'Smash a machine, shake one apart, or crash a ship.', from: ['battery'],
+    },
   ]);
 })(globalThis);

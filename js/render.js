@@ -150,7 +150,7 @@
   for (const m of [R.PLANT, R.GRASS, R.FLOWER, R.VINE, R.LILY]) SWAYS[m] = 1;
   const SINE = new Float32Array(256);
   for (let k = 0; k < 256; k++) SINE[k] = Math.sin((k / 256) * Math.PI * 2);
-  const RUBBLE = ID.RUBBLE;
+  const RUBBLE = ID.RUBBLE, SCRAP = ID.SCRAP;
 
   // Explosion flashes: an explosive's own blastColor, else the flame-test colour of whatever
   // coloured the blast, else fire orange; blastGlow is how bright the flash is.
@@ -479,6 +479,21 @@
               if (((x + y) & 3) === 0) { r += 20; g += 20; b += 22; } // polished
               break;
             }
+            case R.THRUSTER: {
+              // ribbed steel; firing, it glows, white-hot at the nozzle end (the side it doesn't push)
+              if ((((aux[i] & 1) ? x : y) & 1) === 0) { r -= 10; g -= 10; b -= 8; }
+              if (aux[i] & 4) {
+                const q = aux[i] & 3, nozzle = type[i + (q === 0 ? SW : q === 1 ? -1 : q === 2 ? -SW : 1)] !== t;
+                const f = nozzle ? 0.85 : 0.3;
+                r = r * (1 - f) + 255 * f; g = g * (1 - f) + (nozzle ? 214 : 150) * f; b = b * (1 - f) + (nozzle ? 150 : 70) * f;
+                gl = nozzle ? 0.9 : 0.3;
+              }
+              break;
+            }
+            case R.LEGS: {
+              if ((((x + y) >> 1) & 1) === 0) { r = r * 0.45 + 230 * 0.55; g = g * 0.45 + 190 * 0.55; b = b * 0.45 + 40 * 0.55; } // hazard stripes
+              break;
+            }
             case R.CELL: {
               // a living cell: a soft green blob that pulses
               const ph = SINE[(s + tick * 3) & 255];
@@ -791,8 +806,9 @@
             const k = SINE[ph] * amp;
             r += k * 0.55; g += k; b += k * 0.3;
           }
-          // rubble looks like what it broke from: brick red, concrete grey, black obsidian
-          if (t === RUBBLE && aux[i]) {
+          // rubble and scrap look like what they broke from: brick red, concrete grey, black obsidian, a
+          // pump's blue, a battery's yellow and black
+          if ((t === RUBBLE || t === SCRAP) && aux[i]) {
             const q = aux[i] * 16 + (s >> 4), j = 0.74 + (hash(i) & 15) / 60;
             r = PR[q] * j; g = PG[q] * j; b = PB[q] * j;
           }

@@ -191,8 +191,9 @@ const cells = (w, pred) => { let n = 0; for (let i = 0; i < w.N; i++) if (pred(i
 {
   const needs = Lab.sceneNeeds(Scenes);
   const show = (n) => (needs[n] || []).map((t) => ELEM.list[t].sym).join(' ');
-  check('Scenes with periodic elements need them', show('reactor') === 'Cd U' && show('lamps').includes('Ne') && !needs.island && !needs.village,
-    `reactor: ${show('reactor')} · lamps: ${show('lamps')} · magnets: ${show('magnets')}`);
+  check('Scenes with periodic elements need them', show('reactor') === 'Be Ne Te Hf Ra U' && show('city') === 'He Ne Ar Kr Xe'
+    && !needs.island && !needs.village && !needs.caves && !needs.canyon && !needs.forest && !needs.workshop && !needs.volcano,
+    `reactor: ${show('reactor')} · city: ${show('city')} · magnets: ${show('magnets')} · electrics: ${show('electrics')}`);
 }
 
 let fail = 0;
