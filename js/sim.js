@@ -391,7 +391,7 @@
     const disc = new Uint8Array(NT);
     const counts = new Int32Array(NT);
     // booms: x, y, radius, kind (the element whose colour the blast shows) for each blast this frame
-    const events = { sizzle: 0, ignite: 0, fizz: 0, zap: 0, burning: 0, fission: 0, decay: 0, rad: 0, booms: [], bolts: [], found: [], rx: [], fused: [] };
+    const events = { sizzle: 0, ignite: 0, fizz: 0, zap: 0, burning: 0, fission: 0, decay: 0, rad: 0, naturalBolt: 0, booms: [], bolts: [], found: [], rx: [], fused: [] };
     // A contact reaction worth seeing: x, y and the element whose colour the renderer flashes there.
     // Capped per frame, so a whole pool of acid eating a heap of zinc doesn't flood the screen.
     function flashRx(i, t) {
@@ -426,11 +426,12 @@
     const cx = (i) => (i % SW) - 1;
     const cy = (i) => ((i / SW) | 0) - 1;
 
+    let empLeft = 0; // a solar storm: ticks the circuits are still down for (see startSolar())
     function clear() {
       type.fill(EMPTY); flags.fill(0); charge.fill(0); aux.fill(0); stamp.fill(0);
       data.fill(0); temp.fill(ambient); vy.fill(0); vx.fill(0); sap.fill(0); col.fill(0);
       avx.fill(0); avy.fill(0); ap.fill(0);
-      disasters.length = 0;
+      disasters.length = 0; empLeft = 0;
       for (let x = 0; x < SW; x++) { type[x] = BOUND; type[(SH - 1) * SW + x] = BOUND; }
       for (let y = 0; y < SH; y++) { type[y * SW] = BOUND; type[y * SW + SW - 1] = BOUND; }
       for (let i = 0; i < N; i++) shade[i] = (rnd() * 256) | 0;
@@ -739,6 +740,7 @@
 
     // ───── electricity ─────
     function energize(n) {
+      if (empLeft > 0) return; // a solar storm: nothing can drive a current
       if (charge[n] === 0) {
         charge[n] = CH_NEW;
         if (!disc[SPARK]) discover(SPARK, n);
@@ -755,7 +757,7 @@
 
     function electric(i, t) {
       const c = charge[i];
-      if (!P_CONDUCT[t]) { charge[i] = 0; return; }
+      if (!P_CONDUCT[t] || empLeft > 0) { charge[i] = 0; return; }
       // a valve, a pump or a piston runs on the current and passes it no further; a switch that is
       // off lets none in
       if (P_CONSUMER[t]) { if (c === CH_ACTIVE) sap[i] = POWER_TICKS; charge[i] = c - 1; return; }
@@ -917,6 +919,7 @@
       x = Math.max(0, Math.min(W - 1, x | 0));
       y = Math.max(0, Math.min(H - 1, y | 0));
       if (natural && !disc[LIGHTNING]) discover(LIGHTNING, idx(x, y));
+      if (natural) events.naturalBolt++; // a storm cloud's own bolt, not a weapon's
       if (!disc[LIGHT]) discover(LIGHT, idx(x, y)); // a flash that lights up the sky
       let bx = x, by = y, drift = 0, hit = -1, last = -1;
       while (by < H) {
@@ -4024,6 +4027,7 @@
       if ((tick & 3) === 0) magField();
       weatherTick();
       if (disasters.length) disasterTick();
+      if (empLeft > 0) empLeft--;
       if (hand.on) handPhysics();
       if ((tick & 15) === 0) rootPass();
       if (counts[THRUSTER]) ships();
@@ -4324,7 +4328,7 @@
     let disasterSeq = 0;
     const DISASTERS = {
       tsunami: [startTsunami, tsunami], quake: [startQuake, quake], tornado: [startTornado, tornado],
-      volcano: [startVolcano, volcano], meteor: [startMeteor, meteor], storm: [startStorm, storm],
+      volcano: [startVolcano, volcano], meteor: [startMeteor, meteor], storm: [startStorm, storm], solar: [startSolar, solar],
       freeze: [startFreeze, freeze], acidrain: [startAcidRain, acidRain], nuke: [startNuke, nuke],
       hbomb: [startHbomb, hbomb], blackhole: [startBlackHole, blackHole],
     };
@@ -4389,7 +4393,7 @@
         case 'storm': case 'acidrain': return Math.min(W / 2, 30 * size); // how much sky it covers
         case 'freeze': return Math.min(110, 46 * size);
         case 'nuke': return Math.min(44, 17 * size);
-        case 'blackhole': return Math.min(70, 30 * size);
+        case 'blackhole': return Math.min(90, 36 * size);
         default: return 0;
       }
     }
@@ -4762,6 +4766,39 @@
           if (avy[a] > -4 * core * env) avy[a] = -4 * core * env;
           if (h < 12 && k) avx[a] -= Math.sign(k) * 1.2 * env;
         }
+      }
+    }
+
+    // Solar storm: a burst of charged particles from the sun meets the world's magnetic field. Every
+    // switch trips off at once (and stays off until you flip it back), and while the storm lasts no
+    // circuit works: no battery, cell, panel or sensor can drive a current through it (see energize()
+    // and electric()), so lamps go dark, pumps, valves and pistons stop, and a flying ship's thrusters
+    // cut out. Long runs of wire and metal pick up surges that crackle with sparks and heat them, the
+    // more the bigger the storm. An aurora ripples across the sky (render.js drawAurora()).
+    function startSolar(d) {
+      d.life = Math.round(600 + 300 * d.size);
+      empLeft = Math.max(empLeft, d.life);
+      for (let i = 0; i < N; i++) {
+        const t = type[i];
+        if (t === SWITCH) aux[i] = 0;
+        else if (P_CONSUMER[t]) sap[i] = 0;
+        if (charge[i]) charge[i] = 0;
+      }
+    }
+    function solar(d) {
+      const env = fade(d, 60, 150);
+      if (empLeft < d.life - d.age) empLeft = d.life - d.age;
+      // surges: here and there along the metal and the wiring, a crackle of sparks and a burst of heat
+      // (as often as a random look lands on metal, so the more metal there is the more surges, but each
+      // warms it only a little: wiring gets hot enough to set a wooden house alight, never to melt)
+      const want = Math.round((1 + 2 * d.size) * env);
+      for (let k = 0, got = 0; k < 150 && got < want; k++) {
+        const i = idx((rnd() * W) | 0, (rnd() * H) | 0), t = type[i];
+        if (!P_CONDUCT[t] || catOf(i) !== C_STATIC) continue;
+        temp[i] += (25 + rnd() * 50) * (0.6 + 0.4 * d.size);
+        flashRx(i, SPARK);
+        events.zap++;
+        got++;
       }
     }
 
@@ -5152,12 +5189,25 @@
       return drop;
     }
     function hbomb(d) {
+      if (d.phase === 'gone') return; // swallowed by a black hole
       if (d.phase === 'fall') { hbombFall(d); return; }
+      if (d.phase === 'drift') { hbombDrift(d); return; }
       const age = d.age - d.at; // ticks since it went off
       events.shake += Math.max(0, 2.5 * (1 - age / 120));
       mushroom(d.mr, d.x, d.y, age);
     }
     function hbombFall(d) {
+      // inside a black hole's reach (the ring its brush showed) it is caught and spirals in,
+      // whistling, until the hole swallows it
+      for (const b of disasters) {
+        if (b.kind !== 'blackhole' || b.age >= b.life) continue;
+        const dx = d.px - b.x, dy = d.py - b.y, dist = Math.hypot(dx, dy);
+        if (dist > b.r) continue;
+        d.phase = 'drift'; d.hole = b.id;
+        d.rad = d.rad0 = Math.max(1, dist); d.ang = Math.atan2(dy, dx); d.dv = 0.25;
+        d.wp = Math.min(0.6, Math.max(0.05, (d.py + 8) / (Math.min(H - 1, floorY(d.x)) + 8)));
+        return;
+      }
       d.vy = Math.min(HBOMB_VMAX, d.vy + HBOMB_G);
       const x = d.x, y1 = d.py + d.vy;
       for (let y = Math.max(0, Math.ceil(d.py)); y <= Math.min(H - 1, Math.floor(y1)); y++) {
@@ -5170,8 +5220,45 @@
       const land = Math.min(H - 1, floorY(x));
       events.whistle = Math.max(events.whistle, Math.min(1, Math.max(0.01, (d.py + 8) / (land + 8))));
     }
-    function hbombBlast(d, x0, y0) {
-      const R = coverRadius(x0, y0, HBOMB_SHARE), CORE = R * 0.3, WRECK = R * 0.75, FLASH = R * 1.35;
+    // Caught by a black hole: the bomb spirals in, faster as it nears, turning to point at the middle
+    // and shrinking into the dark, whistling all the way down. Only once it reaches the middle is it
+    // swallowed: then, without a sound, the hole grows half as big again (over a second or so) and
+    // lasts five seconds longer, and its rumble deepens. It holds five; the sixth is too much, and
+    // the whole map goes up. If the hole is gone before it gets there, the bomb falls on.
+    function hbombDrift(d) {
+      const b = disasters.find((q) => q.id === d.hole && q.age < q.life);
+      if (!b) { d.phase = 'fall'; d.vy = 0.4; d.rot = 0; d.scale = 1; d.x = Math.max(0, Math.min(W - 1, Math.round(d.px))); return; }
+      d.dv = Math.min(1.4, d.dv + 0.02);
+      d.rad -= d.dv;
+      d.ang += 0.04 + 0.5 / Math.max(4, d.rad);
+      d.px = b.x + Math.cos(d.ang) * Math.max(0, d.rad);
+      d.py = b.y + Math.sin(d.ang) * Math.max(0, d.rad);
+      d.x = Math.max(0, Math.min(W - 1, Math.round(d.px)));
+      d.rot = d.ang + Math.PI / 2; // its nose (drawn pointing down) toward the middle
+      d.scale = Math.max(0.12, Math.min(1, d.rad / d.rad0 + 0.15));
+      const f = 1 - Math.max(0, d.rad) / d.rad0;
+      events.whistle = Math.max(events.whistle, d.wp + (1 - d.wp) * f);
+      if (d.rad > b.rh * 0.6) return;
+      d.life = d.age + 1; d.phase = 'gone';
+      b.fed = (b.fed || 0) + 1;
+      if (b.fed > HOLE_HOLDS) { holeBurst(b); return; }
+      b.rTo = Math.min(Math.hypot(W, H), (b.rTo || b.r) * 1.5);
+      b.rhTo = Math.min(40, (b.rhTo || b.rh) * 1.5);
+      b.life += 300;
+      events.shake += 3;
+    }
+    // A black hole that swallowed one hydrogen bomb too many: every bomb in it goes off at once, and
+    // the fireball takes the whole map.
+    const HOLE_HOLDS = 5;
+    function holeBurst(b) {
+      b.life = b.age + 1;
+      const d = { id: ++disasterSeq, kind: 'hbomb', size: 4, mag: 7, r: 0, age: 0, life: 1, delay: 0, x: b.x, y: b.y };
+      disasters.push(d);
+      hbombBlast(d, b.x, b.y, true);
+    }
+    function hbombBlast(d, x0, y0, whole = false) {
+      // (whole: a fireball over every cell of the map, as when a black hole bursts)
+      const R = whole ? Math.hypot(W, H) + 2 : coverRadius(x0, y0, HBOMB_SHARE), CORE = whole ? R : R * 0.3, WRECK = R * 0.75, FLASH = R * 1.35;
       d.phase = 'blast'; d.x = x0; d.y = y0; d.r = R; d.at = d.age;
       d.mr = Math.max(18, Math.min(W * 0.22, R * 0.28)); // how big its mushroom cloud is
       d.life = d.age + 420;
@@ -5232,13 +5319,16 @@
     // Void resist it.
     function startBlackHole(d) {
       d.life = Math.round(540 + 120 * d.size);
-      d.rh = 1.5 + 1.1 * Math.min(3, d.size); // the event horizon
+      d.rh = 1.9 + 1.3 * Math.min(3, d.size); // the event horizon
       d.eaten = 0;
     }
     function blackHole(d) {
-      const env = fade(d, 30, 40), R = d.r, rh = d.rh;
-      events.shake += 0.25 * env;
-      events.rumble = Math.max(events.rumble, 0.6 * env);
+      if (d.rTo && d.r < d.rTo) d.r = Math.min(d.rTo, d.r + Math.max(0.4, (d.rTo - d.r) * 0.08)); // growing after a bomb
+      if (d.rhTo && d.rh < d.rhTo) d.rh = Math.min(d.rhTo, d.rh + Math.max(0.05, (d.rhTo - d.rh) * 0.08));
+      const env = fade(d, 30, 40), R = d.r, rh = d.rh, fed = d.fed || 0;
+      // its rumble starts low so that it can grow louder with every hydrogen bomb it has swallowed
+      events.shake += (0.25 + 0.3 * fed) * env;
+      events.rumble = Math.max(events.rumble, Math.min(1, 0.3 + 0.14 * fed) * env);
       forDisc(d.x, d.y, R, (i, dx, dy, d2) => {
         const t = type[i];
         if (t === EMPTY || unbreakable(t)) return;
@@ -5541,11 +5631,11 @@
       if (sn.air) { avx.set(sn.air[0]); avy.set(sn.air[1]); ap.set(sn.air[2]); }
       else { avx.fill(0); avy.fill(0); ap.fill(0); }
       stamp.fill(0);
-      disasters.length = 0; // undoing a disaster stops it
+      disasters.length = 0; empLeft = 0; // undoing a disaster stops it (a solar storm's blackout too)
     }
 
     function resetEvents() {
-      events.sizzle = 0; events.ignite = 0; events.fizz = 0; events.zap = 0; events.fission = 0; events.decay = 0; events.rad = 0;
+      events.sizzle = 0; events.ignite = 0; events.fizz = 0; events.zap = 0; events.fission = 0; events.decay = 0; events.rad = 0; events.naturalBolt = 0;
       events.rumble = 0; events.cracks = 0; events.surge = 0; events.howl = 0; events.flash = 0; events.shake = 0;
       events.hbomb.length = 0; events.whistle = 0; events.pump = 0; events.piston = 0;
       events.booms.length = 0; events.bolts.length = 0; events.found.length = 0; events.rx.length = 0;

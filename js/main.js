@@ -2,7 +2,7 @@
 (function (G) {
   'use strict';
 
-  const { ELEM, Sim, Renderer, AudioFX, UI, Scenes, Journey, Lab, LabView, TryIt, Tints } = G;
+  const { ELEM, Sim, Renderer, AudioFX, UI, Scenes, Journey, Lab, LabView, TryIt, Tints, Unlocks } = G;
   const { ID, CAT, list } = ELEM;
   const $ = (s) => document.querySelector(s);
 
@@ -165,7 +165,10 @@
       if (sel.name === 'erase') use(sel, (max) => w.erase(x, y, r, max));
       else if (sel.name === 'heat') use(sel, () => w.heat(x, y, r, 28 * game.speed));
       else if (sel.name === 'cool') use(sel, () => w.heat(x, y, r, -18 * game.speed));
-      else if (sel.name === 'smash') { if (use(sel, (max) => w.smash(x, y, r, max))) AudioFX.pour('powder'); }
+      else if (sel.name === 'smash') {
+        const n = use(sel, (max) => w.smash(x, y, r, max));
+        if (n) { AudioFX.pour('powder'); if (!Journey.active) UI.announce(Unlocks.smashed(n)); } // toward the Earthquake
+      }
       return; // the magnet acts every tick while held (see tickOnce), not along the stroke
     }
     if (sel.kind === 'weapon') return; // a weapon goes off once, on the press
@@ -304,6 +307,7 @@
       canvas.classList.add('panning');
       return;
     }
+    if (Journey.locked) return; // a chapter's own scene is playing: watch it
     checkpoint();
     pointer.down = true;
     pointer.button = e.button;
@@ -325,6 +329,9 @@
     }
     if (isWeapon() && e.button === 0) { // one click sets the disaster off
       pointer.weapon = game.world.launch(game.selected.name, pointer.x, pointer.y, weaponSize(), { magnitude: game.magnitude });
+      if (game.selected.name === 'nuke' && !Journey.active) { // beside hydrogen, toward the H-bomb
+        UI.announce(Unlocks.nuked(game.world, pointer.x, pointer.y, game.world.weaponReach('nuke', weaponSize())));
+      }
       return;
     }
     if (dragged()) { pointer.anchor = { x: pointer.x, y: pointer.y }; return; }
@@ -466,6 +473,21 @@
   // A scene built from periodic elements opens once every one of them is unlocked.
   const sceneMissing = (name) => (Lab.sceneNeeds(Scenes)[name] || []).filter((t) => !UI.unlocked(t));
   function paintScenes() {
+    let hidden = 0;
+    for (const b of menus.scenes.querySelectorAll('[data-scene]')) {
+      b.hidden = b.dataset.scene !== 'island' && !Unlocks.has('scene', b.dataset.scene);
+      if (b.hidden) hidden++;
+    }
+    let more = menus.scenes.querySelector('.scene-more');
+    if (!more) {
+      more = document.createElement('button');
+      more.type = 'button';
+      more.className = 'scene-more';
+      more.addEventListener('click', (e) => { e.stopPropagation(); UI.sceneHint(more); });
+      menus.scenes.append(more);
+    }
+    more.hidden = !hidden;
+    more.innerHTML = `${hidden} more scene${hidden === 1 ? '' : 's'} to find <small>how to find one</small>`;
     for (const b of menus.scenes.querySelectorAll('[data-scene]')) {
       const miss = sceneMissing(b.dataset.scene);
       let needs = b.querySelector('.needs');
@@ -500,11 +522,19 @@
   // The Map menu can pin it to one (store 'sky').
   const SCENE_SKY = { island: 'day', canyon: 'day', forest: 'day', caves: 'day', village: 'day', machines: 'day', volcano: 'dusk', reactor: 'dusk' };
   let skyPick = UI.store.get('sky', 'auto');
+  const skyOpen = (k) => k === 'auto' || k === 'day' || Unlocks.has('sky', k);
+  // a chapter brings its own sky; out past the air (a chapter's 'space') it is always the stars
   const skyNow = () => (game.thermal || game.air ? 'night'
-    : skyPick !== 'auto' ? skyPick : Journey.active ? 'night' : SCENE_SKY[game.scene] || 'night');
+    : Journey.active && Journey.sky === 'space' ? 'space'
+      : skyPick !== 'auto' && skyOpen(skyPick) ? skyPick : Journey.active ? Journey.sky || 'night' : SCENE_SKY[game.scene] || 'night');
   function markSky() {
-    for (const b of menus.world.querySelectorAll('[data-sky]')) b.setAttribute('aria-pressed', b.dataset.sky === skyPick);
+    for (const b of menus.world.querySelectorAll('[data-sky]')) {
+      b.setAttribute('aria-pressed', b.dataset.sky === skyPick);
+      b.hidden = !skyOpen(b.dataset.sky); // dusk and night open with a scene that has them
+    }
   }
+  // something new opened: the menus show it
+  UI.onUnlock = () => { paintScenes(); markSky(); };
   markSky();
   menus.world.addEventListener('click', (e) => {
     const k = e.target.closest('[data-sky]');
@@ -713,6 +743,9 @@
     // an experiment with a pile to build or a wait to hold shows how far along it is
     if (game.world.tick % 20 === 0 && game.selected.kind === 'element' && TryIt.progress(game.selected.t)) UI.refreshInspect();
     if (!LabView.isOpen()) AudioFX.frame(ev); // the Lab's test tube has the sound while it is open
+    // feats in your own world (not in a chapter) toward unlocks, and whatever opens on what you have
+    if (!Journey.active) UI.announce(Unlocks.frame(game.world, ev));
+    if (game.world.tick % 60 === 0) UI.announce(Unlocks.check());
     game.world.resetEvents();
   }
 
@@ -761,7 +794,7 @@
     renderer.draw(w.tick, {
       thermal: game.thermal, air: game.air, reducedMotion, lens: game.lens,
       weather: { ambient: w.ambient, gloom: GLOOM[w.weather.mode] || 0 }, sky: skyNow(),
-      disasters: w.disasters,
+      disasters: w.disasters, floodLine: UI.floodLine(),
     });
     const z = `${Math.round(renderer.zoom * 100)}%`;
     if (z !== lastZoom) { btnZoom.textContent = z; lastZoom = z; }

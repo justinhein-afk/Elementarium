@@ -86,12 +86,13 @@
     // whatever a chapter puts in the pouch can be used, discovered or not
     if (G.Journey && G.Journey.active && G.Journey.allows({ kind: 'element', t })) return true;
     if (d.periodic) return Lab.has(t); // identified in the Lab
-    if (d.special) return d.needs ? !!known[ELEM.byKey[d.needs].id] : foundCount() >= d.unlockAt;
+    if (d.special) return d.needs ? G.Unlocks.has('part', d.key) : foundCount() >= d.unlockAt; // a part: a battery touched its partner
     return !!known[t];
   }
   // what opens a special element, in a few words and in a sentence
-  const opensWith = (d) => (d.needs ? ELEM.byKey[d.needs].name : `${d.unlockAt} finds`);
-  const opensWhen = (d) => (d.needs ? `Unlocks once you have made a ${ELEM.byKey[d.needs].name.toLowerCase()}` : `Unlocks after ${d.unlockAt} discoveries`);
+  const partnerName = (d) => ELEM.byKey[G.Unlocks.partner(d.key)].name;
+  const opensWith = (d) => (d.needs ? `Battery + ${partnerName(d)}` : `${d.unlockAt} finds`);
+  const opensWhen = (d) => (d.needs ? `Unlocks when a battery touches ${partnerName(d).toLowerCase()}` : `Unlocks after ${d.unlockAt} discoveries`);
   function near(t) {
     const d = list[t];
     return !known[t] && !d.special && d.fromIds.length > 0 && d.fromIds.every((f) => known[f] || (list[f].periodic && Lab.has(f)));
@@ -341,9 +342,10 @@
     b.classList.toggle('new', !codex && fresh.has(d.id));
     b.querySelector('canvas').style.display = isOpen ? '' : 'none';
     b.querySelector('.sym').textContent = isOpen ? SYM[d.key] : '?';
-    b.querySelector('.nm').textContent = isOpen ? d.name : d.special ? opensWith(d) : '';
+    b.querySelector('.nm').textContent = isOpen ? d.name : d.special && !d.needs ? opensWith(d) : '';
     let title;
     if (isOpen) title = `${d.name} — ${d.desc}`;
+    else if (d.special && d.needs) title = 'Not found yet — Hint shows how to make it';
     else if (d.special) title = opensWhen(d);
     else if (near(d.id)) title = `Within reach: ${d.hint}`;
     else title = d.castOf !== undefined ? `Not within reach yet — unlock ${list[d.castOf].name.toLowerCase()} in the Lab first`
@@ -425,6 +427,9 @@
     storm: ['Lightning storm', 'Bolt after bolt from above',
       'Storm clouds roll in and strike again and again.',
       '#c9a3ff', CLOUD_ICON(9.5) + stroke('M8.6 7.5L6.4 11h2.4l-1.6 4')],
+    solar: ['Solar storm', 'Knocks out every circuit',
+      'Charged particles from the sun: switches trip, circuits fail and an aurora lights the sky. The bigger, the longer.',
+      '#5effa8', '<circle cx="4.6" cy="4.6" r="2.3" fill="currentColor"/>' + stroke('M4.6.6v1M4.6 7.6v1M.6 4.6h1M7.6 4.6h1', 1.2) + stroke('M1.5 13.5c2-1.6 3.4 1.2 5.4-.4s3.4-1.2 5.4.4M5 10.6c2-1.4 3.2.8 5-.4s2.6-.9 4.5.3', 1.3)],
     freeze: ['Ice age', 'A front of deadly cold',
       'A front of −100°C cold: water and lava freeze, fire goes out.',
       '#8fd4ff', stroke('M8 1v14M1.9 4.5l12.2 7M1.9 11.5l12.2-7', 1.4) + stroke('M6 2.5L8 4l2-1.5M6 13.5L8 12l2 1.5', 1.2)],
@@ -442,14 +447,15 @@
       '#b06cff', '<ellipse cx="8" cy="8" rx="7" ry="2.6" fill="none" stroke="currentColor" stroke-width="1.3" transform="rotate(-18 8 8)"/><circle cx="8" cy="8" r="3.4" fill="#05070a" stroke="currentColor" stroke-width="1.2"/>'],
   };
   const WEAPON_GROUPS = [
-    ['Natural disasters', ['tsunami', 'quake', 'tornado', 'volcano', 'meteor', 'storm', 'freeze', 'acidrain']],
+    ['Natural disasters', ['tsunami', 'quake', 'tornado', 'volcano', 'meteor', 'storm', 'solar', 'freeze', 'acidrain']],
     ['Doomsday', ['nuke', 'hbomb', 'blackhole']],
   ];
-  const weaponButtons = {};
+  const weaponButtons = {}, weaponGroups = [];
   function buildWeapons() {
     const root = $('#weapons');
     root.innerHTML = '';
     root.append(buildMagnitude());
+    weaponGroups.length = 0;
     for (const [group, names] of WEAPON_GROUPS) {
       const label = document.createElement('div');
       label.className = 'group-label';
@@ -469,11 +475,12 @@
         grid.append(b);
       }
       root.append(label, grid);
+      weaponGroups.push({ label, grid, names });
     }
-    const note = document.createElement('p');
-    note.className = 'weapons-note';
-    note.innerHTML = 'Click the map to set one off. The <strong>brush</strong> size sets how big it is. <kbd>Ctrl</kbd>+<kbd>Z</kbd> takes it back.';
-    root.append(note);
+    const more = document.createElement('p');
+    more.className = 'weapons-more';
+    more.id = 'weapons-more';
+    root.append(more);
   }
 
   // ───── earthquake magnitude ─────
@@ -583,11 +590,16 @@
       note('Not in your pouch', 'This chapter can only be solved with what you carry.');
       return;
     }
+    if (sel.kind === 'weapon' && !G.Unlocks.has('weapon', sel.name)) {
+      note('Not earned yet', `${G.Unlocks.line('weapon', sel.name)}.`);
+      return;
+    }
     if (sel.kind === 'element') {
       if (!unlocked(sel.t)) {
         const d = list[sel.t];
         if (d.periodic) note(`${d.name} is locked`, Lab.ready(d.id) ? 'Identify it in the Lab to use it.' : 'Unlock an element beside it on the table first.');
-        else if (d.special) note(`${d.name} is locked`, d.needs ? `${opensWhen(d)}.` : `${opensWhen(d)}. You have ${foundCount()}.`);
+        else if (d.special && d.needs) note('Not found yet', 'Hint shows how to make it.');
+        else if (d.special) note(`${d.name} is locked`, `${opensWhen(d)}. You have ${foundCount()}.`);
         else if (near(sel.t)) note('Within reach', d.hint);
         else note('Not within reach yet', d.castOf !== undefined ? `Unlock ${list[d.castOf].name.toLowerCase()} in the Lab first.` : 'Discover its ingredients first.');
         return;
@@ -712,7 +724,8 @@ ${tried ? '★ Done' : 'Try it'}: ${TryIt.text(d.id)}` : ''}`
 
   const TABS = { alchemy: '#table', periodic: '#ptable', weapons: '#weapons' };
   function showTab(which) {
-    if (!TABS[which]) which = 'alchemy';
+    if (!TABS[which] || (which === 'weapons' && !G.Unlocks.has('weapons'))) which = 'alchemy';
+    closePop();
     for (const [k, panel] of Object.entries(TABS)) {
       $(`#tab-${k}`).setAttribute('aria-selected', k === which);
       $(panel).hidden = k !== which;
@@ -767,15 +780,9 @@ ${tried ? '★ Done' : 'Try it'}: ${TryIt.text(d.id)}` : ''}`
         }, 1400);
       }
     }
-    // the machine parts, once their battery is made
-    const opened = list.filter((s) => s.special && s.needs === d.key && !s.hidden);
-    if (opened.length) {
-      setTimeout(() => {
-        AudioFX.unlock();
-        toast({ eyebrow: 'Machines unlocked', name: 'Machine parts', how: `${opened.map((s) => s.name).join(', ')}: in the Machines section.`, t: opened[0].id, ms: 7000 });
-        for (const s of opened) fresh.add(s.id);
-        refreshTable();
-      }, 1400);
+    // a battery: machine parts open as it touches things (metal makes wire, wood a switch…)
+    if (d.key === 'battery') {
+      setTimeout(() => toast({ eyebrow: 'Machines', name: 'A battery!', how: 'Machine parts open as a battery touches things: metal for Wire, wood for a Switch, water for Pipe. Hint shows them.', t: d.id, ms: 8000 }), 1400);
     }
     if (LIFE.includes(d) && lifeFound() === LIFE.length) {
       setTimeout(() => {
@@ -790,6 +797,166 @@ ${tried ? '★ Done' : 'Try it'}: ${TryIt.text(d.id)}` : ''}`
       }, 2600);
     }
     refreshTable();
+    announce(G.Unlocks.check());
+  }
+
+  // ───── what is earned (unlocks.js): the Journey, the Weapons tab, scenes, skies, weapons, parts ─────
+  const SCENE_NAMES = {
+    canyon: 'Canyon', volcano: 'Volcano', forest: 'Forest', caves: 'Caves', workshop: 'Workshop', village: 'Village',
+    machines: 'Waterworks', electrics: 'Electric workshop', magnets: 'Magnet lab', reactor: 'Nuclear plant', city: 'City', empty: 'Empty bench',
+  };
+  // newly opened things, one toast each, a moment apart
+  function announce(fresh) {
+    if (!fresh || !fresh.length) return;
+    paintUnlocks();
+    fresh.forEach(([kind, name], k) => setTimeout(() => {
+      AudioFX.unlock();
+      const part = kind === 'part' ? ELEM.byKey[name] : null;
+      const say = {
+        journey: ['Unlocked', 'The Apprentice’s Journey', 'Your master has gone, and left you a letter. The Journey button opens it.'],
+        weapons: ['Unlocked', 'Weapons', 'A tab of disasters. Each one is earned: with the Weapons tab open, Hint says how.'],
+        scene: ['New scene', SCENE_NAMES[name], 'Open it from Scenes.'],
+        sky: ['New sky', name === 'dusk' ? 'Dusk' : 'Night', 'Choose it from Map → Sky.'],
+        weapon: ['New weapon', name && WEAPON_INFO[name] ? WEAPON_INFO[name][0] : '',
+          G.Unlocks.has('weapons') ? 'In the Weapons tab.' : `It is yours once the Weapons tab opens, at ${G.Unlocks.WEAPONS_AT} elements found.`],
+        part: ['Machine part', part ? part.name : '', part ? `A battery touched ${partnerName(part).toLowerCase()}. It is in the Machines section.` : ''],
+      }[kind];
+      if (part) fresh.add(part.id);
+      toast({ eyebrow: say[0], name: say[1], how: say[2], t: part ? part.id : undefined, ms: 6500 });
+      refreshTable();
+      if (G.UI.onUnlock) G.UI.onUnlock();
+    }, 1400 + k * 1000));
+  }
+  // Locked things stay out of sight: the Weapons tab and each weapon, the Journey's buttons
+  function paintUnlocks() {
+    const U = G.Unlocks;
+    const tabOpen = U.has('weapons');
+    $('#tab-weapons').hidden = !tabOpen;
+    if (!tabOpen && !$('#weapons').hidden) showTab('alchemy');
+    let shut = 0;
+    for (const [name, b] of Object.entries(weaponButtons)) { b.hidden = !U.has('weapon', name); if (b.hidden) shut++; }
+    for (const g of weaponGroups) g.label.hidden = g.grid.hidden = g.names.every((n) => !U.has('weapon', n));
+    const more = $('#weapons-more');
+    if (more) {
+      more.hidden = !shut;
+      more.textContent = shut === U.weapons.length ? `${shut} to earn.` : `${shut} more to earn.`;
+    }
+    for (const sel of ['#btn-journey', '#btn-begin-journey']) { const b = $(sel); if (b) b.hidden = !U.has('journey'); }
+  }
+
+  // ───── hints: a box with the answer in it ─────
+  // Alchemy: a recipe you can make now (Ash + Salt → Gunpowder). With the Weapons tab open: how to
+  // earn the next weapon you haven't got. From the Scenes menu: how to find the next scene.
+  let pop = null, floodShown = false;
+  function chip(t, label) {
+    const c = document.createElement('span');
+    c.className = 'hp-chip';
+    if (t != null) c.append(cloneCanvas(swatchFor(t, 18, 18)));
+    c.append(Object.assign(document.createElement('span'), { textContent: label || list[t].name }));
+    return c;
+  }
+  function closePop() {
+    if (!pop) return;
+    pop.remove(); pop = null; floodShown = false;
+    removeEventListener('pointerdown', popOutside, true);
+  }
+  function popOutside(e) { if (pop && !pop.contains(e.target) && !e.target.closest('#btn-hint, .scene-more')) closePop(); }
+  function hintPop({ eyebrow, title, icon, color, recipe, line, prog, foot, near: at }) {
+    closePop();
+    const box = document.createElement('div');
+    box.className = 'hint-pop';
+    box.setAttribute('role', 'dialog');
+    box.setAttribute('aria-label', title || eyebrow);
+    const head = document.createElement('div');
+    head.className = 'hp-head';
+    head.append(Object.assign(document.createElement('span'), { className: 'hp-eyebrow', textContent: eyebrow }));
+    const x = Object.assign(document.createElement('button'), { className: 'hp-close', type: 'button', textContent: '×' });
+    x.setAttribute('aria-label', 'Close');
+    x.addEventListener('click', closePop);
+    head.append(x);
+    box.append(head);
+    if (title) {
+      const t = document.createElement('div');
+      t.className = 'hp-title';
+      if (icon) { const i = document.createElement('span'); i.className = 'hp-icon'; i.style.color = color || ''; i.innerHTML = `<svg viewBox="0 0 16 16" width="22" height="22" aria-hidden="true">${icon}</svg>`; t.append(i); }
+      t.append(Object.assign(document.createElement('b'), { textContent: title }));
+      box.append(t);
+    }
+    if (recipe) {
+      const r = document.createElement('div');
+      r.className = 'hp-recipe';
+      recipe.ins.forEach((c, k) => { if (k) r.append(Object.assign(document.createElement('span'), { className: 'hp-op', textContent: '+' })); r.append(c); });
+      r.append(Object.assign(document.createElement('span'), { className: 'hp-op', textContent: '→' }), recipe.out);
+      box.append(r);
+    }
+    if (line) box.append(Object.assign(document.createElement('p'), { textContent: line }));
+    if (prog) {
+      const bar = document.createElement('div');
+      bar.className = 'hp-bar';
+      const f = Math.max(0, Math.min(1, prog[0] / prog[1]));
+      bar.append(Object.assign(document.createElement('i'), { style: `width:${Math.round(f * 100)}%` }));
+      box.append(bar, Object.assign(document.createElement('small'), { className: 'hp-prog', textContent: prog[2] || `${Math.round(prog[0]).toLocaleString()} of ${prog[1].toLocaleString()}` }));
+    }
+    if (foot) box.append(Object.assign(document.createElement('small'), { className: 'hp-foot', textContent: foot }));
+    document.body.append(box);
+    pop = box;
+    const a = (at || $('#btn-hint')).getBoundingClientRect(), bw = box.offsetWidth, bh = box.offsetHeight;
+    let top = a.top - bh - 10;
+    if (top < 8) top = Math.min(innerHeight - bh - 8, a.bottom + 10);
+    const left = Math.max(8, Math.min(innerWidth - bw - 8, a.right - bw));
+    Object.assign(box.style, { left: `${left}px`, top: `${top}px` });
+    setTimeout(() => addEventListener('pointerdown', popOutside, true));
+  }
+  let weaponTurn = null, sceneTurn = null;
+  function weaponHint() {
+    const U = G.Unlocks, name = U.nextLocked('weapon', weaponTurn);
+    if (!name) { closePop(); note('Every weapon is yours', 'There is nothing left to earn here.'); return; }
+    weaponTurn = name;
+    const [title, , , color, icon] = WEAPON_INFO[name];
+    const p = U.progress('weapon', name, game.world);
+    hintPop({
+      eyebrow: 'To earn a weapon', title, icon, color, line: `${U.line('weapon', name)}.`,
+      prog: p && (name === 'tsunami' ? [p[0], p[1], `${Math.round((p[0] / p[1]) * 100)}% of the way across`] : p),
+      foot: name === 'tsunami' ? 'The dashed line is on the map now. Press Hint again for another weapon.' : 'Press Hint again for another weapon.',
+    });
+    floodShown = name === 'tsunami';
+  }
+  function sceneHint(at) {
+    const U = G.Unlocks, name = U.nextLocked('scene', sceneTurn);
+    if (!name) { closePop(); note('Every scene is yours', 'There are no more to find.'); return; }
+    sceneTurn = name;
+    const p = U.progress('scene', name, game.world);
+    hintPop({
+      eyebrow: 'To find a scene', title: SCENE_NAMES[name], line: `${U.line('scene', name)}.`,
+      prog: p && p[1] > 1 ? p : null, foot: 'Click again for another scene.', near: at,
+    });
+  }
+  // alchemy: something you can make with what you have, as its recipe
+  let partTurn = 0;
+  function alchemyHint() {
+    const options = tableOrder.filter((d) => near(d.id));
+    // machine parts: a battery and the thing it should touch
+    const parts = known[ID.BATTERY] ? tableOrder.filter((d) => d.special && d.needs && !d.hidden && !unlocked(d.id)) : [];
+    const all = options.length + parts.length;
+    if (!all) {
+      if (totalKnown() === tableTotal) note('Nothing left to find', 'Every element is on your table.');
+      else note('Nothing within reach', 'Every remaining element needs one you have not found yet.');
+      return;
+    }
+    const k = hintTurn++ % all;
+    if (k >= options.length) {
+      const d = parts[(partTurn++) % parts.length];
+      hintPop({
+        eyebrow: 'Within reach', recipe: { ins: [chip(ID.BATTERY), chip(ELEM.byKey[G.Unlocks.partner(d.key)].id)], out: chip(d.id) },
+        line: `Let a battery touch ${partnerName(d).toLowerCase()} in your world.`, foot: `${all} within reach. Press Hint again for another.`,
+      });
+      return;
+    }
+    const d = options[k];
+    hintPop({
+      eyebrow: 'Within reach', recipe: { ins: d.fromIds.map((f) => chip(f)), out: chip(d.id) },
+      line: d.recipe, foot: `${all} within reach. Press Hint again for another.`,
+    });
   }
 
   // Try it: an element's experiment done in the world
@@ -903,7 +1070,7 @@ ${tried ? '★ Done' : 'Try it'}: ${TryIt.text(d.id)}` : ''}`
     }
     box.append(cloneCanvas(swatchFor(d.id, 60, 18)));
     const rows = [];
-    rows.push(['Found by', d.starter ? 'Starter element' : d.special ? (d.needs ? `Making a ${ELEM.byKey[d.needs].name.toLowerCase()}` : `${d.unlockAt} discoveries`) : d.recipe]);
+    rows.push(['Found by', d.starter ? 'Starter element' : d.special ? (d.needs ? `A battery touching ${partnerName(d).toLowerCase()}` : `${d.unlockAt} discoveries`) : d.recipe]);
     if (d.hi && d.hi[1] >= 0) rows.push(['Above', `${fmtT(d.hi[0])} → ${list[d.hi[1]].name}`]);
     if (d.lo && d.lo[1] >= 0) rows.push(['Below', `${fmtT(d.lo[0])} → ${list[d.lo[1]].name}`]);
     if (d.flam > 0) rows.push(['Ignites', d.explode ? `${fmtT(d.ign)} — explodes` : fmtT(d.ign)]);
@@ -938,7 +1105,7 @@ ${tried ? '★ Done' : 'Try it'}: ${TryIt.text(d.id)}` : ''}`
     let k = 0;
     for (const [group, names] of WEAPON_GROUPS) for (const name of names) {
       const [title, line, desc] = WEAPON_INFO[name];
-      G.Search.add({ cat: 'Weapons', kind: 'weapon', id: name, name: title, order: k++, fields: [[title, 10, 'name'], [group, 4], [line, 3], [desc, 3]] });
+      G.Search.add({ cat: 'Weapons', kind: 'weapon', id: name, name: title, order: k++, visible: () => G.Unlocks.has('weapon', name), fields: [[title, 10, 'name'], [group, 4], [line, 3], [desc, 3]] });
     }
     for (const [name, [title, desc]] of Object.entries(TOOL_INFO)) {
       G.Search.add({ cat: 'Tools', kind: 'tool', id: name, name: title, order: k++, fields: [[title, 10, 'name'], [desc, 3]] });
@@ -1048,14 +1215,8 @@ ${tried ? '★ Done' : 'Try it'}: ${TryIt.text(d.id)}` : ''}`
   let hintTurn = 0;
   function hint() {
     if (G.Journey && G.Journey.active) { G.Journey.hint(); return; }
-    const options = tableOrder.filter((d) => near(d.id));
-    if (!options.length) {
-      if (totalKnown() === tableTotal) note('Nothing left to find', 'Every element is on your table.');
-      else note('Nothing within reach', 'Every remaining element needs one you have not found yet.');
-      return;
-    }
-    const d = options[hintTurn++ % options.length];
-    toast({ eyebrow: 'Within reach', name: d.hint, how: `${options.length} element${options.length > 1 ? 's' : ''} can be found with what you have.`, note: true, ms: 6500 });
+    if (!$('#weapons').hidden) weaponHint();
+    else alchemyHint();
   }
 
   // ───── modals ─────
@@ -1082,6 +1243,15 @@ ${tried ? '★ Done' : 'Try it'}: ${TryIt.text(d.id)}` : ''}`
     TryIt.onDone = tried;
     Tints.init(store);
     Tints.onOpen = tintMade;
+    G.Unlocks.init(store, {
+      sandbox: () => game.sandbox,
+      found: () => totalKnown(),
+      known: (t) => !!known[t],
+      glass: () => Tints.count('glass'),
+      tried: (sym) => TryIt.has(ELEM.periodic.find((d) => d.sym === sym).id),
+      journeyWon: (cid) => ((store.get('journey', {}).stars || {})[cid] || 0) > 0,
+      labMet: (scene) => (Lab.sceneNeeds(G.Scenes)[scene] || []).every((t) => Lab.has(t)),
+    });
     game.sandbox = store.get('sandbox', false);
     game.magnitude = store.get('magnitude', 7);
     game.machine = Object.assign({ dir: 0, mode: 1, set: 100, sticky: false }, store.get('machine', {}));
@@ -1118,6 +1288,7 @@ ${tried ? '★ Done' : 'Try it'}: ${TryIt.text(d.id)}` : ''}`
     for (const k of Object.keys(TABS)) $(`#tab-${k}`).addEventListener('click', () => { setSearch(''); showTab(k); });
     showTab(store.get('tab', 'alchemy'));
     refreshTable();
+    paintUnlocks();
 
     $('#btn-codex').addEventListener('click', openCodex);
     $('#btn-groups').addEventListener('click', openGroups);
@@ -1128,6 +1299,8 @@ ${tried ? '★ Done' : 'Try it'}: ${TryIt.text(d.id)}` : ''}`
       store.set('sandbox', game.sandbox);
       syncWorldDisc(game.world);
       refreshTable();
+      paintUnlocks();
+      if (G.UI.onUnlock) G.UI.onUnlock();
       openCodex();
     });
     $('#btn-reset').addEventListener('click', () => {
@@ -1139,10 +1312,14 @@ ${tried ? '★ Done' : 'Try it'}: ${TryIt.text(d.id)}` : ''}`
       Lab.reset();
       TryIt.reset();
       Tints.reset();
+      G.Unlocks.reset();
+      G.Unlocks.check();
       G.LabView.reset();
       syncWorldDisc(game.world);
       if (game.selected.kind === 'element' && !unlocked(game.selected.t)) game.selected = { kind: 'element', t: ID.SAND };
       refreshTable();
+      paintUnlocks();
+      if (G.UI.onUnlock) G.UI.onUnlock();
       openCodex();
     });
 
@@ -1165,6 +1342,11 @@ ${tried ? '★ Done' : 'Try it'}: ${TryIt.text(d.id)}` : ''}`
     swatch: (t, w, h) => cloneCanvas(swatchFor(t, w, h)),
     toolName: (name) => TOOL_INFO[name][0],
     weaponColor: (name) => WEAPON_INFO[name][3],
+    announce, paintUnlocks, sceneHint, closePop, sceneName: (n) => SCENE_NAMES[n], weaponName: (n) => WEAPON_INFO[n][0],
+    found: () => totalKnown(),
+    // the tsunami's line, while its hint is up (a row of the map, or null)
+    floodLine: () => (floodShown && pop ? Math.round(game.world.H * G.Unlocks.FLOOD_ROW) : null),
+    onUnlock: null,
     // the colour Concrete is laid in, or the Paint tool paints in (0xrrggbb, 0 for none)
     paintColor: (t) => (list[t].key in paints ? paintRGB(list[t].key) : 0),
     picture: () => picture,

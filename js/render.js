@@ -287,6 +287,8 @@
       day: [[0, '#2c64a8'], [0.45, '#5b97d0'], [0.8, '#a9d0ea'], [1, '#d4e8f2']],
       dusk: [[0, '#14122c'], [0.35, '#3b2349'], [0.65, '#8c3a45'], [0.85, '#d2683a'], [1, '#f0a35a']],
     };
+    // the space sky's stars, where they sit on the map (0–1), their size, and how they twinkle
+    const STARS = Array.from({ length: 260 }, () => [Math.random(), Math.random(), Math.random() < 0.12 ? 2 : 1, Math.random() * 6.3, 0.6 + Math.random() * 2.2]);
     function drawVessel(sx, sy, weather, sky) {
       const { ox, oy, s } = view;
       const x0 = ox + sx, y0 = oy + sy, w = W * s, h = H * s;
@@ -304,11 +306,25 @@
         sun.addColorStop(1, 'rgba(255,240,210,0)');
         ctx.fillStyle = sun;
         ctx.fillRect(x0, y0, w, h);
+      } else if (sky === 'space') {
+        // the black above the air: a deep blue-black, and stars that twinkle
+        const g = ctx.createLinearGradient(0, y0, 0, y0 + h);
+        g.addColorStop(0, '#010207');
+        g.addColorStop(1, '#070b18');
+        ctx.fillStyle = g;
+        ctx.fillRect(x0, y0, w, h);
+        const now = performance.now() / 1000;
+        for (const [fx, fy, r, ph, sp] of STARS) {
+          const a = 0.45 + 0.4 * Math.sin(now * sp + ph);
+          const d = Math.max(dpr, r * s * 0.6);
+          ctx.fillStyle = `rgba(232,238,255,${a.toFixed(2)})`;
+          ctx.fillRect(x0 + fx * w, y0 + fy * h, d, d);
+        }
       } else {
         ctx.fillStyle = '#0a1013';
         ctx.fillRect(x0, y0, w, h);
       }
-      if (weather) {
+      if (weather && sky !== 'space') {
         const a = weather.ambient;
         let tint = null;
         if (a < 5) tint = `rgba(120,170,255,${Math.min(0.16, (5 - a) / 45 * 0.16)})`;
@@ -949,6 +965,7 @@
       shakeAmt *= 0.86;
 
       drawVessel(sx, sy, opts.weather, opts.sky);
+      if (opts.disasters) for (const d of opts.disasters) if (d.kind === 'solar') drawAurora(d, tick, sx, sy);
       ctx.imageSmoothingEnabled = false;
       ctx.drawImage(wc, ox + sx, oy + sy, W * s, H * s);
 
@@ -979,8 +996,20 @@
       if (air) drawAir(sx, sy);
       else if (!opts.thermal) drawCreatures(tick, sx, sy);
       drawRings();
+      if (opts.floodLine != null) drawFloodLine(opts.floodLine, tick, sx, sy);
       if (opts.lens && brush.visible) drawLens();
       drawBrush();
+    }
+    // the tsunami's quest: a dashed line across the map at the height the water has to reach
+    function drawFloodLine(row, tick, sx, sy) {
+      const { ox, oy, s } = view, y = oy + sy + row * s;
+      ctx.save();
+      ctx.strokeStyle = `rgba(110, 190, 255, ${0.65 + 0.25 * Math.sin(tick / 9)})`;
+      ctx.lineWidth = Math.max(1.5, 1.5 * dpr);
+      ctx.setLineDash([10 * dpr, 7 * dpr]);
+      ctx.lineDashOffset = -tick * 0.6;
+      ctx.beginPath(); ctx.moveTo(ox + sx, y); ctx.lineTo(ox + sx + W * s, y); ctx.stroke();
+      ctx.restore();
     }
 
     // A flash for each blast: a white-hot core in the blast's own colour that swells and fades
@@ -1052,9 +1081,114 @@
       ctx.globalCompositeOperation = 'source-over';
     }
 
+    // A tornado as you would see it, over the cells and see-through enough to show the debris whirling
+    // in it: a funnel of cloud hanging from the storm, narrowing to the ground, bending back from the way
+    // it is going and swaying, with bands of cloud winding round it as it turns, a dark wall cloud where
+    // it leaves the storm, and a whirl of dust and debris round its foot (spray, over water). The funnel
+    // is drawn a little narrower than the winds it stands for (sim.js tornado()).
+    function drawTornado(d, env, tick, X, Y) {
+      const s = view.s, top = d.top, gy = d.gy, tall = gy - top;
+      if (tall < 4) return;
+      const lean = d.vx || 0, x0 = d.fx === undefined ? d.x : d.fx;
+      const axis = (h) => x0 - lean * h * 0.7 + Math.sin(tick * 0.04 + h * 0.07) * (1 + h * 0.04);
+      // a narrow rope low down that flares like a trumpet into the cloud
+      const half = (h) => { const f = h / tall; return d.b * 0.6 + h * d.slope * 0.4 + f * f * f * f * tall * 0.16; };
+      const n = 32, yAt = (k) => top + (tall * k) / n;
+      // the funnel: dark where it leaves the cloud, paler and thinner toward the ground
+      const g = ctx.createLinearGradient(0, Y(top), 0, Y(gy));
+      g.addColorStop(0, `rgba(56,60,68,${0.92 * env})`);
+      g.addColorStop(0.55, `rgba(118,122,128,${0.78 * env})`);
+      g.addColorStop(1, `rgba(150,142,128,${0.5 * env})`);
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      for (let k = 0; k <= n; k++) { const y = yAt(k), h = gy - y; ctx.lineTo(X(axis(h) - half(h)), Y(y)); }
+      for (let k = n; k >= 0; k--) { const y = yAt(k), h = gy - y; ctx.lineTo(X(axis(h) + half(h)), Y(y)); }
+      ctx.closePath(); ctx.fill();
+      // bands of cloud winding round it, only where they pass across its near side
+      ctx.lineWidth = Math.max(1, s * 0.6);
+      ctx.lineCap = 'round';
+      for (let b = 0; b < 8; b++) {
+        ctx.strokeStyle = b & 1 ? `rgba(206,210,216,${0.24 * env})` : `rgba(34,38,44,${0.3 * env})`;
+        ctx.beginPath();
+        let on = false;
+        for (let k = 0; k <= n; k++) {
+          const y = yAt(k), h = gy - y, th = tick * 0.13 + b * 0.8 + y * 0.09;
+          if (Math.cos(th) < 0) { on = false; continue; }
+          const x = X(axis(h) + half(h) * 0.92 * Math.sin(th));
+          if (on) ctx.lineTo(x, Y(y)); else { ctx.moveTo(x, Y(y)); on = true; }
+        }
+        ctx.stroke();
+      }
+      // the wall cloud it hangs from, swallowing the top of the funnel
+      const tx = axis(tall), tw = half(tall), tr = (tw * 1.6 + 10) * s;
+      ctx.save(); // soft-edged, squashed flat: a radial gradient drawn into a scaled circle
+      ctx.translate(X(tx), Y(top + 1));
+      ctx.scale(1, 0.3);
+      const wc = ctx.createRadialGradient(0, 0, 0, 0, 0, tr);
+      wc.addColorStop(0, `rgba(36,40,48,${0.95 * env})`);
+      wc.addColorStop((tw + 2) * s / tr, `rgba(40,44,52,${0.85 * env})`);
+      wc.addColorStop(1, 'rgba(40,44,52,0)');
+      ctx.fillStyle = wc;
+      ctx.beginPath(); ctx.arc(0, 0, tr, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+      // the debris cloud round its foot: dust and bits whirling round and up, or spray over water
+      const bx = axis(0), bw = d.b * 2.6 + 7, bh = d.b * 1.4 + 6, cy = gy - bh * 0.4;
+      const gx = Math.max(0, Math.min(W - 1, Math.round(bx))), gyi = Math.max(0, Math.min(H - 1, Math.round(gy)));
+      const wet = MODE[world.type[world.idx(gx, gyi)]] === R.LIQUID;
+      const dust = wet ? '214,230,238' : '124,106,86';
+      const dc = ctx.createRadialGradient(X(bx), Y(cy), 0, X(bx), Y(cy), bw * s);
+      dc.addColorStop(0, `rgba(${dust},${0.8 * env})`);
+      dc.addColorStop(0.55, `rgba(${dust},${0.5 * env})`);
+      dc.addColorStop(1, `rgba(${dust},0)`);
+      ctx.fillStyle = dc;
+      ctx.beginPath(); ctx.ellipse(X(bx), Y(cy), bw * s, bh * s, 0, 0, Math.PI * 2); ctx.fill();
+      const bit = Math.max(1, s * 0.8);
+      for (let p = 0; p < 40; p++) {
+        const ph = tick * 0.1 + p * 0.73, up = (tick * 0.5 + p * 7.3) % (bh * 3), r = bw * (0.35 + 0.065 * ((p * 37) % 10)) * (1 - up / (bh * 6));
+        if (Math.sin(ph) < -0.2 && p & 1) continue; // some pass behind it
+        ctx.fillStyle = wet ? `rgba(230,240,248,${0.7 * env})` : p % 3 ? `rgba(88,72,56,${0.85 * env})` : `rgba(58,62,56,${0.85 * env})`;
+        ctx.fillRect(X(bx + Math.cos(ph) * r) - bit / 2, Y(gy - up) - bit / 2, bit, bit);
+      }
+    }
+
+    // A solar storm's aurora: curtains of green light hanging in the sky, violet toward their tops,
+    // rippling and shimmering. It is drawn behind the cells (it is high in the sky), and the sky dims a
+    // little while it lasts so it shows by day too.
+    let auroraStrip = null; // one column of the curtain's light, stretched into place
+    function drawAurora(d, tick, sx, sy) {
+      const { ox, oy, s } = view, env = Math.max(0, Math.min(1, (d.age + 1) / 60, (d.life - d.age) / 150));
+      if (env <= 0) return;
+      if (!auroraStrip) {
+        auroraStrip = document.createElement('canvas');
+        auroraStrip.width = 1; auroraStrip.height = 64;
+        const c = auroraStrip.getContext('2d'), g = c.createLinearGradient(0, 64, 0, 0);
+        g.addColorStop(0, 'rgba(120,255,170,0)');
+        g.addColorStop(0.06, 'rgba(120,255,170,1)');
+        g.addColorStop(0.35, 'rgba(70,230,170,0.75)');
+        g.addColorStop(0.7, 'rgba(150,100,255,0.4)');
+        g.addColorStop(1, 'rgba(200,90,255,0)');
+        c.fillStyle = g; c.fillRect(0, 0, 1, 64);
+      }
+      const x0 = ox + sx, y0 = oy + sy;
+      ctx.save();
+      ctx.beginPath(); ctx.rect(x0, y0, W * s, H * s); ctx.clip();
+      ctx.fillStyle = `rgba(6,14,24,${0.35 * env})`;
+      ctx.fillRect(x0, y0, W * s, H * s);
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.imageSmoothingEnabled = true;
+      for (let c = 0; c < 3; c++) {
+        for (let x = 0; x < W; x += 2) {
+          const base = H * (0.3 + c * 0.07) + Math.sin(x * 0.03 + tick * 0.012 + c * 2.1) * H * 0.05 + Math.sin(x * 0.09 - tick * 0.03 + c) * H * 0.015;
+          const len = H * (0.16 + 0.08 * Math.sin(x * 0.045 + tick * 0.008 + c * 1.3));
+          ctx.globalAlpha = env * (0.45 + 0.55 * Math.max(0, Math.sin(x * 0.12 + tick * 0.06 + c * 2.7))) * (0.55 - c * 0.12);
+          ctx.drawImage(auroraStrip, x0 + x * s, y0 + (base - len) * s, 2 * s + 0.5, len * s);
+        }
+      }
+      ctx.restore();
+    }
+
     // What the cells alone can't show of a disaster from the Weapons tab: a black hole and its
-    // glowing disc, a meteor's white-hot head, the edge of the frost. A tornado is left as it is
-    // in the open: wind you can't see, only what it carries (the Air view shows its funnel).
+    // glowing disc, a meteor's white-hot head, the edge of the frost, a tornado's funnel of cloud.
     function drawDisasters(list, tick, sx, sy) {
       const s = view.s;
       const X = (x) => view.ox + sx + (x + 0.5) * s, Y = (y) => view.oy + sy + (y + 0.5) * s;
@@ -1082,12 +1216,14 @@
           ctx.lineWidth = Math.max(1, dpr);
           ctx.strokeStyle = `rgba(255,240,215,${0.7 * env})`;
           ctx.beginPath(); ctx.arc(px, py, R * Math.max(0.2, env) + dpr, 0, Math.PI * 2); ctx.stroke();
-        } else if (d.kind === 'hbomb' && d.phase === 'fall') {
-          // the bomb itself, nose down, swaying a little as it falls (d.py is where its nose is)
+        } else if (d.kind === 'hbomb' && (d.phase === 'fall' || d.phase === 'drift')) {
+          // the bomb itself, nose down, swaying a little as it falls (d.py is where its nose is);
+          // caught by a black hole, it turns its nose to the middle and shrinks as it spirals in
           const L = Math.max(18 * dpr, s * 9), w = L * 0.34;
           ctx.save();
           ctx.translate(X(d.px), Y(d.py));
-          ctx.rotate(Math.sin(d.age * 0.07) * 0.05);
+          if (d.phase === 'drift') { ctx.rotate(d.rot); ctx.scale(d.scale, d.scale); }
+          else ctx.rotate(Math.sin(d.age * 0.07) * 0.05);
           ctx.fillStyle = '#596150'; // the casing
           ctx.beginPath();
           ctx.moveTo(-w / 2, -L * 0.72);
@@ -1126,6 +1262,8 @@
           ctx.fillStyle = hg;
           ctx.beginPath(); ctx.arc(px, py, hr * 2.6, 0, Math.PI * 2); ctx.fill();
           ctx.globalCompositeOperation = 'source-over';
+        } else if (d.kind === 'tornado') {
+          drawTornado(d, env, tick, X, Y);
         } else if (d.kind === 'freeze' && d.age < 90) {
           const a = 1 - d.age / 90;
           ctx.lineWidth = Math.max(1, s * 0.8);

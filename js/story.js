@@ -1,12 +1,15 @@
 /* Elementarium — the Apprentice's Journey: story chapters as data.
- * A chapter builds its own world, sets the weather and any bent laws, fills the apprentice's
- * pouch, scripts a few events and judges its goals from the simulation itself. No DOM here,
- * so tools/storytest.js can play the chapters headless. */
+ * Ten chapters follow your master's trail from a dry village to a launch pad, each one leaning on
+ * a different part of the lab and each a little harder than the last. A chapter builds its own
+ * world, sets the weather and any bent laws, fills the apprentice's pouch, scripts a few events and
+ * judges its goals from the simulation itself. No DOM here, so tools/storytest.js can play the
+ * chapters headless. */
 (function (G) {
   'use strict';
 
-  const { ID } = G.ELEM;
-  const { noise1, fillCol, blob } = G.SceneKit;
+  const { ID, byKey } = G.ELEM;
+  const K = G.SceneKit;
+  const { noise1, fillCol, blob, rect, paintBox, tone, mixRGB, rgb, pick } = K;
 
   const SEC = 60; // simulation ticks per second of game time
   const EVAL_EVERY = 10;
@@ -45,6 +48,265 @@
 
   // A low stone wall: people step up one cell at most, so two cells keep them on their side.
   function curb(w, x, g, h = 2) { for (let y = g - h; y < g; y++) w.place(w.idx(x, y), ID.STONE); }
+  // A stile: stone held a cell off the ground, so water runs under it and people can't get past.
+  function stile(w, x, g) { for (let y = g - 4; y < g - 1; y++) w.place(w.idx(x, y), ID.STONE); }
+
+  // Falling stones (Skywatch): a burning rock that comes in at a slant from high over the east,
+  // trailing fire, and bursts against the first solid thing in its way: a small crater, and the
+  // stone itself left glowing in it. (The Meteor weapon is far bigger, and throws fragments.)
+  function throwStone(w, s, x, y) {
+    const sx = x + (y + 8) * 0.55, sy = -6, dx = x - sx, dy = y - sy, len = Math.hypot(dx, dy);
+    s.stones.push({ x: sx, y: sy, vx: (dx / len) * 3.2, vy: (dy / len) * 3.2 });
+  }
+  function flyStones(w, s) {
+    const AIRY = (t) => t === ID.EMPTY || t === ID.FIRE || t === ID.SMOKE || t === ID.STEAM;
+    s.stones = s.stones.filter((st) => {
+      for (let k = 0; k < 4; k++) {
+        st.x += st.vx / 4; st.y += st.vy / 4;
+        const x = Math.round(st.x), y = Math.round(st.y);
+        if (x < 0 || x >= w.W || y >= w.H) return false;
+        if (y < 0) continue;
+        const i = w.idx(x, y);
+        if (!AIRY(w.type[i])) {
+          w.explode(x, y, 4, 1.25, 0);
+          for (const j of [i, i - w.SW]) if (w.type[j] === ID.EMPTY) { w.place(j, ID.MMETAL); w.temp[j] = 1500; }
+          return false;
+        }
+        if (w.type[i] === ID.EMPTY) { w.place(i, ID.FIRE); w.data[i] = 8 + ((Math.random() * 10) | 0); w.temp[i] = 1600; }
+      }
+      return true;
+    });
+  }
+
+  // ───── guides ─────
+  // A chapter's Hint is a visual guide in three steps, one per thing to do, in the order you do them:
+  // `use` is what to pick up from the pouch (an element's key, or 'tool:heat' and so on), `makes`
+  // what comes of it, `at(w, s)` the box on the map to light up, and `done(w, s)` whether it has
+  // been done. The guide always shows the first step not yet done, and a done step stays done.
+  const pad = (z, d) => ({ x0: z.x0 - d, x1: z.x1 + d, y0: z.y0 - d, y1: z.y1 + d });
+  const goalMet = (s, id) => s.goals.some((g) => g.id === id && g.met);
+  // the mean temperature of the cells of type t in a box (every other cell, for speed)
+  function meanTemp(w, z, t) {
+    let sum = 0, n = 0;
+    for (let y = z.y0; y <= z.y1; y += 2) for (let x = z.x0; x <= z.x1; x += 2) { const i = w.idx(x, y); if (w.type[i] === t) { sum += w.temp[i]; n++; } }
+    return n ? sum / n : 0;
+  }
+  // where the test sledge is (chapter IX): the box round its engines
+  function sledgeBox(w) {
+    let x0 = w.W, x1 = -1, y0 = w.H, y1 = -1;
+    for (let y = 0; y < w.H; y++) for (let x = 0, i = w.idx(0, y); x < 280; x++, i++) {
+      if (w.type[i] !== ID.THRUSTER) continue;
+      if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+    }
+    return x1 < 0 ? null : { x0, x1, y0: y0 - 5, y1: y1 + 2 };
+  }
+  // The step the player is on: { k, n, step }, or k = -1 once all are done.
+  function step(ch, w, s) {
+    const g = ch.guide;
+    if (!g) return null;
+    s.stepsDone = s.stepsDone || [];
+    for (let k = 0; k < g.length; k++) if (!s.stepsDone[k] && g[k].done(w, s)) s.stepsDone[k] = true;
+    const k = g.findIndex((_, q) => !s.stepsDone[q]);
+    return k < 0 ? { k: -1, n: g.length } : { k, n: g.length, step: g[k] };
+  }
+
+  // ───── the launch (chapter X) ─────
+  // What a ship is built of (as sim.js counts it): machine parts, metal, glass and cast metal.
+  const SHIPPY = new Set([ID.WIRE, ID.SWITCH, ID.SENSOR, ID.PIPE, ID.VALVE, ID.PUMP, ID.TANK, ID.PISTON, ID.ROD,
+    ID.CASING, ID.BATTERY, ID.THRUSTER, ID.LEGS, ID.METAL, ID.GLASS, ...G.ELEM.list.filter((d) => d.castOf !== undefined).map((d) => d.id)]);
+  const HULLISH = new Set([ID.METAL, ...G.ELEM.list.filter((d) => d.castOf !== undefined).map((d) => d.id)]);
+  const FUELS = new Set(['oil', 'methane', 'alcohol', 'napalm', 'el_h'].filter((k) => byKey[k]).map((k) => byKey[k].id));
+
+  // The ship standing in (or rising out of) the silo: every cell joined to its engines, and what
+  // they add up to.
+  function surveyShip(w, s) {
+    let seed = -1;
+    for (let y = 0; y < w.H && seed < 0; y++) for (let x = 130; x <= 190; x++) { const i = w.idx(x, y); if (w.type[i] === ID.THRUSTER) { seed = i; break; } }
+    if (seed < 0) return null;
+    const seen = new Set([seed]), q = [seed];
+    while (q.length && seen.size < 4000) {
+      const i = q.pop();
+      for (const d of [1, -1, w.SW, -w.SW]) { const j = i + d; if (!seen.has(j) && SHIPPY.has(w.type[j])) { seen.add(j); q.push(j); } }
+    }
+    // Everything is judged on the ship proper, the columns it stands in: the fuel line and the depot
+    // it may still be joined to don't count (the line lets go at launch)
+    const own = (x) => x >= s.shipBox.x0 && x <= s.shipBox.x1;
+    const r = { all: seen, cells: new Set(), n: 0, up: 0, fuel: 0, legs: 0, bypass: false, x0: w.W, x1: -1, y0: w.H, y1: -1, vy: 0, attached: false, powered: false };
+    let nt = 0;
+    for (const i of seen) {
+      const t = w.type[i], x = i % w.SW, y = (i / w.SW) | 0;
+      if (!own(x)) { r.attached = true; continue; }
+      r.cells.add(i); r.n++;
+      if (x < r.x0) r.x0 = x; if (x > r.x1) r.x1 = x; if (y < r.y0) r.y0 = y; if (y > r.y1) r.y1 = y;
+      if (t === ID.THRUSTER) { nt++; r.vy += w.vy[i]; if ((w.aux[i] & 3) === 0) r.up++; if (w.sap[i] > 0) r.powered = true; }
+      else if (t === ID.TANK) { if (FUELS.has(w.aux[i])) r.fuel += w.data[i]; }
+      else if (t === ID.LEGS) r.legs++;
+      else if (t === ID.BATTERY) for (const d of [1, -1, w.SW, -w.SW]) if (HULLISH.has(w.type[i + d])) r.bypass = true;
+    }
+    r.vy = nt ? r.vy / nt : 0;
+    // the cabin: is the air round you shut in by the ship?
+    r.head = -1;
+    for (let y = r.y0; y <= r.y1 && r.head < 0; y++) for (let x = r.x0; x <= r.x1; x++) { const i = w.idx(x, y); if (w.type[i] === ID.HEAD) { r.head = i; break; } }
+    r.sealed = false;
+    if (r.head >= 0) {
+      const air = new Set(), aq = [];
+      for (const d of [1, -1, w.SW, -w.SW]) { const j = r.head + d; if (w.type[j] === ID.EMPTY) { air.add(j); aq.push(j); } }
+      let out = false;
+      while (aq.length && !out && air.size < 900) {
+        const i = aq.pop(), x = i % w.SW, y = (i / w.SW) | 0;
+        if (x <= r.x0 || x >= r.x1 || y <= r.y0 || y >= r.y1) { out = true; break; }
+        for (const d of [1, -1, w.SW, -w.SW]) { const j = i + d, t = w.type[j]; if (!air.has(j) && (t === ID.EMPTY || t === ID.HUMAN || t === ID.SMOKE || t === ID.FIRE)) { air.add(j); aq.push(j); } }
+      }
+      r.sealed = !out && air.size < 900;
+    }
+    return r;
+  }
+
+  const READY = [
+    ['The porthole is sealed', 'The cabin holds its air.'],
+    ['The engines answer to the switch', 'No current round the hull any more.'],
+    ['Engines enough to climb', 'Under fifty cells of ship for every engine.'],
+    ['Fuel aboard', 'Switch the depot off. The fuel line lets go by itself when the engines light.'],
+    ['Legs fitted', 'Something to stand on when you get there.'],
+  ];
+  function launchPad(w, s) {
+    if (s.shards0 == null) s.shards0 = w.counts[ID.SHARDS] || 3;
+    if (s.t % 15) return;
+    const r = surveyShip(w, s);
+    if (!r) return;
+    s.ship = r;
+    if (s.lifted) { s.ship = r; return launchCheck(w, s, r); } // the checklist is done with once it flies
+    // light enough: an engine can just about lift 74 cells; to climb out of the silo briskly, it
+    // wants under 50 each
+    const ready = [r.sealed, !r.bypass && w.counts[ID.BATTERY] > 0, r.up > 0 && r.n / r.up < 50, r.fuel >= 240, r.legs >= 2];
+    s.ready = s.ready || [false, false, false, false, false];
+    ready.forEach((ok, k) => {
+      if (ok && !s.ready[k]) s.say.push({ eyebrow: `Ready ${ready.filter(Boolean).length} of 5`, name: READY[k][0], how: READY[k][1] });
+      s.ready[k] = ok;
+    });
+    if (w.counts[ID.SCRAP] > 0 || w.counts[ID.SHARDS] > s.shards0) s.dented = true;
+    // the engines light: the clamps let the fuel line go, once the ship is ready to fly; until then
+    // the line holds it down on the pad
+    if (r.attached && r.powered && r.fuel > 0) {
+      if (ready.every(Boolean)) {
+        for (const i of r.all) {
+          const x = i % w.SW;
+          if ((x > s.shipBox.x1 && x <= s.shipBox.x1 + 3) || (x < s.shipBox.x0 && x >= s.shipBox.x0 - 3)) w.place(i, ID.EMPTY);
+        }
+        s.say.push({ eyebrow: 'The pad', name: 'The fuel line lets go', how: 'Nothing holds the ship now.' });
+      } else if (!s.heldNote || s.t - s.heldNote > 8 * SEC) {
+        s.heldNote = s.t;
+        const missing = READY.filter((_, k) => !ready[k]).map((m) => m[0].toLowerCase());
+        s.say.push({ eyebrow: 'The pad', name: 'The fuel line holds the ship down', how: `It lets go when the ship is ready. Still to do: ${missing.join('; ')}.` });
+      }
+    }
+    if (!s.lifted && r.vy < -0.05 && r.y1 < s.shipBox.y1 - 2) { s.lifted = true; s.say.push({ eyebrow: 'Lift-off', name: 'It flies', how: 'Up the silo and out.' }); }
+    launchCheck(w, s, r);
+  }
+  // through the silo's mouth and away: on to the moon
+  function launchCheck(w, s, r) {
+    if (r.y0 <= 14 && r.vy < -0.1) {
+      if (!r.sealed) { s.abort = 'Past the air there is nothing to breathe, and your cabin was open to it. You turned back and came down hard in the dark.'; return; }
+      if (r.legs < 2) { s.abort = 'Halfway there you remembered: no legs. A ship that can’t stand can’t land. You turned back.'; return; }
+      toTheMoon(w, s, r);
+    }
+  }
+
+  // Lift the ship (and you) out of the world, build the moon, and set it down at the top of it.
+  function toTheMoon(w, s, r) {
+    const keep = [];
+    for (let y = r.y0; y <= r.y1; y++) for (let x = r.x0; x <= r.x1; x++) {
+      const i = w.idx(x, y), t = w.type[i];
+      if (!r.cells.has(i) && t !== ID.HUMAN && t !== ID.HEAD) continue;
+      keep.push([x - r.x0, y - r.y0, t, w.aux[i], w.data[i], Math.min(w.temp[i], 60), w.sap[i], w.col[i], w.flags[i]]);
+    }
+    w.clear();
+    w.ambient = 0;
+    w.weather.mode = 'clear'; w.weather.wind = 0;
+    buildMoon(w, s);
+    const ox = 160 - ((r.x1 - r.x0) >> 1), oy = 6;
+    for (const [dx, dy, t, aux, data, temp, sap, col, flags] of keep) {
+      const i = w.idx(ox + dx, oy + dy);
+      w.place(i, t);
+      w.aux[i] = t === ID.SWITCH ? 0 : aux; w.data[i] = data; w.temp[i] = temp; w.sap[i] = t === ID.SWITCH ? 0 : sap; w.col[i] = col; w.flags[i] = flags;
+      if (t === ID.THRUSTER) { w.vy[i] = 0.25; w.vx[i] = 0; }
+    }
+    s.phase = 'moon'; s.cutscene = true; s.sky = 'space'; s.landT = s.t;
+    s.say.push({ eyebrow: 'Space', name: 'The sky turns black', how: 'The engines fall quiet. The moon fills the porthole.' });
+  }
+
+  function buildMoon(w, s) {
+    const { W, H } = w;
+    const n = noise1();
+    const DUST = [0xb9b8b3, 0xadaca7, 0xc4c3be, 0xa5a49f], ROCK = [0x7d7c78, 0x72716d, 0x86857f];
+    const craters = [[58, 12], [112, 7], [214, 9], [292, 13]];
+    const ground = new Int32Array(W);
+    for (let x = 0; x < W; x++) {
+      let g = 150 + Math.round(n(x) * 4);
+      for (const [cx, r] of craters) {
+        const d = Math.abs(x - cx);
+        if (d < r) g += Math.round(Math.sqrt(r * r - d * d) * 0.45);  // the bowl
+        else if (d < r + 4) g -= 2;                                     // its rim
+      }
+      ground[x] = g;
+      strata(w, x, g, [[ID.ASH, 3, DUST], [ID.STONE, 40, ROCK]]);
+    }
+    // the Earth over the horizon: oceans, land and cloud
+    const ex = 54, ey = 34, er = 11;
+    for (let y = ey - er; y <= ey + er; y++) for (let x = ex - er; x <= ex + er; x++) {
+      const dx = x - ex, dy = y - ey;
+      if (dx * dx + dy * dy > er * er) continue;
+      const i = w.idx(x, y);
+      w.place(i, ID.STONE);
+      const v = Math.sin(x * 0.5) + Math.cos(y * 0.7 + x * 0.2);
+      const shade = dx < -4 && dx * dx + dy * dy > (er - 3) * (er - 3) ? 0.55 : 1;
+      const c = v > 1.1 ? 0xf2f4f8 : v > 0.3 ? 0x4f9a52 : 0x2f6fd0;
+      tone(w, i, shade < 1 ? mixRGB(c, 0x0a0f1a, 0.45) : c);
+    }
+    // your master's ship, standing on its legs with its hatch open
+    const mx = 230, mg = ground[mx];
+    const mb = Math.min(ground[mx - 2], ground[mx + 14]) - 3;
+    rect(w, mx, mb - 24, mx + 12, mb, ID.METAL);
+    rect(w, mx + 1, mb - 23, mx + 11, mb - 1, ID.EMPTY);
+    for (let q = 1; q <= 5; q++) rect(w, mx + q, mb - 24 - q, mx + 12 - q, mb - 24 - q, ID.METAL);
+    rect(w, mx + 12, mb - 6, mx + 12, mb - 2, ID.EMPTY);               // the open hatch
+    for (const lx of [mx - 2, mx - 1, mx + 13, mx + 14]) for (let y = mb + 1; y < ground[lx]; y++) w.place(w.idx(lx, y), ID.LEGS);
+    rect(w, mx + 3, mb - 1, mx + 9, mb - 1, ID.METAL);
+    paintBox(w, mx, mb - 30, mx + 14, mb, ID.METAL, [0xb0b5bc, 0xa3a8af]);
+    // footprints away from it toward the far crater, and the light beyond the rim
+    for (let x = mx + 16; x < 300; x += 4) { const i = w.idx(x, ground[x]); if (w.type[i] === ID.ASH) tone(w, i, 0x6d6c68); }
+    const bx = 312, by = ground[bx] - 2;
+    rect(w, bx - 2, by - 6, bx + 2, by, ID.GLASS);
+    rect(w, bx - 1, by - 5, bx + 1, by - 1, byKey.el_xe.id);
+    s.beacon = [];
+    for (let y = by - 5; y <= by - 1; y++) for (let x = bx - 1; x <= bx + 1; x++) s.beacon.push(w.idx(x, y));
+  }
+
+  function moonfall(w, s) {
+    // the ship comes down under its own gentle hand: engines off, the descent held to a safe speed
+    let nt = 0, x0 = w.W, y1 = -1;
+    for (let i = 0; i < w.N; i++) {
+      if (w.type[i] !== ID.THRUSTER) continue;
+      nt++; w.vx[i] = 0; if (w.vy[i] > 0.25) w.vy[i] = 0.25;
+      const x = i % w.SW, y = (i / w.SW) | 0;
+      if (x < x0) x0 = x; if (y > y1) y1 = y;
+    }
+    // the light beyond the rim blinks: long, short, long
+    const ph = Math.floor(s.t / 12) % 12;
+    const on = ph < 4 || ph === 5 || (ph >= 7 && ph < 11);
+    if (on) for (const i of s.beacon) w.charge[i] = 1;
+    if (s.t % 10) return;
+    const pos = `${x0},${y1}`;
+    s.still = pos === s.lastPos ? (s.still || 0) + 10 : 0;
+    s.lastPos = pos;
+    if (!s.landed && nt && s.still >= 2 * SEC) {
+      s.landed = true;
+      s.say.push({ eyebrow: 'The moon', name: 'Touchdown', how: 'Dust settles round the legs. Far off, a light is blinking.' });
+    }
+  }
+
+  // the powders a paddle can stir together
+  const STIRS = new Set([ID.ASH, ID.SALT, ID.RUST, ID.GUNPOWDER, ID.THERMITE]);
 
   // Everything that is on fire right now: flames, embers, and burning matter.
   function burning(w) { return w.counts[ID.FIRE] + w.counts[ID.EMBER] + w.events.burning; }
@@ -54,21 +316,59 @@
     return `${(s / 60) | 0}:${String(s % 60).padStart(2, '0')}`;
   }
 
+  // Chapter I: the field counts as soaked once this much of its top three rows is mud (rain only
+  // ever wets the top row, so about half of that)
+  const SOAK = 0.15;
+
+  // a star goal that holds while the clock is under `secs`
+  function beforeBell(id, text, secs) {
+    return {
+      id, keep: true, text,
+      eval(w, s) {
+        const limit = secs * SEC;
+        return { holds: s.t <= limit, value: s.t <= limit ? clock(limit - s.t) : 'missed' };
+      },
+    };
+  }
+  // a star goal that holds while at least `need` people (or all of them) are alive
+  function nobodyHurt(id, text, key = 'villagers') {
+    return {
+      id, keep: true, text,
+      eval(w, s) {
+        const alive = w.counts[ID.HUMAN];
+        return { holds: alive >= s[key], value: `${Math.min(alive, s[key])} / ${s[key]}` };
+      },
+    };
+  }
+
+  // Ground strata painted in earth colours: a top crust, then soil, then rock in bands.
+  function strata(w, x, top, bands) {
+    let y = top;
+    for (const [t, depth, colors] of bands) {
+      for (let k = 0; k < depth && y < w.H; k++, y++) {
+        const i = w.idx(x, y);
+        w.place(i, t);
+        if (colors) tone(w, i, pick(colors, x, y));
+      }
+    }
+    for (; y < w.H; y++) w.place(w.idx(x, y), ID.STONE);
+  }
+
   // ───── the master's letter ─────
   const prologue = {
     title: 'The Empty Workshop',
     body: [
-      'You came back from market to find the Elementarium unlocked and the furnace cold. Your master’s coat was gone from its hook. On the bench lay the table of elements, half its slots still dark, and a letter.',
+      'You came back from market to find the Elementarium unlocked and the furnace cold. Your master’s coat was gone from its hook, and so were the big copper boiler, the brass telescope and every roll of wire in the house. On the bench lay the table of elements, half its slots still dark, and a letter.',
     ],
     letter: {
       text: [
         'Apprentice —',
-        'The rain falls in the wrong places this year. The pines are warm at night. The mountain hums. Something beneath the valley is out of balance, and I have gone to find it.',
-        'Do not follow me. Help the valley instead. Everything you need is in the table; the rest you will learn by watching what the world does.',
+        'For forty nights a light has burned on the dark face of the moon, where no light should be. It blinks, and it keeps time, like someone signalling. Since it came the valley has gone wrong: rain falls in the wrong places, stones fall out of clear skies, the mountain hums in its sleep.',
+        'I am going up to see who is calling. It will take a ship, and I have to build it from whatever the valley can spare. Do not follow me. Help the valley instead. Everything you need is in the table; the rest you will learn by watching what the world does.',
       ],
       sign: '— O.',
     },
-    after: 'You folded the letter into your pocket and took down the travelling pouch.',
+    after: 'You folded the letter into your pocket, took down the travelling pouch, and looked at the moon for a long time.',
   };
 
   // ───── chapters ─────
@@ -78,849 +378,1644 @@
       num: 'I',
       title: 'The Dry Season',
       place: 'Millbrook',
-      blurb: 'No rain since spring. The seed lies in the furrows like gravel.',
+      blurb: 'No rain since spring. The furrows are dust and the seed sacks are full.',
       size: [320, 180],
+      sky: 'day',
       weather: { mode: 'natural', wind: 1, ambient: 32 },
       rules: { drySoil: true },
       pouch: [
         { kind: 'tool', name: 'heat' },
         { kind: 'element', key: 'fire', n: 300 },
-        { kind: 'element', key: 'seed', n: 40 },
+        { kind: 'element', key: 'seed', n: 60 },
       ],
       intro: {
         body: [
-          'Millbrook has not seen rain since the spring fair. The furrows have cracked like old pottery and the seed lies in them like gravel. The pond has shrunk to a muddy eye at the bottom of its banks.',
-          'The miller remembers your master. “Stood by that pond half the afternoon,” he says. “Said the water wasn’t gone, only resting. Said it has to go up before it can come down.”',
+          'Millbrook has not seen rain since the spring fair. The furrows have cracked like old pottery, the willow by the millpond is dropping its leaves, and the farmers will not sow: seed thrown into this dust only lies there like gravel.',
+          'The miller remembers your master. “Stood by that pond half the afternoon,” he says. “Said the water wasn’t gone, only resting. Said it has to go up before it can come down. Then they bought my old boiler and drove off with it.”',
         ],
-        task: 'Bring rain to the fields so the crops can sprout. Seeds won’t take in this dust; they need mud.',
+        task: 'Bring rain to the bare field until the ground there is mud, then sow your seed in it and green the field.',
       },
-      hints: [
-        'The miller’s riddle: water has to go up before it can come down. What sends water up?',
-        'Select Heat and hold it over the pond. Steam rises, cools high in the sky and gathers into clouds.',
-        'A lone wisp of cloud just fades. Keep the steam coming until the clouds crowd together and darken. The breeze carries them east over the fields.',
+      guide: [
+        {
+          title: 'Heat the millpond', use: ['tool:heat'], makes: 'steam',
+          note: 'Hold Heat on the water. Steam rises and gathers into clouds high above.',
+          at: (w, s) => pad(s.pond, 3),
+          done: (w, s) => s.rained || w.counts[ID.CLOUD] + w.counts[ID.RAINCLOUD] >= 120,
+        },
+        {
+          title: 'Bring the rain', use: ['tool:heat'], makes: 'raincloud',
+          note: 'Keep heating until the clouds crowd together and darken. The breeze blows them east over the field.',
+          at: (w, s) => ({ x0: s.pond.x0, x1: s.soil.x1, y0: 6, y1: s.soil.y0 + 2 }),
+          done: (w, s) => !!s.rained,
+        },
+        {
+          title: 'Sow the field', use: ['seed'], makes: 'plant',
+          note: 'The field is mud now. Brush Seed along it: every seed grows into a crop.',
+          at: (w, s) => ({ x0: s.soil.x0, x1: s.soil.x1, y0: s.soil.y0 - 10, y1: s.soil.y1 }),
+          done: (w, s) => goalMet(s, 'crops'),
+        },
       ],
       outro: {
         title: 'Rain on Millbrook',
         body: [
-          'The first drops hit the dust like thrown coins. By evening the furrows are black with mud and green threads are standing up out of them. Someone starts singing in the square.',
+          'The first drops hit the dust like thrown coins. By evening the furrows are black with mud and green threads are standing up out of them. Someone starts singing in the square, and the miller brings you a jug of the first milk of the week.',
         ],
         found: 'Tucked under the miller’s door, a page in your master’s hand:',
         page: [
-          'The water here no longer rises of its own accord. The ground drinks the heat that should lift it. Something below is thirsty.',
-          'I am going north to the old pines. Trees feel the ground first.',
+          'The water here no longer rises of its own accord: the ground drinks the heat that should lift it. The moon’s light pulls at everything in this valley, even the weather.',
+          'The boiler will make a fine fuel tank. A ship also needs a window that can hold back nothing at all, and no fire in the valley is hot enough to make one. I am going to the glassworks at Sandmouth.',
         ],
         sign: '— O.',
       },
+      part: 'The miller’s boiler: your master took it for a fuel tank.',
 
       build(w, s) {
         const { W, H } = w;
         const n = noise1();
-        const g = (x) => Math.round(H * 0.7 + n(x) * 3);
-        const p0 = Math.round(W * 0.05), p1 = Math.round(W * 0.27);
-        const f0 = Math.round(W * 0.35), f1 = Math.round(W * 0.64);
-        const v0 = Math.round(W * 0.7);
-        const fieldG = g(f0), villageG = g(Math.round(W * 0.85));
+        const g = (x) => Math.round(H * 0.68 + n(x) * 3);
+        const p0 = 6, p1 = 74;                  // the millpond
+        const f0 = 114, f1 = 208;               // the field
+        const v0 = 222;                         // the village wall
+        // the village stands on a rise, so the rain runs off it down into the field and the pond
+        const fieldG = g(f0), villageG = fieldG - 6;
         const ground = new Int32Array(W);
-        for (let x = 0; x < W; x++) ground[x] = x >= f0 - 3 && x <= f1 + 3 ? fieldG : x >= v0 - 2 ? villageG : g(x);
         for (let x = 0; x < W; x++) {
-          fillCol(w, x, ground[x] + 10, H - 1, ID.STONE);
-          fillCol(w, x, ground[x], ground[x] + 9, ID.DIRT);
+          ground[x] = x >= f0 - 3 && x <= f1 + 3 ? fieldG : x > f1 + 3 ? Math.max(villageG, fieldG - (((x - f1 - 3) / 2) | 0)) : g(x);
         }
-        // the pond: a steep stone basin, its water sunk well below the rim by the drought
+        const DUST = [0x9c7d55, 0xa3845b, 0x94764f, 0xa98a62], SOILC = [0x7a5a3b, 0x6f5236, 0x80603f];
+        const ROCK = [0x6f675e, 0x7a7167, 0x655d55], DEEP = [0x57504a, 0x5f5750];
+        for (let x = 0; x < W; x++) {
+          strata(w, x, ground[x], [[ID.DIRT, 3, DUST], [ID.DIRT, 7, SOILC], [ID.STONE, 14, ROCK], [ID.STONE, 60, DEEP]]);
+        }
+        // the millpond: a steep stone basin, its water sunk well below the rim by the drought
         const pg = Math.min(...Array.from({ length: p1 - p0 + 1 }, (_, k) => ground[p0 + k]));
         for (let x = p0; x <= p1; x++) {
           fillCol(w, x, ground[x], pg + 26, ID.STONE);
+          for (let y = ground[x]; y <= pg + 26; y++) tone(w, w.idx(x, y), pick(ROCK, x, y));
           if (x >= p0 + 2 && x <= p1 - 2) {
             fillCol(w, x, ground[x], pg + 23, ID.EMPTY);
             fillCol(w, x, pg + 12, pg + 23, ID.WATER);
           }
         }
-        // the field: furrows of seed between two stone curbs that keep the mud in
+        // a dry tidemark of cracked mud where the water used to stand
+        for (let x = p0 + 2; x <= p1 - 2; x++) {
+          const i = w.idx(x, pg + 11);
+          if (w.type[i] === ID.EMPTY && (x < p0 + 6 || x > p1 - 6)) { w.place(i, ID.CLAY); }
+        }
+        // the field: bare, cracked furrows between two stone curbs that keep the mud in
         curb(w, f0 - 1, fieldG); curb(w, f1 + 1, fieldG);
-        for (let x = f0 + 1; x < f1; x += 3) w.place(w.idx(x, fieldG - 1), ID.SEED);
+        for (let x = f0; x <= f1; x++) {
+          for (let y = fieldG; y < fieldG + 3; y++) tone(w, w.idx(x, y), (x - f0) % 4 === 0 ? 0x8a6c47 : pick(DUST, x, y));
+        }
         s.field = { x0: f0, x1: f1, y0: fieldG - 70, y1: fieldG + 4 };
-        // the village behind its wall, and the people who live there
-        curb(w, v0, villageG);
-        hut(w, Math.round(W * 0.75), 14, villageG);
-        hut(w, Math.round(W * 0.88), 16, villageG);
-        for (const u of [0.31, 0.68]) {
-          const tx = Math.round(W * u), tg = ground[tx], h = 14 + ((Math.random() * 6) | 0);
-          for (let y = tg - h; y < tg; y++) w.place(w.idx(tx, y), ID.WOOD);
-          blob(w, tx, tg - h - 3, 5, 4, ID.PLANT, true);
+        s.pond = { x0: p0 + 2, x1: p1 - 2, y0: pg + 6, y1: pg + 16 };
+        s.soil = { x0: f0, x1: f1, y0: fieldG, y1: fieldG + 2, n: (f1 - f0 + 1) * 3 };
+        // dry grass by the millpond, gone brown (none toward the village: rain greens it, and grass
+        // that greens spreads, and would grow over the people)
+        for (let x = p1 + 3; x <= f0 - 3; x++) if (Math.random() < 0.8) { const y = ground[x] - 1; w.place(w.idx(x, y), ID.DRYGRASS); }
+        for (let x = f1 + 3; x < v0; x += 3 + ((Math.random() * 4) | 0)) w.place(w.idx(x, ground[x] - 1), ID.STONE);
+        // a willow drooping over the millpond and an oak by the lane (leaves green and spread in rain,
+        // so no tree stands in the village itself: it would grow over the people sheltering there)
+        K.willow(w, p1 + 9, ground[p1 + 9], 16);
+        K.oak(w, f0 - 14, ground[f0 - 14], 19);
+        // the village behind its stile: two cottages, the mill house with its glass windows, and oaks
+        stile(w, v0, villageG);
+        s.timber = [...hut(w, 232, 14, villageG), ...hut(w, 300, 13, villageG)];
+        const m0 = 256, m1 = 282, top = villageG - 16;
+        for (let y = top; y < villageG; y++) for (const x of [m0, m0 + 1, m1 - 1, m1]) w.place(w.idx(x, y), ID.BRICK);
+        for (let x = m0 - 2; x <= m1 + 2; x++) { w.place(w.idx(x, top), ID.BRICK); w.place(w.idx(x, top - 1), ID.BRICK); }
+        for (let k = 0; k < 6; k++) for (let x = m0 + 3 + k; x <= m1 - 3 - k; x++) w.place(w.idx(x, top - 2 - k), ID.WOOD);
+        for (let y = top + 4; y < top + 8; y++) { w.place(w.idx(m0, y), ID.GLASS); w.place(w.idx(m1, y), ID.GLASS); }
+        for (let y = villageG - 4; y < villageG; y++) w.place(w.idx(m0, y), ID.EMPTY); // the door
+        paintBox(w, m0 - 2, top - 1, m1 + 2, villageG, ID.BRICK, [0xb5653e, 0xa85b37, 0xbd7148]);
+        // a well under its little roof (dry, and boarded over), a hay cart and the dead plum trees
+        for (let x = 289; x <= 294; x++) for (let y = villageG - 3; y < villageG; y++) w.place(w.idx(x, y), x === 289 || x === 294 || y === villageG - 3 ? ID.STONE : ID.WOOD);
+        for (let y = villageG - 9; y < villageG - 3; y++) { w.place(w.idx(289, y), ID.WOOD); w.place(w.idx(294, y), ID.WOOD); }
+        for (let x = 288; x <= 295; x++) w.place(w.idx(x, villageG - 10), ID.WOOD);
+        K.snag(w, 248, villageG, 12);
+        K.snag(w, 316, villageG, 10);
+        for (let x = 225; x <= 229; x++) w.place(w.idx(x, villageG - 2), ID.WOOD);
+        w.place(w.idx(225, villageG - 1), ID.WOOD); w.place(w.idx(229, villageG - 1), ID.WOOD);
+        s.villagers = villagers(w, v0 + 3, W - 3, 8, () => villageG - 1);
+        // the cells just above the parched ground outside the field, where rain soaks away into it
+        // (the field keeps its water between the curbs, for the crops)
+        s.drink = [];
+        for (let x = p1 + 1; x < W; x++) if (x < 289 || x > 294) s.drink.push(w.idx(x, ground[x] - 1));
+        s.f0 = f0; s.f1 = f1;
+        s.skyTo = villageG - 12;
+      },
+
+      script(w, s) {
+        if (s.t === 2 * SEC) s.say.push({ eyebrow: 'Millbrook', name: 'Not a cloud in the sky', how: 'The farmers watch you walk down to the millpond.' });
+        // ground this dry drinks the rain as it lands, so a downpour soaks in instead of flooding
+        // (the field more slowly, so the crops have a shallow pool to drink from)
+        if (s.t % 10 === 0) {
+          for (const i of s.drink) {
+            if (w.type[i] !== ID.WATER) continue;
+            const x = i % w.SW;
+            if (Math.random() < (x >= s.f0 && x <= s.f1 ? 0.12 : 0.3)) w.place(i, ID.EMPTY);
+          }
         }
-        s.villagers = villagers(w, v0 + 3, W - 3, 8, (x) => villageG - 1);
+        // the pouch holds the miller's wheat: whatever you sow grows into leafy crops, not flowers
+        // (checked every tick, before a seed on mud has a chance to sprout)
+        {
+          const z = s.field;
+          for (let y = z.y0; y <= z.y1; y++) for (let x = 0, i = w.idx(0, y); x < w.W; x++, i++) if (w.type[i] === ID.SEED) w.aux[i] = 1;
+        }
+        // once the rain has really come, it soaks into the whole field, so seed takes wherever it falls
+        if (s.rained && s.t % 10 === 0) {
+          const z = s.soil;
+          for (let k = 0; k < 6; k++) {
+            const x = z.x0 + ((Math.random() * (z.x1 - z.x0 + 1)) | 0), i = w.idx(x, z.y0);
+            if (w.type[i] === ID.DIRT) w.place(i, ID.MUD);
+          }
+        }
+        // a soft summer rain: these clouds never build into thunderheads
+        if (w.counts[ID.STORMCLOUD]) {
+          for (let i = 0, end = w.idx(w.W - 1, s.skyTo); i <= end; i++) if (w.type[i] === ID.STORMCLOUD) w.place(i, ID.RAINCLOUD);
+        }
+        // the rain and the greening are judged once each: a field that is mud stays counted
+        if (!s.rained && s.t % 30 === 0) {
+          const mud = countIn(w, s.soil, [ID.MUD]);
+          s.mud = mud;
+          if (mud >= s.soil.n * SOAK) {
+            s.rained = true;
+            w.ambient = 21; // the heat breaks with the rain
+            s.say.push({ eyebrow: 'Rain', name: 'The field is mud again', how: 'The heat breaks. Now sow the seed in it.' });
+          }
+        }
       },
 
       goals: [
         {
-          id: 'crops', main: true, text: 'Green the fields',
+          id: 'rain', main: true, text: 'Soak the field',
           eval(w, s) {
-            const have = countIn(w, s.field, [ID.PLANT, ID.FLOWER]);
-            const want = 1000; // about ten seedlings' worth: long enough to watch the rain land
-            return { met: have >= want, progress: Math.min(1, have / want), value: `${Math.min(100, Math.round((have / want) * 100))}%` };
+            const want = s.soil.n * SOAK, have = s.rained ? want : s.mud || 0;
+            return { met: !!s.rained, progress: Math.min(1, have / want), value: s.rained ? 'mud' : `${Math.round((have / want) * 100)}%` };
           },
         },
         {
-          id: 'safe', keep: true, text: 'No villager comes to harm',
+          id: 'crops', main: true, text: 'Green the field',
           eval(w, s) {
-            const alive = w.counts[ID.HUMAN];
-            return { holds: alive >= s.villagers, value: `${Math.min(alive, s.villagers)} / ${s.villagers}` };
+            // how much of the field's width has crops standing on it: green from end to end, near enough
+            const z = s.soil, cols = z.x1 - z.x0 + 1;
+            let green = 0;
+            for (let x = z.x0; x <= z.x1; x++) {
+              for (let y = z.y0 - 24; y < z.y0 + 1; y++) {
+                const i = w.idx(x, y), t = w.type[i];
+                if ((t === ID.PLANT && !(w.flags[i] & G.Sim.LEAF)) || t === ID.FLOWER) { green++; break; }
+              }
+            }
+            const f = green / (cols * 0.6); // green over most of its width is a green field
+            return { met: f >= 1, progress: Math.min(1, f), value: `${Math.min(100, Math.floor(f * 100))}%` };
           },
         },
-        {
-          id: 'swift', keep: true, text: 'Rain before the third bell',
-          eval(w, s) {
-            const limit = 180 * SEC;
-            return { holds: s.t <= limit, value: s.t <= limit ? clock(limit - s.t) : 'missed' };
-          },
-        },
+        nobodyHurt('safe', 'No villager comes to harm'),
+        beforeBell('swift', 'Green before the third bell', 210),
       ],
     },
 
     {
-      id: 'wildfire',
+      id: 'kiln',
       num: 'II',
-      title: 'Wildfire',
-      place: 'Hollow End',
-      blurb: 'Dry thunder over the old pines, and no rain in it.',
+      title: 'The Cold Kiln',
+      place: 'Sandmouth glassworks',
+      blurb: 'A glassworks with no coal, and a window that must be poured anyway.',
       size: [320, 180],
-      weather: { mode: 'natural', wind: 1, ambient: 30 },
+      sky: 'day',
+      weather: { mode: 'natural', wind: -1, ambient: 18 },
       rules: {},
       pouch: [
-        { kind: 'tool', name: 'erase', n: 700 },
-        { kind: 'element', key: 'water', n: 1500 },
+        { kind: 'element', key: 'ash', n: 160 },
+        { kind: 'element', key: 'salt', n: 160 },
+        { kind: 'element', key: 'rust', n: 260 },
+        { kind: 'element', key: 'oil', n: 40 },
+        { kind: 'element', key: 'fire', n: 30 },
       ],
       intro: {
         body: [
-          'North of Millbrook the old pines stand so dry that their needles crackle underfoot. The woodcutters of Hollow End say the forest has been warm to the touch ever since your master walked through it.',
-          'Tonight the sky is full of thunder and there is no rain in it. The woodcutters keep looking west.',
+          'Sandmouth sits on the dunes where the river meets the sea, and its glassworks has made every window in the valley. Today its kiln is cold. Your master came a week ago, paid for a round porthole “thick enough to hold back nothing at all”, and left with every sack of coal in the yard.',
+          'Wenna the glassblower shows you the crucible, its sand still waiting. “Sand melts at seventeen hundred degrees,” she says. “Coal barely gets there; wood never does. Your master scribbled something on the wall before they left. I can’t make head or tail of it.” On the wall, in charcoal: ash and salt → black powder. Black powder and rust burn like the sun. Light it with something hotter than a flame.',
         ],
-        task: 'When the forest catches, keep the fire out of Hollow End. The rain comes in 30 seconds, and the night is over the moment no fire is left. At least 8 of the 12 woodcutters must survive.',
+        task: 'Make something that burns hot enough to melt sand, and pour the porthole: 12 cells of glass in the crucible. Mind the barrels of black powder by the door.',
       },
-      hints: [
-        'Fire only travels through what can burn. Take that away and it stops.',
-        'Use Erase to clear a firebreak across the meadow, right down to bare soil. Make it wide, because flames lean.',
-        'Water greens dry grass, and green grass barely burns. Soak your break, or the ground in front of the huts, before the fire arrives, not after.',
+      guide: [
+        {
+          title: 'Make black powder', use: ['ash', 'salt'], makes: 'gunpowder',
+          note: 'Pour ash into the crucible, then salt on top. Where they meet they turn to black powder.',
+          at: (w, s) => pad(s.mould, 2),
+          done: (w, s) => countIn(w, s.mould, [ID.GUNPOWDER, ID.THERMITE]) >= 20,
+        },
+        {
+          title: 'Make thermite', use: ['rust'], makes: 'thermite',
+          note: 'Pour rust over the black powder. Together they make thermite.',
+          at: (w, s) => pad(s.mould, 2),
+          done: (w, s) => countIn(w, s.mould, [ID.THERMITE]) >= 30 || (s.molten || 0) + (s.glass || 0) > 0,
+        },
+        {
+          title: 'Light it', use: ['oil', 'fire'], makes: 'mglass',
+          note: 'A flame alone can’t light thermite. Pour a little oil on top and set it alight.',
+          at: (w, s) => pad(s.mould, 2),
+          done: (w, s) => (s.molten || 0) + (s.glass || 0) > 0,
+        },
       ],
       outro: {
-        title: 'The Rain Comes',
+        title: 'A Window onto Nothing',
         body: [
-          'The fire reaches your break, gnaws at its edge and dies there. When the rain finally comes it falls on black stumps to the west and on Hollow End, still standing, to the east.',
+          'The thermite burns white, too bright to look at. When the glare dies there is a disc of glass at the bottom of the crucible, still red at the edges, and under it a puddle of iron. Wenna lifts it out with tongs, holds it to the sky and says nothing for a long while. Then she wraps it in straw for you.',
         ],
-        found: 'Nailed to the woodcutters’ notice board, curling from the heat:',
+        found: 'Pressed into the sand of the mould, under where the glass had been, a folded page:',
         page: [
-          'The pines are hot at the roots, not the crowns. The heat is coming up through the rock. The mountain is waking.',
-          'I am taking the canyon road. If you have followed me this far, learn what cold does to water. You will need it at the gorge.',
+          'Thermite: the hottest fire you can make in a bucket. Remember it. You will need hotter things than fire before the end.',
+          'A ship has to be steered, and steering means current: wires, a switch, a battery that doesn’t drown. The lighthouse keeper at Gull Point owes me a favour. I have gone to collect it.',
         ],
         sign: '— O.',
       },
-      failText: 'Too many of the woodcutters were lost. Hollow End will remember this night.',
+      part: 'A porthole of thermite-poured glass, wrapped in straw.',
+      failText: 'The sand was blown out of the crucible. There is nothing left to melt.',
 
       build(w, s) {
         const { W, H } = w;
         const n = noise1();
-        const v0 = Math.round(W * 0.72), m0 = Math.round(W * 0.58);
-        const hills = (x) => Math.round(H * 0.72 + n(x) * H * 0.03);
-        const villageG = hills(v0 - 6); // level with the meadow where they meet: no cliff for the fire to stop at
-        const ground = new Int32Array(W);
-        for (let x = 0; x < W; x++) ground[x] = x >= v0 - 6 ? villageG : hills(x);
+        const g = 140;
+        const SANDC = [0xe3c98a, 0xdcbf7c, 0xe9d197, 0xd6b673];
+        const BRICKC = [0xa4552f, 0x99502c, 0xae6038, 0x8f4a29];
+        // the sea, the beach and the dunes, then the yard of the glassworks
         for (let x = 0; x < W; x++) {
-          fillCol(w, x, ground[x] + 10, H - 1, ID.STONE);
-          fillCol(w, x, ground[x], ground[x] + 9, ID.DIRT);
-          // dry grass over everything: the fuse between the forest and Hollow End. Where the ground
-          // steps, it climbs the step too, so every blade touches the next one edge to edge.
-          const top = Math.min(ground[x], ground[Math.max(0, x - 1)], ground[Math.min(W - 1, x + 1)]);
-          for (let y = top - 1; y < ground[x]; y++) w.place(w.idx(x, y), ID.DRYGRASS);
+          const dune = x < 34 ? g + 10 : x < 118 ? Math.round(g - 6 - n(x) * 6 - Math.sin((x - 34) / 84 * Math.PI) * 8) : g;
+          strata(w, x, dune, x < 118 ? [[ID.SAND, 12, SANDC], [ID.STONE, 6, null]] : [[ID.DIRT, 3, [0x8a7457, 0x7f6a4f]], [ID.STONE, 10, null]]);
+          if (x < 34) for (let y = g - 2; y < dune; y++) w.place(w.idx(x, y), ID.WATER);
         }
-        // the old pines, close enough that their crowns touch
-        s.trees = [];
-        const tree = (tx) => {
-          const tg = ground[tx], h = 22 + ((Math.random() * 14) | 0);
-          for (let y = tg - h; y < tg - 1; y++) { w.place(w.idx(tx, y), ID.WOOD); w.place(w.idx(tx + 1, y), ID.WOOD); }
-          crown(tx, tg - h - 4, 7 + ((Math.random() * 4) | 0), 6 + ((Math.random() * 3) | 0));
-          s.trees.push([tx, tg - h - 10, tg]);
-        };
-        // needles with air between them: a solid blob would smother its own fire
-        const crown = (cx, cy, rx, ry) => {
-          for (let y = cy - ry; y <= cy + ry; y++) for (let x = cx - rx; x <= cx + rx; x++) {
-            const dx = (x - cx) / rx, dy = (y - cy) / ry;
-            if (x < 0 || x >= W || y < 0 || dx * dx + dy * dy > 1 || Math.random() < 0.45) continue;
-            const i = w.idx(x, y);
-            if (w.type[i] === ID.EMPTY) w.place(i, ID.PLANT);
-          }
-        };
-        for (let tx = 6; tx < m0 - 4; tx += 8 + ((Math.random() * 5) | 0)) tree(tx);
-        // Hollow End: a stone stile keeps the woodcutters home (water and grass pass under it),
-        // three huts and a woodpile
-        for (let y = villageG - 4; y < villageG - 1; y++) w.place(w.idx(v0, y), ID.STONE);
-        s.timber = [];
-        for (const [u, wd] of [[0.76, 14], [0.84, 13], [0.92, 14]]) s.timber.push(...hut(w, Math.round(W * u), wd, villageG));
-        for (let y = villageG - 4; y < villageG - 1; y++) for (let x = v0 + 4; x < v0 + 9; x++) w.place(w.idx(x, y), ID.WOOD);
-        s.villagers = villagers(w, v0 + 3, W - 3, 12, () => villageG - 2);
-        s.strikeAt = 5 * SEC;
-        s.rainAt = 30 * SEC;
-        s.endAt = 75 * SEC; // the rain puts out whatever is left long before this
+        for (let k = 0; k < 6; k++) K.grassOver(w, 50 + k * 10, 54 + k * 10, 0.5);
+        // the glassworks: brick walls with doors and windows, a roof with a chimney hole over the kiln
+        const b0 = 122, b1 = 252, roof = g - 44;
+        rect(w, b0, roof, b0 + 1, g - 1, ID.BRICK); rect(w, b1 - 1, roof, b1, g - 1, ID.BRICK);
+        rect(w, b0 - 3, roof - 2, b1 + 3, roof - 1, ID.BRICK);
+        rect(w, b0, g - 5, b0 + 1, g - 1, ID.EMPTY); rect(w, b1 - 1, g - 5, b1, g - 1, ID.EMPTY); // doors
+        for (const [x0, y0] of [[b0, g - 30], [b1 - 1, g - 30]]) rect(w, x0, y0, x0 + 1, y0 + 8, ID.GLASS);
+        // the kiln: a brick hearth with the crucible sunk in it, open to the chimney above
+        const c0 = 160, c1 = 173, cf = g - 8;         // crucible inside x c0..c1, its floor row cf
+        rect(w, c0 - 8, cf - 18, c1 + 8, g - 1, ID.BRICK);
+        rect(w, c0, cf - 18, c1, cf - 1, ID.EMPTY);   // the crucible's well
+        rect(w, c0 - 6, cf - 18, c0 - 3, cf - 4, ID.EMPTY); rect(w, c1 + 3, cf - 18, c1 + 6, cf - 4, ID.EMPTY); // flues
+        rect(w, c0, cf - 3, c1, cf - 1, ID.SAND);      // the mould's sand
+        rect(w, c0 - 9, roof - 2, c1 + 9, roof - 1, ID.EMPTY); // the chimney hole
+        for (let y = roof - 14; y < roof - 2; y++) { w.place(w.idx(c0 - 10, y), ID.BRICK); w.place(w.idx(c1 + 10, y), ID.BRICK); }
+        paintBox(w, b0 - 3, roof - 16, b1 + 3, g - 1, ID.BRICK, BRICKC);
+        paintBox(w, c0, cf - 3, c1, cf - 1, ID.SAND, [0xf0dfb0, 0xeadaa8]);
+        s.mould = { x0: c0, x1: c1, y0: cf - 18, y1: cf - 1 };
+        s.stir = { x0: c0, x1: c1, y0: cf - 18, y1: cf - 4 }; // above the sand: what Wenna's paddle reaches
+        // the workbench and shelves of finished glass
+        rect(w, 190, g - 10, 214, g - 10, ID.WOOD); rect(w, 190, g - 9, 190, g - 1, ID.WOOD); rect(w, 214, g - 9, 214, g - 1, ID.WOOD);
+        for (let x = 192; x <= 212; x += 4) rect(w, x, g - 13, x + 1, g - 11, ID.GLASS);
+        rect(w, 130, g - 24, 146, g - 24, ID.WOOD);
+        for (let x = 131; x <= 145; x += 3) rect(w, x, g - 27, x + 1, g - 25, ID.GLASS);
+        // the powder store by the east door: barrels of black powder in a wooden rack
+        rect(w, 230, g - 12, 246, g - 12, ID.WOOD); rect(w, 230, g - 11, 230, g - 1, ID.WOOD); rect(w, 246, g - 11, 246, g - 1, ID.WOOD);
+        rect(w, 232, g - 6, 244, g - 1, ID.GUNPOWDER);
+        s.powder = { x0: 228, x1: 248, y0: g - 30, y1: g - 1 };
+        s.powder0 = countIn(w, s.powder, [ID.GUNPOWDER]);
+        // the glassblowers keep to their benches, well back from the kiln
+        stile(w, 198, g);
+        s.villagers = villagers(w, 202, 228, 5, () => g - 1);
+        // cottages of Sandmouth along the shore road
+        s.timber = [...hut(w, 264, 14, g), ...hut(w, 292, 16, g)];
+        paintBox(w, 260, g - 12, 312, g - 1, ID.BRICK, BRICKC);
       },
 
       script(w, s) {
-        if (s.t === s.strikeAt) {
-          // the bolt hits the pine nearest the meadow and sets the litter at its foot alight
-          const [x, y, tg] = s.trees[s.trees.length - 1];
-          w.spawnBolt(x, Math.max(0, y - 30), true);
-          for (let dx = -4; dx <= 5; dx++) for (let dy = 1; dy <= 3; dy++) {
-            const i = w.idx(x + dx, tg - dy);
-            if (w.type[i] === ID.DRYGRASS || w.type[i] === ID.WOOD) w.ignite(i);
+        if (s.t === 3 * SEC) s.say.push({ eyebrow: 'Sandmouth', name: 'The kiln is stone cold', how: 'Wenna watches from her bench.' });
+        // Wenna stirs whatever powders you tip into the crucible with her long paddle, so they meet
+        // (cold ones only: nobody puts a paddle into a fire)
+        if (s.t % 2 === 0) {
+          const z = s.stir;
+          for (let k = 0; k < 24; k++) {
+            const x = z.x0 + ((Math.random() * (z.x1 - z.x0 + 1)) | 0), y = z.y0 + ((Math.random() * (z.y1 - z.y0 + 1)) | 0);
+            const i = w.idx(x, y), j = i + w.SW * (y < z.y1 ? 1 : -1) + (Math.random() < 0.5 ? 1 : -1) * (Math.random() < 0.5 ? 1 : 0);
+            const a = w.type[i], b = w.type[j];
+            if (a === b || !STIRS.has(a) || !STIRS.has(b) || w.temp[i] > 120 || w.temp[j] > 120) continue;
+            w.place(i, b); w.place(j, a);
           }
-          s.say.push({ eyebrow: 'Lightning', name: 'The old pines are burning', how: 'The rain is half a minute away. The fire won’t wait for it.' });
         }
-        if (s.t === s.rainAt - 8 * SEC) s.say.push({ eyebrow: 'Thunder', name: 'The rain is nearly here', how: 'Hold on a little longer.' });
-        if (s.t === s.rainAt) {
-          w.weather.mode = 'rain';
-          w.ambient = 14;
-          s.say.push({ eyebrow: 'At last', name: 'The rain breaks', how: 'Keep the fire off the huts until it is out.' });
+        if (s.t % 30 === 0) {
+          s.glass = countIn(w, s.mould, [ID.GLASS]);
+          s.molten = countIn(w, s.mould, [ID.MGLASS]);
+          s.sand = countIn(w, s.mould, [ID.SAND]);
+          if (!s.hot && s.molten > 0) { s.hot = true; s.say.push({ eyebrow: 'The crucible', name: 'The sand is melting', how: 'Let it cool and set.' }); }
         }
       },
 
       goals: [
         {
-          id: 'hold', main: true, text: 'Put the fire out, or hold it until the rain',
+          id: 'glass', main: true, text: 'Pour the porthole',
           eval(w, s) {
-            // won the moment nothing is burning any more, or when the rain has had its say
-            const out = s.t > s.strikeAt + SEC && burning(w) === 0;
-            const left = s.endAt - s.t;
-            const value = out ? 'the fire is out' : s.t < s.strikeAt ? 'waiting' : s.t < s.rainAt ? `rain in ${clock(s.rainAt - s.t)}` : 'raining';
-            return { met: out || left <= 0, progress: out ? 1 : Math.min(0.95, s.t / s.rainAt), value };
+            const have = s.glass || 0, want = 12;
+            const value = have >= want ? 'poured' : s.molten ? `${s.molten} molten` : `${have} / ${want} glass`;
+            return { met: have >= want, progress: Math.min(1, (have + (s.molten || 0) * 0.5) / want), value };
           },
         },
+        nobodyHurt('safe', 'No glassblower is hurt'),
         {
-          id: 'everyone', keep: true, text: 'Every woodcutter survives',
+          id: 'powder', keep: true, text: 'The powder store never goes off',
           eval(w, s) {
-            const alive = w.counts[ID.HUMAN];
-            return { holds: alive >= s.villagers, value: `${Math.min(alive, s.villagers)} / ${s.villagers}` };
-          },
-        },
-        {
-          id: 'huts', keep: true, text: 'The huts still stand',
-          eval(w, s) {
-            let left = 0;
-            for (const i of s.timber) if (w.type[i] === ID.WOOD) left++;
-            const f = left / s.timber.length;
-            return { holds: f >= 0.85, value: `${Math.round(f * 100)}%` };
+            const left = countIn(w, s.powder, [ID.GUNPOWDER]);
+            return { holds: left >= s.powder0 * 0.9, value: left >= s.powder0 * 0.9 ? 'safe' : 'went off' };
           },
         },
       ],
       fail(w, s) {
-        if (w.counts[ID.HUMAN] < 8) return this.failText;
-        let left = 0;
-        for (const i of s.timber) if (w.type[i] === ID.WOOD) left++;
-        return left < s.timber.length * 0.8 ? 'The fire got into Hollow End and the huts burned.' : null;
+        if (s.t > 2 * SEC && (s.sand || 0) + (s.glass || 0) + (s.molten || 0) < 12 && s.t % 30 === 0) return this.failText;
+        return null;
       },
     },
 
     {
-      id: 'bridge',
+      id: 'lighthouse',
       num: 'III',
-      title: 'The Broken Bridge',
-      place: 'The canyon road',
-      blurb: 'Travellers stranded on the far side of a gorge.',
+      title: 'The Dark Lighthouse',
+      place: 'Gull Point',
+      blurb: 'A storm coming in, the boats still out, and the light gone dark.',
       size: [320, 180],
-      weather: { mode: 'natural', wind: 0, ambient: 1 }, // a raw morning: right at the edge of freezing
-      rules: {},
-      pouch: [
-        { kind: 'element', key: 'water', n: 1500 },
-        { kind: 'tool', name: 'cool' },
-      ],
-      intro: {
-        body: [
-          'The canyon road ends at a gorge with nothing across it. The rope bridge burned the same night the pines did. Eight travellers sit on their packs at the edge, looking at the inn on the far side.',
-          'One of them, a tinker, saw your master pass. “Poured water down there, then breathed frost on it, and walked straight over the top. Never seen the like.”',
-        ],
-        task: 'Make a way across the gorge so the travellers can reach the inn. They will set off once it is filled almost to the road and its surface is solid enough to stand on. At least 6 of the 8 must reach the far side.',
-      },
-      hints: [
-        'Your master’s page said to learn what cold does to water. The air here is right at freezing; it only needs a push.',
-        'Pour water into the gorge until it stands nearly level with the road.',
-        'Then sweep the Cool tool across its surface. Water below 0°C freezes into ice, and ice is solid ground.',
-      ],
-      outro: {
-        title: 'Across the Gorge',
-        body: [
-          'The ice creaks under them, but the travellers cross it in a line, testing each step, and the innkeeper is waiting with the door open. That night the common room is louder than it has been all year.',
-        ],
-        found: 'Scratched into the inn’s doorframe, at the height your master would write:',
-        page: [
-          'Water and cold, and from the two of them, ground to stand on. Remember that.',
-          'The springs in the foothills are running backwards. I am going down into the old mine to see why.',
-        ],
-        sign: '— O.',
-      },
-      failText: 'Too many of the travellers were lost on the way across.',
-
-      build(w, s) {
-        const { W, H } = w;
-        const g = Math.round(H * 0.45);
-        const depth = 38;
-        const c0 = Math.round(W * 0.42);       // the near cliff
-        const flatEnd = c0 + 14;               // the gorge floor, then the far side climbs a step a column
-        const c1 = flatEnd + depth;            // where the far side meets the road again
-        for (let x = 0; x < W; x++) {
-          const top = x < c0 || x > c1 ? g : x <= flatEnd ? g + depth : g + depth - (x - flatEnd);
-          fillCol(w, x, top, H - 1, ID.STONE);
-          if (x < c0 - 4 || x > c1 + 4) fillCol(w, x, top, top + 2, ID.DIRT);
-        }
-        // a trickle of a stream at the bottom of the gorge
-        for (let x = c0 + 1; x < flatEnd; x++) w.place(w.idx(x, g + depth - 1), ID.WATER);
-        hut(w, Math.round(W * 0.8), 16, g);
-        s.far = { x0: c1 + 4, x1: W - 1, y0: 0, y1: H - 1 };
-        s.g = g; s.c0 = c0; s.c1 = c1;
-        // they camp well back from the edge, and only set off once the way across is safe
-        s.travellers = villagers(w, 6, c0 - 34, 8, () => g - 1);
-        w.rules.goalX = c0 - 40;
-        s.status = 'the gorge is too deep';
-      },
-
-      script(w, s) {
-        if (s.crossing || s.t % 20) return;
-        // safe to cross: every column of the gorge filled to within four cells of the road, with
-        // something solid on top: nobody will walk out onto open water
-        const AIRY = [ID.EMPTY, ID.STEAM, ID.SMOKE, ID.FOG, ID.CO2];
-        let deep = false, wet = 0;
-        for (let x = s.c0; x <= s.c1 && !deep; x++) {
-          let y = s.g - 3;
-          while (y < w.H && AIRY.includes(w.type[w.idx(x, y)])) y++;
-          if (y - s.g > 4) { deep = true; break; }
-          if (w.type[w.idx(x, y)] === ID.WATER) wet++;
-        }
-        s.status = deep ? 'the gorge is too deep' : wet ? `${wet} cells of open water` : 'safe';
-        if (!deep && !wet) {
-          s.crossing = true;
-          w.rules.goalX = w.W - 12; // everyone makes for the inn
-          s.say.push({ eyebrow: 'The canyon road', name: 'The travellers set off', how: 'The ice will hold them.' });
-        }
-      },
-
-      goals: [
-        {
-          id: 'across', main: true, text: 'Bring 6 travellers across',
-          eval(w, s) {
-            const n = countIn(w, s.far, [ID.HUMAN]);
-            return { met: n >= 6, progress: Math.min(1, n / 6), value: s.crossing ? `${n} / ${s.travellers} across` : s.status };
-          },
-        },
-        {
-          id: 'everyone', keep: true, text: 'No traveller is hurt',
-          eval(w, s) {
-            const alive = w.counts[ID.HUMAN];
-            return { holds: alive >= s.travellers, value: `${Math.min(alive, s.travellers)} / ${s.travellers}` };
-          },
-        },
-        {
-          id: 'swift', keep: true, text: 'Across before the fourth bell',
-          eval(w, s) {
-            const limit = 150 * SEC;
-            return { holds: s.t <= limit, value: s.t <= limit ? clock(limit - s.t) : 'missed' };
-          },
-        },
-      ],
-      fail(w, s) { return w.counts[ID.HUMAN] < 6 ? this.failText : null; },
-    },
-
-    {
-      id: 'mine',
-      num: 'IV',
-      title: 'The Flooded Mine',
-      place: 'Under the foothills',
-      blurb: 'Miners trapped below, and the water still rising.',
-      size: [320, 180],
-      weather: { mode: 'natural', wind: 0, ambient: 14 },
-      rules: {},
-      pouch: [
-        { kind: 'tool', name: 'cool' },
-        { kind: 'tool', name: 'erase', n: 260 },
-        { kind: 'element', key: 'sand', n: 500 },
-      ],
-      intro: {
-        body: [
-          'The old silver mine runs deep under the foothills. Six miners went down at dawn. An hour later the shaft began to sing, and then to run with water: a spring has broken through the rock halfway down.',
-          'The rescue rope is coming from the next valley. It will not be here for most of a minute.',
-        ],
-        task: 'Keep the miners from drowning until the rescue rope arrives. At least 5 of the 6 must live.',
-      },
-      hints: [
-        'Water you cannot stop, you can still send somewhere else, or turn into something that does not flow.',
-        'The spring pours from a crack in the shaft wall. Hold the Cool tool over the crack: frozen water plugs it like a cork.',
-        'There is an old cave under the gallery floor. Erase a hole through the floor where the water gathers and it drains away beneath the miners, but only until the cave is full. It buys time; it doesn’t stop the spring.',
-      ],
-      outro: {
-        title: 'Up the Rope',
-        body: [
-          'The rope comes down the shaft hand over hand, and the miners come up it one by one, wet to the chest and swearing about the cold. The spring behind its plug of ice has gone quiet.',
-        ],
-        found: 'Wrapped in oilcloth on a ledge in the shaft, where no miner would put it:',
-        page: [
-          'The water was not rising. It was being pushed: something under the mountain is so hot that the rock is sweating out its springs.',
-          'The mountain itself, then. I am going up.',
-        ],
-        sign: '— O.',
-      },
-      failText: 'The water rose faster than you could stop it, and too many miners were lost.',
-
-      build(w, s) {
-        const { W, H } = w;
-        const surf = Math.round(H * 0.18);
-        for (let x = 0; x < W; x++) {
-          fillCol(w, x, surf, H - 1, ID.STONE);
-          fillCol(w, x, surf, surf + 3, ID.DIRT);
-        }
-        const sx0 = Math.round(W * 0.22), sx1 = sx0 + 6;         // the shaft
-        const gy0 = Math.round(H * 0.7), gy1 = gy0 + 4;          // the bottom gallery: rows gy0 … gy1-1, just head height
-        const gx1 = Math.round(W * 0.6);
-        // the gallery runs gently downhill from the shaft to its dead end, where the miners are:
-        // that end floods first, and the last air gathers back by the shaft
-        const dip = (x) => Math.max(0, Math.floor((x - sx1) / 18));
-        for (let y = surf; y < gy1; y++) for (let x = sx0; x < sx1; x++) w.place(w.idx(x, y), ID.EMPTY);
-        for (let x = sx0; x <= gx1; x++) for (let y = gy0; y < gy1; y++) w.place(w.idx(x, y + dip(x)), ID.EMPTY);
-        // an old cave under the gallery, behind three rows of rock: somewhere for the water to go
-        const cy0 = gy1 + dip(gx1) + 3;
-        for (let y = cy0; y < cy0 + 14; y++) for (let x = sx0 + 6; x < gx1 - 10; x++) w.place(w.idx(x, y), ID.EMPTY);
-        // the spring: a crack in the shaft's right wall, half way down
-        const mid = Math.round((surf + gy0) / 2);
-        s.crack = [];
-        for (let y = mid - 2; y <= mid + 2; y++) { const i = w.idx(sx1, y); w.place(i, ID.EMPTY); s.crack.push(i); }
-        // a windlass at the top of the shaft, for the story
-        for (let x = sx0 - 3; x <= sx1 + 2; x++) w.place(w.idx(x, surf - 8), ID.WOOD);
-        for (let y = surf - 8; y < surf; y++) { w.place(w.idx(sx0 - 3, y), ID.WOOD); w.place(w.idx(sx1 + 2, y), ID.WOOD); }
-        s.gallery = { x0: sx1 + 8, x1: gx1, y0: gy0, y1: gy1 - 1 + dip(gx1) };
-        s.miners = villagers(w, gx1 - 40, gx1 - 2, 6, (x) => gy1 - 1 + dip(x));
-        s.springAt = 3 * SEC;
-        s.rescueAt = 55 * SEC;
-      },
-
-      script(w, s) {
-        if (s.t === s.springAt) s.say.push({ eyebrow: 'Below', name: 'The spring breaks through', how: 'Water is pouring down the shaft.' });
-        if (s.t >= s.springAt) {
-          // the spring keeps its crack full of water; once the water in it freezes, the crack is plugged
-          let flowing = false;
-          for (const c of s.crack) {
-            const t = w.type[c];
-            if (t === ID.EMPTY || t === ID.WATER) flowing = true;
-            if (t === ID.EMPTY && Math.random() < 0.6) { w.place(c, ID.WATER); w.temp[c] = Math.min(w.temp[c], 12); }
-          }
-          // while it still flows the water is under pressure, and squeezes out any pocket of air it
-          // hems in (the sim has no air pressure of its own to hold a bubble against the ceiling)
-          if (flowing && s.t % 10 === 0) {
-            const z = s.gallery;
-            for (let y = z.y0; y <= z.y1; y++) for (let x = z.x0; x <= z.x1; x++) {
-              const i = w.idx(x, y);
-              if (w.type[i] !== ID.EMPTY) continue;
-              let wet = 0;
-              for (const d of [-1, 1, -w.SW, w.SW]) if (w.type[i + d] === ID.WATER) wet++;
-              if (wet >= 2) w.place(i, ID.WATER);
-            }
-          }
-        }
-        if (s.t === s.rescueAt - 10 * SEC) s.say.push({ eyebrow: 'Above', name: 'Voices at the top of the shaft', how: 'The rope is nearly here.' });
-      },
-
-      goals: [
-        {
-          id: 'rescue', main: true, text: 'Keep the miners alive until the rope comes',
-          eval(w, s) {
-            const left = s.rescueAt - s.t;
-            return { met: left <= 0 && w.counts[ID.HUMAN] >= 5, progress: Math.min(1, s.t / s.rescueAt), value: left > 0 ? `rope in ${clock(left)}` : 'here' };
-          },
-        },
-        {
-          id: 'everyone', keep: true, text: 'Every miner survives',
-          eval(w, s) {
-            const alive = w.counts[ID.HUMAN];
-            return { holds: alive >= s.miners, value: `${Math.min(alive, s.miners)} / ${s.miners}` };
-          },
-        },
-        {
-          id: 'dry', keep: true, text: 'The gallery never floods',
-          eval(w, s) {
-            const wet = countIn(w, s.gallery, [ID.WATER]);
-            return { holds: wet < 100, value: `${wet} water` };
-          },
-        },
-      ],
-      fail(w, s) { return w.counts[ID.HUMAN] < 5 ? this.failText : null; },
-    },
-
-    {
-      id: 'mountain',
-      num: 'V',
-      title: 'The Waking Mountain',
-      place: 'Ashford, under the mountain',
-      blurb: 'The magma chamber is full and the village is downhill.',
-      size: [320, 180],
-      weather: { mode: 'natural', wind: 0, ambient: 22 },
-      rules: {},
-      pouch: [
-        { kind: 'element', key: 'water', n: 2400 },
-        { kind: 'tool', name: 'erase', n: 500 },
-      ],
-      intro: {
-        body: [
-          'Ashford sits at the foot of the mountain like a cat at a stove. The ground has been warm for a month; this morning the well water came up steaming and the goats would not go uphill.',
-          'Smoke is rising from the crater. The villagers are packing, but the road out runs past the mountain’s foot.',
-        ],
-        task: 'When the mountain erupts, keep the lava out of Ashford until it falls quiet again.',
-      },
-      hints: [
-        'Lava set by water becomes rock, and rock doesn’t flow. Where would a plug of rock do the most good?',
-        'Lava only comes out where the vent is open. Pour water into the crater as the lava rises and it seals itself shut.',
-        'Or meet the flow on the slope: a wall of quenched rock, or a trench to catch it, turns the lava before it reaches the huts.',
-      ],
-      outro: {
-        title: 'The Mountain Sleeps',
-        body: [
-          'By evening the crater is capped with black glass, still hissing where the rain of steam lands on it. Ashford smells of sulphur and wet stone, and every roof is still on.',
-        ],
-        found: 'On the crater rim, weighted with a lump of obsidian, a page:',
-        page: [
-          'This was only a symptom. The heat is coming from far deeper: a heart of stone that burns without fire.',
-          'Before I go down to it, I need the lamps of Gaslight. You cannot work in that dark without light.',
-        ],
-        sign: '— O.',
-      },
-      failText: 'The lava ran into Ashford.',
-
-      build(w, s) {
-        const { W, H } = w;
-        const g = Math.round(H * 0.8);
-        const px = Math.round(W * 0.34), peak = Math.round(H * 0.32);
-        const left0 = Math.round(W * 0.06), right1 = Math.round(W * 0.55);
-        const n = noise1();
-        for (let x = 0; x < W; x++) {
-          let top = g;
-          if (x >= left0 && x <= px) top = Math.round(g - (g - peak) * ((x - left0) / (px - left0)));
-          else if (x > px && x <= right1) top = Math.round(peak + (g - peak) * ((x - px) / (right1 - px)));
-          top += Math.round(n(x) * 1.5);
-          if (Math.abs(x - px) <= 4) top = peak + 4; // the crater
-          else if (x >= px - 9 && x < px - 4) top = peak - 4; // its high west rim: the lava spills east
-          fillCol(w, x, top, H - 1, ID.STONE);
-          if (x > right1 + 2 || x < left0 - 2) fillCol(w, x, top, top + 3, ID.DIRT);
-        }
-        s.vent = [];
-        for (let x = px - 3; x <= px + 3; x++) s.vent.push(w.idx(x, peak + 3));
-        for (const i of s.vent) w.place(i, ID.EMPTY);
-        const v0 = Math.round(W * 0.62);
-        curb(w, v0, g);
-        s.timber = [];
-        for (const [u, wd] of [[0.68, 14], [0.84, 14]]) s.timber.push(...hut(w, Math.round(W * u), wd, g));
-        s.villagers = villagers(w, v0 + 3, W - 3, 8, () => g - 1);
-        s.village = { x0: v0 - 4, x1: W - 1, y0: 0, y1: H - 1 };
-        s.eruptAt = 6 * SEC;
-        s.quietAt = 40 * SEC;
-        s.endAt = 52 * SEC;
-      },
-
-      script(w, s) {
-        if (s.t === s.eruptAt) s.say.push({ eyebrow: 'The mountain', name: 'It wakes', how: 'Lava is welling up in the crater.' });
-        if (s.t > s.eruptAt && s.t < s.quietAt) {
-          // magma rises wherever the vent is open; a vent sealed by rock stays sealed
-          for (const v of s.vent) {
-            const t = w.type[v];
-            if (t === ID.STONE) w.transform(v, ID.LAVA); // a natural crust is melted from below
-            else if (t === ID.EMPTY) { if (Math.random() < 0.6) w.place(v, ID.LAVA); }
-            else if (t === ID.LAVA && Math.random() < 0.35) {
-              // magma wells up under pressure: the crater fills and spills over its low east rim
-              let u = v - w.SW;
-              while (w.type[u] === ID.LAVA) u -= w.SW;
-              if (w.type[u] === ID.EMPTY) w.place(u, ID.LAVA);
-            }
-            if (w.type[v] === ID.LAVA && w.temp[v] < 1450) w.temp[v] = 1450;
-          }
-        }
-        if (s.t === s.quietAt) s.say.push({ eyebrow: 'The mountain', name: 'The rumbling fades', how: 'Hold on until the last of the lava cools.' });
-      },
-
-      goals: [
-        {
-          id: 'safe', main: true, text: 'Keep the lava out of Ashford',
-          eval(w, s) {
-            const left = s.endAt - s.t;
-            return { met: left <= 0, progress: Math.min(1, s.t / s.endAt), value: s.t < s.eruptAt ? 'waiting' : left > 0 ? clock(left) : 'quiet' };
-          },
-        },
-        {
-          id: 'everyone', keep: true, text: 'Every villager survives',
-          eval(w, s) {
-            const alive = w.counts[ID.HUMAN];
-            return { holds: alive >= s.villagers, value: `${Math.min(alive, s.villagers)} / ${s.villagers}` };
-          },
-        },
-        {
-          id: 'huts', keep: true, text: 'Not a plank scorched',
-          eval(w, s) {
-            let left = 0;
-            for (const i of s.timber) if (w.type[i] === ID.WOOD && !(w.flags[i] & 1)) left++;
-            return { holds: left === s.timber.length, value: `${Math.round((left / s.timber.length) * 100)}%` };
-          },
-        },
-      ],
-      fail(w, s) {
-        if (countIn(w, s.village, [ID.LAVA]) > 25) return this.failText;
-        return w.counts[ID.HUMAN] < 6 ? 'Too many of the villagers were lost.' : null;
-      },
-    },
-
-    {
-      id: 'city',
-      num: 'VI',
-      title: 'The Dark City',
-      place: 'Gaslight',
-      blurb: 'A city whose lamps went out all at once.',
-      size: [320, 180],
-      weather: { mode: 'natural', wind: 0, ambient: 8 },
+      sky: 'night',
+      weather: { mode: 'natural', wind: 2, ambient: 9 }, // no rain: it would fill the map; the gale's spray is scripted
       rules: {},
       pouch: [
         { kind: 'element', key: 'battery', n: 3 },
-        { kind: 'element', key: 'metal', n: 40 },
+        { kind: 'element', key: 'wire', n: 180 },
+        { kind: 'element', key: 'metal', n: 120 },
+        { kind: 'element', key: 'switch', n: 2 },
       ],
       intro: {
         body: [
-          'Gaslight is famous for its lamps: tubes of rare air that glow red and violet and blue all down the high street. Three nights ago they all went out at once, and the powerhouse batteries were found eaten through.',
-          'The lamplighter shows you the line. “Snapped in four places,” she says, “and every battery dead. Whatever came through here was hungry.”',
+          'Gull Point is the last rock before open sea, and its lighthouse brings the fishing boats home. Tonight a gale is driving spray over the jetty, four boats are still out, and the lamp at the top of the tower is dark.',
+          'The keeper, Mags, shows you the line: a bare copper strap from the battery bench up the seaward face of the tower, gone green and crumbling. “Salt eats metal,” she says. “Your master told me so last week, while they were taking my spare batteries and every reel of wire I had. Left me one reel. Said you’d know what it was for.”',
         ],
-        task: 'Put a battery on the line in the powerhouse and mend the four breaks so every lamp lights.',
+        task: 'Put current through the lamp at the top of the tower and keep it lit until all four boats are home. The bench at the tower’s foot holds the batteries; the line needs mending all the way up.',
       },
-      hints: [
-        'Current needs an unbroken path. A battery pushes it into any conductor it touches.',
-        'Place a battery against the end of the line inside the powerhouse, at the left.',
-        'Then mend each gap in the line with metal. The Pen brush lays one cell at a time, so you waste none.',
+      guide: [
+        {
+          title: 'A battery on the bench', use: ['battery'],
+          note: 'Put a battery on the bench at the foot of the tower, right against the tower.',
+          at: (w, s) => ({ x0: s.bench.x0, x1: s.face.x, y0: s.bench.y - 5, y1: s.bench.y + 4 }),
+          done: (w, s) => s.litAny || countIn(w, { x0: s.bench.x0 - 1, x1: s.face.x, y0: s.bench.y - 6, y1: s.bench.y }, [ID.BATTERY]) > 0,
+        },
+        {
+          title: 'Wire up the tower', use: ['wire', 'switch'],
+          note: 'Draw Wire from the battery straight up the tower to the iron bar under the lamp, with a switch on the way. Bare metal rusts in the spray.',
+          at: (w, s) => ({ x0: s.face.x - 3, x1: s.face.x + 3, y0: s.face.top - 3, y1: s.bench.y + 1 }),
+          done: (w, s) => !!s.litAny,
+        },
+        {
+          title: 'Keep it burning', use: [],
+          note: 'A boat comes home for every eight seconds of light. Keep the line whole until all four are in.',
+          at: (w, s) => ({ x0: 8, x1: 128, y0: s.sea - 12, y1: s.sea + 2 }),
+          done: (w, s) => goalMet(s, 'boats'),
+        },
       ],
       outro: {
-        title: 'Lamps of Gaslight',
+        title: 'The Boats Come Home',
         body: [
-          'One by one the tubes stutter and catch: neon red, argon violet, xenon blue, krypton white, helium peach. People come out of their doors to look at the street they have been feeling their way down for three nights.',
+          'The lamp throws its white beam across the waves, and one by one the boats come round the point and in under the jetty. The fishers climb up soaked to the skin, and Mags pours everyone something hot from a kettle that has been on the stove all night.',
         ],
-        found: 'The lamplighter gives you a page your master left in her keeping, “for whoever mends the lamps”:',
+        found: 'Under the battery bench, wrapped in tarred cloth against the salt:',
         page: [
-          'The batteries were not eaten. They were drained: something deep below drinks current the way a fire drinks air. It is a heart of uranium, and it has woken.',
-          'Bring gadolinium: it drinks neutrons better than anything, and it will not melt in the heat down there. I have gone ahead.',
+          'A ship lives or dies by its wiring. Bare metal carries current anywhere it touches, and salt eats it; coated wire goes only where you lay it. And always put a switch where you can reach it.',
+          'Now the hull. Iron, and a great deal of it, and pure: copper in the plates makes them weak. The foundry at Copperhill has a mountain of mixed ore and a magnet that picks out iron. I am going to see what it makes.',
         ],
         sign: '— O.',
       },
-
-      build(w, s) {
-        const { W, H } = w;
-        const g = Math.round(H * 0.8);
-        for (let x = 0; x < W; x++) {
-          fillCol(w, x, g + 2, H - 1, ID.STONE);
-          fillCol(w, x, g, g + 1, ID.BRICK); // the cobbled high street
-        }
-        // the powerhouse at the west end: brick walls, an empty battery bench
-        const p0 = Math.round(W * 0.03), p1 = Math.round(W * 0.13), roof = g - 22;
-        for (let y = roof; y < g; y++) { w.place(w.idx(p0, y), ID.BRICK); w.place(w.idx(p1, y), ID.BRICK); }
-        for (let x = p0; x <= p1; x++) w.place(w.idx(x, roof), ID.BRICK);
-        for (let y = g - 3; y < g; y++) w.place(w.idx(p1, y), ID.EMPTY); // a doorway
-        // the line, on wooden poles, from the powerhouse down the whole street
-        const ly = g - 14, l0 = p0 + 3, l1 = Math.round(W * 0.93);
-        for (let x = l0; x <= l1; x++) w.place(w.idx(x, ly), ID.METAL);
-        for (let y = ly; y < g; y++) w.place(w.idx(p0 + 2, y), ID.BRICK); // the bench the batteries sat on
-        for (let x = p1 + 18; x < l1; x += 40) for (let y = ly + 1; y < g; y++) w.place(w.idx(x, y), ID.WOOD);
-        // five lamps hanging from the line: a glass tube of gas with a metal tip touching the wire
-        s.lamps = [];
-        const gases = ['el_ne', 'el_ar', 'el_xe', 'el_kr', 'el_he'];
-        gases.forEach((key, k) => {
-          const lx = Math.round(W * (0.24 + k * 0.155));
-          for (let y = ly + 1; y <= ly + 11; y++) { w.place(w.idx(lx - 1, y), ID.GLASS); w.place(w.idx(lx + 1, y), ID.GLASS); }
-          w.place(w.idx(lx, ly + 11), ID.GLASS);
-          w.place(w.idx(lx, ly + 1), ID.METAL); // the electrode
-          for (let y = ly + 2; y <= ly + 10; y++) w.place(w.idx(lx, y), G.ELEM.byKey[key].id);
-          s.lamps.push({ x: lx, y0: ly + 2, y1: ly + 10, last: -1e9 });
-        });
-        // four breaks in the line, one before each lamp after the first
-        s.gaps = [];
-        for (let k = 1; k < 5; k++) {
-          const gx = s.lamps[k].x - 14;
-          for (let x = gx; x < gx + 5; x++) { const i = w.idx(x, ly); w.place(i, ID.EMPTY); s.gaps.push(i); }
-        }
-        s.lineStart = w.idx(l0, ly);
-        s.benchAt = w.idx(l0 - 1, ly); // where a battery touches the end of the line
-        s.metal0 = 0;
-        for (let i = 0; i < w.N; i++) if (w.type[i] === ID.METAL) s.metal0++;
-        s.villagers = villagers(w, p1 + 4, W - 3, 6, () => g - 1);
-      },
-
-      script(w, s) {
-        // a lamp counts as lit if current ran through its gas in the last moment
-        for (const L of s.lamps) {
-          for (let y = L.y0; y <= L.y1; y++) if (w.charge[w.idx(L.x, y)]) { L.last = s.t; break; }
-        }
-      },
-
-      goals: [
-        {
-          id: 'lamps', main: true, text: 'Light every lamp',
-          eval(w, s) {
-            const lit = s.lamps.filter((L) => s.t - L.last < 40).length;
-            return { met: lit === s.lamps.length, progress: lit / s.lamps.length, value: `${lit} / ${s.lamps.length}` };
-          },
-        },
-        {
-          id: 'quick', keep: true, text: 'Lit within a minute',
-          eval(w, s) {
-            const limit = 60 * SEC;
-            return { holds: s.t <= limit, value: s.t <= limit ? clock(limit - s.t) : 'missed' };
-          },
-        },
-        {
-          id: 'thrift', keep: true, text: 'Mend it with 25 cells of metal or fewer',
-          eval(w, s) {
-            const used = Math.max(0, w.counts[ID.METAL] - s.metal0);
-            return { holds: used <= 25, value: `${used} used` };
-          },
-        },
-      ],
-    },
-
-    {
-      id: 'heart',
-      num: 'VII',
-      title: 'The Heart',
-      place: 'Beneath the mountain',
-      blurb: 'Where your master went, and what they found there.',
-      size: [320, 180],
-      weather: { mode: 'natural', wind: 0, ambient: 30 },
-      rules: {},
-      pouch: [
-        { kind: 'element', key: 'el_gd', n: 440 },
-        { kind: 'element', key: 'water', n: 800 },
-        { kind: 'tool', name: 'cool' },
-      ],
-      intro: {
-        body: [
-          'At the bottom of the deepest cave there is a seam of black ore the size of a house, warm as a loaf. It is uranium, and it has started to burn without fire: a natural reactor, its control long since gone. The springs, the heat, the drained lamps all lead here.',
-          'Your master is alive, sheltering behind the glass of an old survey niche in the cavern wall, and can go no further. The old miners cut channels into the seam once. They are empty now.',
-        ],
-        task: 'The seam is creeping back into its old channels. Fill them with gadolinium before they close, and keep the heart quiet.',
-      },
-      hints: [
-        'Every split atom throws out neutrons that split more. Something has to catch them.',
-        'Gadolinium drinks neutrons. Pour it into the empty channels in the ore and let it fill them from the bottom up, as fast as you can.',
-        'If the ore is already glowing, pour water on it and use the Cool tool: melted ore slumps together and burns hotter.',
-      ],
-      outro: {
-        title: 'The Heart Sleeps',
-        body: [
-          'The ore goes dark channel by channel. The roar in the rock fades to a tick, and then to nothing you can hear. Your master comes out from behind the glass, stiff and grey with dust, and looks at the silver-grey metal in the channels for a long time.',
-          '“You came,” they say. “Of course you did. I left the table half empty so you would.”',
-        ],
-        found: 'That night, in the Elementarium, your master writes the last page of the journal and hands it to you:',
-        page: [
-          'The valley is in balance again, and its keeper is you. The table is yours to fill.',
-        ],
-        sign: '— O.',
-      },
-      failText: 'The heart ran away. Deep under the mountain the rock gave way, and the valley shook for a week.',
+      part: 'A coil of coated wire and a brass switch from the lighthouse.',
+      failText: 'The boats couldn’t find the harbour in the dark. They rode out the storm at sea, and Mags will not forgive you soon.',
 
       build(w, s) {
         const { W, H } = w;
         const n = noise1();
-        for (let x = 0; x < W; x++) fillCol(w, x, 0, H - 1, ID.STONE);
-        // the cavern
-        const floor = Math.round(H * 0.88);
-        for (let x = Math.round(W * 0.08); x < Math.round(W * 0.92); x++) {
-          const top = Math.round(H * 0.22 + n(x) * 8);
-          fillCol(w, x, top, floor - 1, ID.EMPTY);
+        const sea = 128, g = 120;                     // the sea's surface, and the top of the headland
+        const ROCK = [0x5b5f63, 0x666a6e, 0x52565a, 0x6f7376];
+        // the sea to the west, a jetty at the foot of the headland, the headland rising to the east
+        for (let x = 0; x < W; x++) {
+          const top = x < 150 ? 150 + Math.round(n(x) * 6) : x < 168 ? sea + 4 : g + Math.round(Math.max(0, 230 - x) * 0.08);
+          strata(w, x, top, [[ID.STONE, 70, ROCK]]);
+          if (x < 168) for (let y = sea; y < top; y++) w.place(w.idx(x, y), ID.SALTWATER);
         }
-        // the heart: a seam of uranium on the cavern floor, cut through with empty rod channels
-        const hx = Math.round(W * 0.58), half = 15, top = floor - 28;
-        for (let y = top; y < floor; y++) for (let x = hx - half; x <= hx + half; x++) w.place(w.idx(x, y), ID.EL_U);
-        s.core = { x0: hx - half, x1: hx + half, y0: top, y1: floor - 1 };
-        s.channels = [];
-        // two columns open in every four: with them empty the seam only ticks; closed, it runs away
-        for (let x = hx - half; x <= hx + half; x++) {
-          const k = x - (hx - half);
-          if (k % 4 !== 2 && k % 4 !== 3) continue;
-          for (let y = top; y < floor - 1; y++) { const i = w.idx(x, y); w.place(i, ID.EMPTY); s.channels.push(i); }
+        // the jetty: planks on posts out over the water
+        rect(w, 140, sea - 2, 170, sea - 2, ID.WOOD);
+        for (const x of [142, 152, 162]) rect(w, x, sea - 1, x, sea + 8, ID.WOOD);
+        // the lighthouse: a stone tower, painted white with a red band, the lamp room on top
+        const t0 = 186, t1 = 200, top = 34;
+        const tg = g + Math.round(Math.max(0, 230 - t0) * 0.08);
+        rect(w, t0, top, t1, tg, ID.STONE);
+        for (let y = top; y <= tg; y++) for (let x = t0; x <= t1; x++) tone(w, w.idx(x, y), ((y - top) / 12 | 0) % 2 ? 0xc0392b : 0xeeeae2);
+        rect(w, t0 - 3, top - 1, t1 + 3, top, ID.METAL);                   // the gallery floor
+        const lamp0 = t0 + 1, lamp1 = t1 - 1, lampTop = top - 16;
+        rect(w, t0 - 1, lampTop, t0 - 1, top - 2, ID.GLASS); rect(w, t1 + 1, lampTop, t1 + 1, top - 2, ID.GLASS);
+        rect(w, t0 - 1, lampTop - 1, t1 + 1, lampTop - 1, ID.GLASS);
+        rect(w, t0 - 2, lampTop - 3, t1 + 2, lampTop - 2, ID.METAL);       // the cap
+        // three tubes of krypton (white light), each standing on the electrode bar
+        const KR = byKey.el_kr.id;
+        s.lamps = [];
+        for (const x of [lamp0 + 2, (lamp0 + lamp1) >> 1, lamp1 - 2]) {
+          rect(w, x - 1, lampTop + 1, x - 1, top - 3, ID.GLASS); rect(w, x + 1, lampTop + 1, x + 1, top - 3, ID.GLASS);
+          rect(w, x, lampTop + 1, x, lampTop + 1, ID.GLASS);
+          rect(w, x, lampTop + 2, x, top - 3, KR);
+          s.lamps.push({ x, y0: lampTop + 2, y1: top - 3 });
         }
-        s.channels.sort((a, b) => b - a); // bottom rows first, so the seam slumps upward from the floor
-        const byCol = new Map();
-        for (const i of s.channels) { const x = i % w.SW; if (!byCol.has(x)) byCol.set(x, []); byCol.get(x).push(i); }
-        s.columns = [...byCol.values()];
-        for (let y = top; y < floor; y++) for (let x = hx - half; x <= hx + half; x++) { const i = w.idx(x, y); if (w.type[i] === ID.EL_U) w.temp[i] = 260; }
-        // your master shelters in an old survey niche cut into the west wall, behind a glass pane
-        // (hot vapour from the splitting ore fills the cavern; it can't get through glass)
-        const nx0 = Math.round(W * 0.02), nx1 = Math.round(W * 0.09), ny = Math.round(H * 0.6);
-        for (let y = ny - 8; y < ny; y++) for (let x = nx0; x <= nx1; x++) w.place(w.idx(x, y), ID.EMPTY);
-        for (let y = ny - 9; y < ny; y++) w.place(w.idx(nx1 + 1, y), ID.GLASS);
-        const lx = Math.round((nx0 + nx1) / 2);
-        w.place(w.idx(lx, ny - 1), ID.HUMAN); w.place(w.idx(lx, ny - 2), ID.HEAD);
-        s.u0 = 0;
-        s.ore = [];
-        for (let y = s.core.y0; y <= s.core.y1; y++) for (let x = s.core.x0; x <= s.core.x1; x++) { const i = w.idx(x, y); if (w.type[i] === ID.EL_U) s.ore.push(i); }
-        for (let i = 0; i < w.N; i++) if (w.type[i] === ID.EL_U) s.u0++;
-        s.uPrev = s.u0;
-        s.splits = []; // when each recent split happened
-        s.quietSince = -1;
+        rect(w, lamp0, top - 2, lamp1, top - 2, ID.METAL);                 // the electrode bar
+        // the battery bench at the tower's foot, on the seaward side, and the old strap up the tower,
+        // rusted through in a dozen places
+        const bx0 = t0 - 12, bg = tg;
+        rect(w, bx0, bg - 4, t0 - 2, bg - 4, ID.WOOD);
+        rect(w, bx0, bg - 3, bx0, bg - 1, ID.WOOD); rect(w, t0 - 2, bg - 3, t0 - 2, bg - 1, ID.WOOD);
+        s.bench = { x0: bx0, x1: t0 - 2, y: bg - 5 };
+        s.face = { x: t0 - 1, top: top - 2 }; s.sea = sea;
+        for (let y = top - 1; y <= bg - 5; y++) {
+          const i = w.idx(t0 - 1, y);
+          w.place(i, Math.random() < 0.22 ? ID.RUST : ID.EMPTY);
+        }
+        rect(w, t0 - 1, top - 2, t0 - 1, top - 2, ID.METAL);               // the strap's last stub, at the bar
+        // the keeper's cottage on the lee side
+        s.timber = hut(w, 222, 16, g);
+        s.villagers = villagers(w, 226, 236, 3, () => g - 1);
+        stile(w, 214, g + Math.round(Math.max(0, 230 - 214) * 0.08));
+        // four fishing boats out on the water, hulls and masts
+        s.boats = [];
+        for (const bx of [16, 46, 78, 108]) {
+          const cells = [];
+          const hull = (x, y, t) => { const i = w.idx(x, y); w.place(i, t); cells.push(i); };
+          for (let x = bx; x < bx + 9; x++) hull(x, sea - 1, ID.WOOD);
+          for (let x = bx + 1; x < bx + 8; x++) hull(x, sea, ID.WOOD);
+          for (let y = sea - 8; y < sea - 1; y++) hull(bx + 4, y, ID.WOOD);
+          s.boats.push({ cells, home: false });
+        }
+        s.seaTop = sea - 30;
+        s.lit = 0; s.litAny = false;
+        s.spray = { x0: 120, x1: t0 - 1, y0: top - 4, y1: bg - 1 };
       },
 
       script(w, s) {
-        // the simulation counts uranium each step: every drop is an atom split
-        const u = w.counts[ID.EL_U];
-        if (s.t > 1 && u < s.uPrev) for (let k = 0; k < s.uPrev - u; k++) s.splits.push(s.t);
-        s.uPrev = u;
-        while (s.splits.length && s.splits[0] < s.t - 10 * SEC) s.splits.shift();
-        const quiet = s.splits.length <= 20; // two splits a second at most: settling down
-        if (!quiet) s.quietSince = -1;
-        else if (s.quietSince < 0) s.quietSince = s.t;
-        if (s.t === 4 * SEC) s.say.push({ eyebrow: 'The heart', name: 'The seam is settling', how: 'The ore will creep into its empty channels and close them.' });
-        if (s.t === 12 * SEC) s.say.push({ eyebrow: 'The heart', name: 'The channels are closing', how: 'Once the seam is whole, it will run away.' });
-        // the heart's own pulse: neutrons fired into the ore for as long as its channels hold no
-        // absorber, so a closed seam always runs away and a seam full of absorber falls quiet
-        // a channel with a good charge of absorber in it is rodded: it stays open and drinks neutrons
-        const ABS = [ID.EL_GD, ID.EL_CD, ID.EL_B];
-        let bareCols = 0;
-        const rodded = new Set();
-        for (const col of s.columns) {
-          let rod = 0;
-          for (const i of col) if (ABS.includes(w.type[i])) rod++;
-          if (rod >= col.length * 0.3) for (const i of col) rodded.add(i);
-          else bareCols++;
+        // is the lamp lit? current ran through one of its tubes in the last moment
+        let on = false;
+        for (const L of s.lamps) {
+          for (let y = L.y0; y <= L.y1 && !on; y++) if (w.charge[w.idx(L.x, y)]) on = true;
         }
-        const f = bareCols / s.columns.length;
-        if (s.t >= 12 * SEC && Math.random() < f * 0.05 && s.ore.length) w.fireNeutrons(s.ore[(Math.random() * s.ore.length) | 0], 2); // it wakes as the seam closes
-        // the hot seam slumps into its old channels, bottom first; an absorber in a channel holds it open
-        if (s.t >= 12 * SEC && s.t < 22 * SEC && s.t % 2 === 0) {
-          // the ore pushes through air, gas or water; only a neutron absorber (or ore already there) holds it back
-          const open = (i) => { const t = w.type[i]; return !rodded.has(i) && t !== ID.EL_U && !ABS.includes(t) && w.type[i + w.SW] !== ID.EMPTY; };
-          for (const i of s.channels) if (open(i)) { w.place(i, ID.EL_U); w.temp[i] = 260; break; }
-          for (let k = s.channels.length - 1; k >= 0; k--) { const i = s.channels[k]; if (open(i)) { w.place(i, ID.EL_U); w.temp[i] = 260; break; } }
+        if (on) s.lastOn = s.t;
+        const lit = s.lastOn != null && s.t - s.lastOn < 40;
+        if (lit) {
+          s.lit++;
+          if (!s.litAny) { s.litAny = true; s.say.push({ eyebrow: 'Gull Point', name: 'The lamp is lit', how: 'Keep it burning until the boats are home.' }); }
+          if (!s.switched) for (let i = 0; i < w.N; i += 1) if (w.type[i] === ID.SWITCH && w.charge[i]) { s.switched = true; break; }
+        }
+        // a boat comes home for every eight seconds of light
+        const due = Math.min(4, Math.floor(s.lit / (8 * SEC)));
+        const home = s.boats.filter((b) => b.home).length;
+        if (due > home) {
+          const b = s.boats.find((q) => !q.home);
+          for (const i of b.cells) w.place(i, ID.EMPTY);
+          b.home = true;
+          s.say.push({ eyebrow: 'The harbour', name: `Boat ${home + 1} is home`, how: home + 1 < 4 ? `${3 - home} still out.` : 'All four are in.' });
+        }
+        // the gale throws spray over the jetty and against the tower's seaward face, and salt eats
+        // any bare metal it wets there (coated wire shrugs it off)
+        if (s.t % 6 === 0) {
+          const z = s.spray;
+          for (let k = 0; k < 6; k++) {
+            const near = Math.random() < 0.7;
+            const x = near ? z.x1 - ((Math.random() * 8) | 0) : z.x0 + ((Math.random() * (z.x1 - z.x0)) | 0);
+            const y = z.y0 + ((Math.random() * (z.y1 - z.y0)) | 0);
+            const i = w.idx(x, y);
+            if (w.type[i] !== ID.EMPTY) continue;
+            w.place(i, ID.SALTWATER);
+            // the spray comes off the sea: take as much from its surface, so the sea doesn't rise
+            const sx = 2 + ((Math.random() * 126) | 0);
+            for (let sy = s.seaTop; sy < w.H; sy++) { const j = w.idx(sx, sy); if (w.type[j] === ID.SALTWATER) { w.place(j, ID.EMPTY); break; } }
+          }
+        }
+        if (s.t % 10 === 0) {
+          const z = s.spray;
+          for (let y = z.y0; y <= z.y1; y++) {
+            for (let x = z.x1 - 10; x <= z.x1 + 1; x++) {
+              const i = w.idx(x, y);
+              if (w.type[i] !== ID.METAL) continue;
+              const wet = w.type[i - 1] === ID.SALTWATER || w.type[i + 1] === ID.SALTWATER || w.type[i - w.SW] === ID.SALTWATER || w.type[i + w.SW] === ID.SALTWATER;
+              if (wet && Math.random() < 0.35) w.place(i, ID.RUST);
+            }
+          }
+        }
+        if (s.t === 4 * SEC) s.say.push({ eyebrow: 'Gull Point', name: 'Four boats are still out', how: 'Without the light they will not find the harbour.' });
+        if (s.t === 75 * SEC && !s.litAny) s.say.push({ eyebrow: 'The harbour', name: 'The boats are getting close to the rocks', how: 'Light the lamp, quickly.' });
+      },
+
+      goals: [
+        {
+          id: 'boats', main: true, text: 'Bring the four boats home',
+          eval(w, s) {
+            const home = s.boats.filter((b) => b.home).length;
+            return { met: home === 4, progress: Math.min(1, s.lit / (32 * SEC)), value: `${home} / 4 home` };
+          },
+        },
+        {
+          id: 'switch', keep: true, text: 'The light runs through a switch',
+          eval(w, s) {
+            const holds = !s.litAny || s.switched || s.t - (s.firstLit || (s.firstLit = s.t)) < 4 * SEC;
+            return { holds, value: s.switched ? 'yes' : s.litAny ? 'no switch' : 'not lit' };
+          },
+        },
+        beforeBell('swift', 'All home before 1:40', 100),
+      ],
+      fail(w, s) { return s.t >= 100 * SEC && !s.litAny ? this.failText : null; },
+    },
+
+    {
+      id: 'foundry',
+      num: 'IV',
+      title: 'The Iron Hills',
+      place: 'Copperhill foundry',
+      blurb: 'A mountain of mixed ore, and a hull plate that must be pure iron.',
+      size: [320, 180],
+      sky: 'dusk',
+      weather: { mode: 'natural', wind: 0, ambient: 16 },
+      rules: {},
+      magnetOnly: true,
+      pouch: [
+        { kind: 'tool', name: 'magnet' },
+        { kind: 'tool', name: 'heat' },
+        { kind: 'tool', name: 'cool' },
+      ],
+      intro: {
+        body: [
+          'Copperhill digs its ore out of the hill in one rattling heap: iron, nickel and copper all together, with the rock still clinging to them. The foundry sorts it with a great magnet. Your master was here three days ago and cast a stack of iron plates; then the foundry’s furnace cracked, and the forge-master has been trying to cast the last plate by hand ever since.',
+          '“Every plate comes out brittle,” he says. “The magnet picks up nickel along with the iron. Your master just laughed and said a magnet can be taught to forget. Then they heated the heap and left me to work out why.”',
+        ],
+        task: 'Carry iron, and only iron, from the ore heap to the mould with the magnet, melt it there and let it set: a hull plate of 120 cells of cast iron, with no nickel or copper in it.',
+      },
+      guide: [
+        {
+          title: 'Warm the heap', use: ['tool:heat'],
+          note: 'Nickel forgets the magnet at 358°C, iron only at 770°C. Hold Heat over the heap until it is warm, about 400–700°C.',
+          at: (w, s) => s.heap,
+          done: (w, s) => (s.iron || 0) + (s.plate || 0) > 20 || meanTemp(w, s.heap, s.FE) >= 380,
+        },
+        {
+          title: 'Carry the iron', use: ['tool:magnet'],
+          note: 'Hold the Magnet over the heap: only iron jumps to it. Drag it under the roof and let go over the mould.',
+          at: (w, s) => ({ x0: s.heap.x0, x1: s.mould.x1, y0: s.mould.y1 - 26, y1: s.heap.y1 }),
+          done: (w, s) => (s.iron || 0) + (s.plate || 0) >= 120,
+        },
+        {
+          title: 'Cast the plate', use: ['tool:heat', 'tool:cool'], makes: 'solid_fe',
+          note: 'Hold Heat on the mould until the iron melts and runs flat, then Cool it so it sets.',
+          at: (w, s) => ({ x0: s.mould.x0 - 2, x1: s.mould.x1 + 2, y0: s.mould.y1 - 10, y1: s.mould.y1 + 2 }),
+          done: (w, s) => (s.plate || 0) >= 120,
+        },
+      ],
+      outro: {
+        title: 'Pure Iron',
+        body: [
+          'The plate rings like a bell when the forge-master knocks it out of the mould, and doesn’t crack when he hits it with a sledge. He hits it twice more to be sure, then sits down on the heap and laughs the way your master must have.',
+        ],
+        found: 'Riveted to the back of the mould, where the plate had hidden it:',
+        page: [
+          'Every magnet has a temperature where it forgets. Past it, iron is only metal. You will see that again.',
+          'The hull is cast. Now fuel: something light that burns hot, more of it than any lamp holds. The spring at Saltmarsh has turned sour, and sour water and the right metal make the lightest fuel there is. I have gone to fetch it.',
+        ],
+        sign: '— O.',
+      },
+      part: 'A plate of pure cast iron for the hull.',
+
+      build(w, s) {
+        const { W, H } = w;
+        const n = noise1();
+        const g = 140;
+        const ROCK = [0x7c6650, 0x6f5a46, 0x86705a, 0x5e4c3c], GREEN = [0x5f8a73, 0x4e7a63, 0x6b9680];
+        // the hill the ore comes out of, streaked with copper green, with the yard at its foot
+        for (let x = 0; x < W; x++) {
+          const hill = x < 64 ? Math.round(g - (64 - x) * 1.1 - 6 + n(x) * 5) : g;
+          for (let y = hill; y < g; y++) {
+            const i = w.idx(x, y);
+            w.place(i, ID.STONE);
+            tone(w, i, (y + x + ((n(x * 3) * 9) | 0)) % 13 < 2 ? pick(GREEN, x, y) : pick(ROCK, x, y));
+          }
+          strata(w, x, g, [[ID.DIRT, 3, [0x6b5845, 0x5f4e3e]], [ID.STONE, 20, ROCK]]);
+        }
+        // the mine's mouth, propped with timber
+        rect(w, 20, g - 14, 34, g - 1, ID.EMPTY);
+        rect(w, 20, g - 15, 34, g - 15, ID.WOOD); rect(w, 20, g - 14, 20, g - 1, ID.WOOD); rect(w, 34, g - 14, 34, g - 1, ID.WOOD);
+        // the ore heap in the yard
+        const FE = byKey.el_fe.id, NI = byKey.el_ni.id, CU = byKey.el_cu.id;
+        for (let x = 52; x <= 150; x++) {
+          const h = Math.round(22 * Math.sin(((x - 52) / 98) * Math.PI));
+          for (let y = g - h; y < g; y++) {
+            const r = Math.random();
+            w.place(w.idx(x, y), r < 0.42 ? FE : r < 0.66 ? NI : r < 0.82 ? CU : ID.RUBBLE);
+          }
+        }
+        s.heap = { x0: 52, x1: 150, y0: g - 40, y1: g - 1 };
+        // the foundry: open to the yard under a roof on brick posts, a mould of firebrick (wall)
+        const f0 = 166, f1 = 300, roof = g - 46;
+        rect(w, f0, roof, f0 + 1, g - 1, ID.BRICK); rect(w, f1 - 1, roof, f1, g - 1, ID.BRICK);
+        rect(w, f0, roof + 4, f0 + 1, g - 1, ID.EMPTY); // the yard side stands open below the eaves
+        rect(w, f0 - 3, roof - 2, f1 + 3, roof - 1, ID.BRICK);
+        for (let x = f0 + 10; x < f1; x += 24) rect(w, x, roof, x + 1, roof + 2, ID.WOOD);
+        paintBox(w, f0 - 3, roof - 2, f1 + 3, g - 1, ID.BRICK, [0x8c4a2f, 0x80432a, 0x97523a]);
+        const m0 = 196, m1 = 250, mf = g - 6;
+        rect(w, m0 - 2, mf - 5, m1 + 2, g - 1, ID.WALL);
+        rect(w, m0, mf - 5, m1, mf - 1, ID.EMPTY);
+        s.mould = { x0: m0, x1: m1, y0: mf - 30, y1: mf - 1 };
+        // the cracked furnace, cold, and the forge-master's crew by the far wall
+        rect(w, 268, g - 26, 290, g - 1, ID.BRICK);
+        rect(w, 272, g - 22, 286, g - 6, ID.EMPTY);
+        paintBox(w, 268, g - 26, 290, g - 1, ID.BRICK, [0x6e3a26, 0x7a412b]);
+        stile(w, 258, g);
+        s.villagers = villagers(w, 261, 266, 2, () => g - 1) + villagers(w, 292, 296, 1, () => g - 1);
+        s.FE = FE; s.SFE = byKey.solid_fe.id;
+        s.dirty = [NI, CU, byKey.solid_ni.id, byKey.solid_cu.id];
+      },
+
+      script(w, s) {
+        if (s.t % 30 === 0) {
+          s.plate = countIn(w, s.mould, [s.SFE]);
+          s.dirt = countIn(w, s.mould, s.dirty);
+          s.iron = countIn(w, s.mould, [s.FE]);
+        }
+        if (s.t === 3 * SEC) s.say.push({ eyebrow: 'Copperhill', name: 'The magnet is yours', how: 'Hold it over the heap and drag what sticks to the mould.' });
+        if (!s.warned && (s.dirt || 0) > 0) { s.warned = true; s.say.push({ eyebrow: 'The forge-master', name: 'Nickel in the mould!', how: 'That will make the plate brittle. Teach the magnet to forget it.' }); }
+      },
+
+      goals: [
+        {
+          id: 'plate', main: true, text: 'Cast a hull plate',
+          eval(w, s) {
+            const have = s.plate || 0, want = 120;
+            const value = have ? `${have} / ${want} cast` : s.iron ? `${s.iron} iron in` : 'empty';
+            return { met: have >= want, progress: Math.min(1, (have + (s.iron || 0) * 0.5) / want), value };
+          },
+        },
+        {
+          id: 'pure', keep: true, text: 'Pure iron: no nickel or copper in it',
+          eval(w, s) { return { holds: !(s.dirt > 0), value: s.dirt ? `${s.dirt} impure` : 'pure' }; },
+        },
+        beforeBell('swift', 'Cast before the night shift', 180),
+      ],
+    },
+
+    {
+      id: 'spring',
+      num: 'V',
+      title: 'The Bitter Spring',
+      place: 'Saltmarsh',
+      blurb: 'A spring gone sour, and the lightest fuel there is waiting in it.',
+      size: [320, 180],
+      sky: 'day',
+      weather: { mode: 'natural', wind: 0, ambient: 15 },
+      rules: {},
+      pouch: [
+        { kind: 'element', key: 'el_zn', n: 700 },
+        { kind: 'element', key: 'glass', n: 40 },
+        { kind: 'element', key: 'water', n: 300 },
+      ],
+      intro: {
+        body: [
+          'The spring at Saltmarsh turned sour in the spring: its water bites, the reeds round it have gone yellow, and nothing drinks from it. The marsh folk lined its pool with glass, the only thing it won’t eat, and waited for someone clever.',
+          'Your master came, and built a great glass bell over the pool, a gasholder, dipping into the sour water. Then a heron knocked a hole in its top, and the old ferryman hung his lantern from the gantry right above it, “so folk can see the thing at night”.',
+        ],
+        task: 'Drop zinc into the sour spring under the bell. The gas that fizzes off is hydrogen, and it rises and gathers in the bell. Fill it with 100 cells of hydrogen. Hydrogen and a flame make a bang.',
+      },
+      guide: [
+        {
+          title: 'Mend the bell', use: ['glass'],
+          note: 'Hydrogen finds any hole. Fill the gap in the top of the bell with Glass.',
+          at: (w, s) => pad(s.hole, 4),
+          done: (w, s) => countIn(w, s.hole, [ID.GLASS]) >= 8,
+        },
+        {
+          title: 'Zinc into the spring', use: ['el_zn'], makes: 'el_h',
+          note: 'Pour zinc into the pool inside the bell’s rim. It fizzes off hydrogen, which rises into the bell.',
+          at: (w, s) => ({ x0: s.bell.x0, x1: s.bell.x1, y0: s.bell.y1 - 14, y1: s.bell.y1 }),
+          done: (w, s) => (s.h || 0) >= 25,
+        },
+        {
+          title: 'Fill the bell', use: ['el_zn'],
+          note: 'Keep adding zinc until the bell holds 100 hydrogen.',
+          at: (w, s) => pad(s.bell, 2),
+          done: (w, s) => (s.h || 0) >= 100,
+        },
+      ],
+      outro: {
+        title: 'A Bell Full of Nothing',
+        body: [
+          'The bell fills with something you can’t see; you can only tell by the way the sour water has been pushed down inside its rim. The ferryman knocks on the glass, listens, and asks if it is empty. You tell him it is full of the lightest thing in the world, and he hangs his lantern somewhere else.',
+        ],
+        found: 'In the ferryman’s tackle box, among the hooks, a page:',
+        page: [
+          'Hydrogen burns hotter than oil and weighs almost nothing: the best fuel a ship could carry. But it has to be moved: pumped, piped, poured into a tank, and kept away from every flame on the way.',
+          'There is an oil seep at Oilbeck too, and a pumphouse that hasn’t pumped in years. I need both fuels in the depot on the hill before the moon is full. I have gone ahead to lay the pipes; I may not finish.',
+        ],
+        sign: '— O.',
+      },
+      part: 'A gasholder of hydrogen, the lightest fuel there is.',
+      failText: 'The hydrogen met the flame. The gasholder went off like a cannon and the marsh will be picking glass out of the reeds for a month.',
+
+      build(w, s) {
+        const { W, H } = w;
+        const n = noise1();
+        const g = 136;
+        const MUDC = [0x5d4a35, 0x524230, 0x67533c];
+        for (let x = 0; x < W; x++) {
+          const top = g + Math.round(n(x) * 2);
+          strata(w, x, top, [[ID.MUD, 4, MUDC], [ID.DIRT, 6, [0x5a4a3a, 0x504234]], [ID.STONE, 30, null]]);
+        }
+        // marsh pools and reeds to either side
+        for (const [a, b] of [[8, 70], [244, 312]]) {
+          for (let x = a; x <= b; x++) { const d = 3 + Math.round(2 * Math.sin(((x - a) / (b - a)) * Math.PI)); rect(w, x, g - 1, x, g + d, ID.WATER); }
+          for (let x = a; x <= b; x += 5) if (Math.random() < 0.7) { const h = 4 + ((Math.random() * 6) | 0); for (let y = g - h; y < g - 1; y++) w.place(w.idx(x, y), ID.PLANT); }
+        }
+        K.scatter(w, ID.FISH, 6, 250, g, 306, g + 3, ID.WATER);
+        // the sour spring: a pool lined with glass, full of acid
+        const p0 = 112, p1 = 208, pf = g + 18;
+        rect(w, p0 - 2, g - 6, p1 + 2, pf + 1, ID.GLASS);
+        rect(w, p0, g - 6, p1, pf - 1, ID.EMPTY);
+        rect(w, p0, g - 2, p1, pf - 1, ID.ACID);
+        s.pool = { x0: p0, x1: p1, y0: g - 2, y1: pf - 1 };
+        // the gasholder: a glass bell on legs, its rim dipping into the acid, a hole in its top
+        const b0 = 132, b1 = 188, top = g - 54;
+        rect(w, b0, top, b0 + 1, g + 6, ID.GLASS); rect(w, b1 - 1, top, b1, g + 6, ID.GLASS);
+        rect(w, b0, top, b1, top + 1, ID.GLASS);
+        const hx = 158;
+        rect(w, hx, top, hx + 3, top + 1, ID.EMPTY); // the heron's hole
+        s.bell = { x0: b0 + 2, x1: b1 - 2, y0: top + 2, y1: g + 6 };
+        s.hole = { x0: hx, x1: hx + 3, y0: top, y1: top + 1 };
+        s.bellGlass = countIn(w, { x0: b0, x1: b1, y0: top, y1: g + 6 }, [ID.GLASS]);
+        s.bellBox = { x0: b0, x1: b1, y0: top, y1: g + 6 };
+        // the gantry above it, and the ferryman's lantern hanging over the hole
+        const gy = top - 26;
+        rect(w, 120, gy, 200, gy, ID.METAL);
+        rect(w, 120, gy + 1, 121, g - 7, ID.METAL); rect(w, 199, gy + 1, 200, g - 7, ID.METAL);
+        rect(w, hx - 2, gy + 1, hx - 2, gy + 6, ID.METAL); rect(w, hx + 5, gy + 1, hx + 5, gy + 6, ID.METAL); // its hangers
+        rect(w, hx - 2, gy + 7, hx - 2, gy + 13, ID.GLASS); rect(w, hx + 5, gy + 7, hx + 5, gy + 13, ID.GLASS); // open-topped
+        s.flame = [w.idx(hx + 1, gy + 12), w.idx(hx + 2, gy + 12)];
+        rect(w, hx, gy + 13, hx + 3, gy + 13, ID.METAL);            // its wick tray (open at the sides)
+        s.lantern = { x0: hx - 6, x1: hx + 9, y0: gy + 2, y1: gy + 18 };
+        // the ferryman's hut and the marsh folk, well back
+        s.timber = hut(w, 222, 14, g);
+        stile(w, 216, g);
+        s.villagers = villagers(w, 224, 234, 3, () => g - 1);
+        s.lit = true;
+      },
+
+      script(w, s) {
+        // the ferryman keeps his lantern trimmed, until water puts it out for good
+        if (s.lit) {
+          for (const i of s.flame) {
+            const t = w.type[i];
+            if (t === ID.WATER || t === ID.STEAM) { s.lit = false; s.say.push({ eyebrow: 'The ferryman', name: 'Hey! My lantern!', how: 'He’ll relight it at dusk. The gas is safe for now.' }); break; }
+            if (t === ID.EMPTY) { w.place(i, ID.FIRE); w.data[i] = 40; }
+          }
+        }
+        if (s.t % 20 === 0) {
+          s.h = countIn(w, s.bell, [ID.EL_H]);
+          s.glassLeft = countIn(w, s.bellBox, [ID.GLASS]);
+          if (!s.fizz && w.counts[ID.EL_H] > 0) { s.fizz = true; s.say.push({ eyebrow: 'The spring', name: 'It fizzes', how: 'Hydrogen is rising into the bell.' }); }
+          // a flame among the gas: it goes up all at once
+          if (!s.boom && s.lit) {
+            const z = s.lantern;
+            for (let y = z.y0; y <= z.y1 && !s.boom; y++) for (let x = z.x0; x <= z.x1; x++) {
+              if (w.type[w.idx(x, y)] === ID.EL_H) { s.boom = true; break; }
+            }
+            if (s.boom) { s.say.push({ eyebrow: 'Bang', name: 'The hydrogen caught', how: 'The flame ran back down into the bell.' }); w.explode(158, s.bell.y0 + 10, 14, 2.2, 0); }
+          }
+        }
+        if (s.t === 4 * SEC) s.say.push({ eyebrow: 'Saltmarsh', name: 'The ferryman’s lantern is lit', how: 'Right above the hole in the bell.' });
+      },
+
+      goals: [
+        {
+          id: 'gas', main: true, text: 'Fill the gasholder',
+          eval(w, s) {
+            const have = s.h || 0, want = 100;
+            return { met: have >= want && !s.boom, progress: Math.min(1, have / want), value: `${have} / ${want} hydrogen` };
+          },
+        },
+        {
+          id: 'calm', keep: true, text: 'No flame ever reaches the gas',
+          eval(w, s) { return { holds: !s.boom, value: s.boom ? 'bang' : 'safe' }; },
+        },
+        beforeBell('swift', 'Filled before the tide turns', 120),
+      ],
+      fail(w, s) {
+        if (s.boom && s.t % 60 === 0) return this.failText;
+        return null;
+      },
+    },
+
+    {
+      id: 'pumphouse',
+      num: 'VI',
+      title: 'The Pumphouse',
+      place: 'Oilbeck',
+      blurb: 'An oil seep, a broken pipeline, and a depot on the hill that must be full by moonrise.',
+      size: [320, 180],
+      sky: 'dusk',
+      weather: { mode: 'natural', wind: 0, ambient: 14 },
+      rules: {},
+      pouch: [
+        { kind: 'element', key: 'pipe', n: 320 },
+        { kind: 'element', key: 'battery', n: 2 },
+        { kind: 'element', key: 'switch', n: 2 },
+        { kind: 'element', key: 'wire', n: 80 },
+      ],
+      intro: {
+        body: [
+          'Oil seeps out of the ground at Oilbeck, black and slow, into a stone sump by the old pumphouse. Your master has built a fuel depot on the hill across the ravine, a great iron tank, and laid a pipeline to it. They didn’t finish: the pipe stops at the edge of the ravine and starts again on the far side, and the pump’s battery is gone.',
+          'Down in the ravine, right under the gap, the smith of Oilbeck has her forge going. “Your master said not to worry,” she says. “Said nobody would be fool enough to pump oil through half a pipe.”',
+        ],
+        task: 'Fill the depot tank on the hill with oil: 400 measures. Mend the pipeline across the ravine, then power the pump at the sump and the valve on the tank.',
+      },
+      guide: [
+        {
+          title: 'Mend the pipeline', use: ['pipe'],
+          note: 'Draw Pipe across the gap in one stroke, from one open end to the other. Drawn onto old pipe, it joins it.',
+          at: (w, s) => ({ x0: s.gapRow.x0 - 5, x1: s.gapRow.x1 + 5, y0: s.gapRow.y - 5, y1: s.gapRow.y + 5 }),
+          done: (w, s) => countIn(w, { x0: s.gapRow.x0, x1: s.gapRow.x1, y0: s.gapRow.y, y1: s.gapRow.y }, [ID.PIPE]) >= s.gapRow.x1 - s.gapRow.x0 - 2,
+        },
+        {
+          title: 'Power the pump', use: ['battery', 'switch'],
+          note: 'The pump’s wire comes up at this post. Put a battery on top of it (a switch between them lets you choose when).',
+          at: (w, s) => ({ x0: s.post.x - 5, x1: s.post.x + 5, y0: s.post.y - 6, y1: s.post.y + 3 }),
+          done: (w, s) => countIn(w, { x0: s.post.x - 3, x1: s.post.x + 3, y0: s.post.y - 4, y1: s.post.y + 1 }, [ID.BATTERY]) > 0,
+        },
+        {
+          title: 'Open the valve', use: ['battery'],
+          note: 'The tank’s valve only opens with current. Put a battery on the post beside the depot.',
+          at: (w, s) => ({ x0: s.post2.x - 5, x1: s.post2.x + 5, y0: s.post2.y - 6, y1: s.post2.y + 3 }),
+          done: (w, s) => countIn(w, { x0: s.post2.x - 3, x1: s.post2.x + 3, y0: s.post2.y - 4, y1: s.post2.y + 1 }, [ID.BATTERY]) > 0,
+        },
+      ],
+      outro: {
+        title: 'Fuel for the Depot',
+        body: [
+          'Oil gurgles up the pipe, along the ravine and up the hill, and the depot tank’s gauge creeps up as the moon does. The smith comes up from the ravine, sniffs the pipeline the whole way along it, finds not a drop, and shakes your hand with a hand like a vice.',
+        ],
+        found: 'Chalked inside the depot’s door:',
+        page: [
+          'Pump, pipe, valve, tank: a ship is plumbing with a fire at one end. You will need to fill one yourself before long.',
+          'Stones are falling at the observatory at Skywatch, more every night, all from the same corner of the sky. The astronomer thinks they come from the moon. I think she is right. I have gone to look through her telescope, if there is a telescope left.',
+        ],
+        sign: '— O.',
+      },
+      part: 'A depot tank of oil on the hill, and a pipeline that doesn’t leak.',
+      failText: 'Oil poured out of the open pipe onto the forge. The ravine went up in flames.',
+
+      build(w, s) {
+        const { W, H } = w;
+        const k = K.kit(w);
+        const { part, facing, holding, pipe } = k;
+        const n = noise1();
+        const ROCK = [0x6a5d52, 0x5f544a, 0x74665a];
+        // the ground: the sump's shelf on the left, a deep ravine, the depot hill on the right
+        const ground = new Int32Array(W);
+        for (let x = 0; x < W; x++) {
+          let gtop = 132 + Math.round(n(x) * 2);
+          if (x >= 116 && x <= 172) gtop = 132 + Math.round(30 * Math.sin(((x - 116) / 56) * Math.PI)); // the ravine
+          if (x > 186) gtop = Math.max(102, 132 - Math.round((x - 186) * 0.9));                       // the hill
+          ground[x] = gtop;
+          strata(w, x, gtop, [[ID.DIRT, 3, [0x5c4b3b, 0x524334]], [ID.STONE, 60, ROCK]]);
+        }
+        K.grassOver(w, 0, 110, 0.6);
+        K.grassOver(w, 190, 319, 0.5);
+        // the sump: a stone basin of oil, fed by the seep, with the pump on its floor facing up
+        const s0 = 18, s1 = 74, sb = 158;
+        rect(w, s0, 120, s1, sb + 2, ID.STONE);
+        rect(w, s0 + 2, 120, s1 - 2, sb, ID.EMPTY);
+        rect(w, s0 + 2, 136, s1 - 2, sb, ID.OIL);
+        // a slim pipeline (a bore one cell wide), so it doesn't swallow the whole sump before the tank
+        // sees a drop; the pump is as wide as the pipe and its walls
+        const r2 = 0, pw = 1;
+        const pc = 46, pumpTop = sb - 3;
+        part(pc - pw, pumpTop, pc + pw, sb, ID.PUMP, facing(0));
+        s.sump = { x0: s0 + 2, x1: s1 - 2, top: 136, sb };
+        // the pumphouse over the sump (the riser goes up through its roof)
+        rect(w, 30, 104, 31, 119, ID.BRICK); rect(w, 62, 104, 63, 119, ID.BRICK); rect(w, 28, 102, 65, 103, ID.BRICK);
+        paintBox(w, 28, 102, 65, 119, ID.BRICK, [0x8a4b31, 0x7e452d]);
+        // the pipeline: straight up out of the sump (a pump's push only lifts so far, so it climbs first),
+        // then high along over the ravine, open at its edge, and down into the depot
+        const py = 74;
+        pipe([[pc, pumpTop - 1 - r2], [pc, py], [112, py]], r2, [[112, py, r2]]);
+        // the far side: from the ravine's other edge, along and up the hill to the tank's valve
+        const t0 = 262, t1 = 284, tTop = 82, tBot = 89;
+        const vc = (t0 + t1) >> 1;
+        part(t0, tTop, t1, tBot, ID.TANK);
+        part(vc - pw, tTop - 4, vc + pw, tTop - 1, ID.VALVE);
+        pipe([[176, py], [vc, py], [vc, tTop - 5]], r2, [[176, py, r2]]);
+        // each broken end is open only straight ahead, so new pipe drawn on from there seals onto it
+        for (const ex of [112, 176]) for (const dx of [-1, 0, 1]) for (const dy of [-1, 1]) {
+          const i = w.idx(ex + dx, py + dy);
+          if (w.type[i] !== ID.PIPE) w.place(i, ID.CASING);
+        }
+        s.tank = { x0: t0, x1: t1, y0: tTop, y1: tBot };
+        // the tank's stand
+        rect(w, t0 + 1, tBot + 1, t0 + 2, ground[t0 + 1] - 1, ID.METAL); rect(w, t1 - 2, tBot + 1, t1 - 1, ground[t1 - 1] - 1, ID.METAL);
+        // the pump's wire: from the pump's foot down through the floor, under the sump, and up to a
+        // post on the shelf beside the pumphouse
+        rect(w, pc - 1, sb + 1, pc + 1, sb + 4, ID.WIRE);
+        rect(w, pc - 1, sb + 4, 86, sb + 6, ID.WIRE);
+        rect(w, 84, ground[85] - 4, 86, sb + 6, ID.WIRE);
+        s.post = { x: 85, y: ground[85] - 5 };
+        // the valve's wire: down the tank stand to a post beside the depot
+        rect(w, vc + pw + 1, tTop - 4, vc + pw + 1, tTop - 1, ID.WIRE);
+        rect(w, vc + pw + 1, tTop - 1, 296, tTop - 1, ID.WIRE);
+        rect(w, 296, tTop - 1, 296, ground[296] - 4, ID.WIRE);
+        s.post2 = { x: 296, y: ground[296] - 5 };
+        s.gapRow = { x0: 113, x1: 175, y: py };
+        // the forge in the ravine, right under the gap, and the smith beside it
+        const fy = ground[144];
+        rect(w, 136, fy - 6, 152, fy - 1, ID.BRICK);
+        rect(w, 139, fy - 6, 149, fy - 4, ID.COAL);
+        s.forge = [];
+        for (let x = 139; x <= 149; x++) s.forge.push(w.idx(x, fy - 7));
+        s.ravine = { x0: 116, x1: 172, y0: 60, y1: 170 };
+        K.person(w, 158, ground[158]);
+        s.villagers = 1;
+        s.OIL = ID.OIL;
+      },
+
+      script(w, s) {
+        // the forge stays lit
+        if (s.t % 4 === 0) for (const i of s.forge) if (w.type[i] === ID.EMPTY && Math.random() < 0.3) { w.place(i, ID.FIRE); w.data[i] = 20; }
+        // the seep keeps the sump topped up
+        if (s.t % 6 === 0) {
+          const x = s.sump.x0 + 2 + ((Math.random() * (s.sump.x1 - s.sump.x0 - 4)) | 0);
+          for (let y = s.sump.top - 6; y < s.sump.sb; y++) { const i = w.idx(x, y); if (w.type[i] === ID.EMPTY && w.type[i + w.SW] !== ID.EMPTY) { w.place(i, ID.OIL); break; } }
+        }
+        if (s.t % 20 === 0) {
+          let oil = 0;
+          const z = s.tank;
+          for (let y = z.y0; y <= z.y1; y++) for (let x = z.x0; x <= z.x1; x++) { const i = w.idx(x, y); if (w.type[i] === ID.TANK && w.aux[i] === ID.OIL) oil += w.data[i]; }
+          s.oil = oil;
+          // oil spilt in the ravine: the thing the smith was afraid of
+          s.spilt = countIn(w, s.ravine, [ID.OIL]);
+          if (!s.warned && s.spilt > 4) { s.warned = true; s.say.push({ eyebrow: 'The smith', name: 'Oil in the ravine!', how: 'It’s pouring out of the gap onto my forge!' }); }
+        }
+        if (s.t === 4 * SEC) s.say.push({ eyebrow: 'Oilbeck', name: 'The moon is rising', how: 'The depot should be full by the time it clears the hill.' });
+      },
+
+      goals: [
+        {
+          id: 'fuel', main: true, text: 'Fill the depot tank',
+          eval(w, s) {
+            const have = s.oil || 0, want = 400;
+            return { met: have >= want, progress: Math.min(1, have / want), value: `${have} / ${want}` };
+          },
+        },
+        {
+          id: 'clean', keep: true, text: 'Not a drop in the ravine',
+          eval(w, s) { return { holds: !(s.spilt > 4), value: s.spilt > 4 ? 'spilt' : 'clean' }; },
+        },
+        beforeBell('swift', 'Full by moonrise', 150),
+      ],
+      fail(w, s) { return w.counts[ID.HUMAN] < 1 ? this.failText : null; },
+    },
+
+    {
+      id: 'skywatch',
+      num: 'VII',
+      title: 'Falling Stars',
+      place: 'Skywatch observatory',
+      blurb: 'Stones falling out of a clear sky, and a telescope that has to stay open.',
+      size: [320, 180],
+      sky: 'night',
+      weather: { mode: 'natural', wind: 0, ambient: 10 },
+      rules: {},
+      pouch: [
+        { kind: 'element', key: 'sand', n: 500 },
+        { kind: 'element', key: 'lime', n: 500 },
+        { kind: 'element', key: 'water', n: 400 },
+        { kind: 'element', key: 'switch', n: 1 },
+      ],
+      intro: {
+        body: [
+          'Skywatch is a village of stargazers on a bare hill, and for a month stones have been falling on it out of a clear sky, three at a time, every half a minute, all from the same corner of the heavens. The astronomer, Ilse, has worked out when the next showers come.',
+          '“Your master stood at my telescope all last night,” she says, “and left at dawn, very pale. I have to see what they saw. The dome’s shutter closes with that switch. Close it when they fall and open it between, or I lose the lens; and the cottages have nothing over them but slate.”',
+        ],
+        task: 'Get through three meteor showers. Close the observatory’s shutter while the stones fall and open it between them, so Ilse can watch the sky for 30 seconds in all, and roof the cottages so nobody is hurt.',
+      },
+      guide: [
+        {
+          title: 'Roof the cottages', use: ['sand', 'lime'], makes: 'concrete',
+          note: 'Pour sand into the trays on the roofs, then lime over it. It turns to cement and sets into concrete.',
+          at: (w, s) => ({ x0: s.huts[0].tray.x0 - 2, x1: s.huts[2].tray.x1 + 2, y0: s.huts[0].tray.y0 - 4, y1: s.huts[0].tray.y1 + 15 }),
+          done: (w, s) => s.t >= s.waves[0] || s.huts.reduce((n, h) => n + countIn(w, h.tray, [ID.CONCRETE, ID.CEMENT]), 0) >= 150,
+        },
+        {
+          title: 'Shut the dome for each shower', use: ['switch'],
+          note: 'When Ilse calls, select Switch and click the switch by the door: the shutter slides over the slit. Click again after the shower to open it.',
+          at: (w, s) => ({ x0: s.slit.x0 - 6, x1: s.switchAt.x + 4, y0: s.slit.y0 - 10, y1: s.switchAt.y + 4 }),
+          done: (w, s) => s.t > s.waves[2] + 4 * SEC,
+        },
+        {
+          title: 'Let Ilse watch', use: [],
+          note: 'Leave the shutter open now, so Ilse can watch the sky: 30 seconds in all.',
+          at: (w, s) => ({ x0: s.slit.x0 - 6, x1: s.slit.x1 + 6, y0: s.slit.y0 - 10, y1: s.lens.y1 + 4 }),
+          done: (w, s) => goalMet(s, 'watch'),
+        },
+      ],
+      outro: {
+        title: 'What the Telescope Saw',
+        body: [
+          'After the third shower the sky goes quiet. Ilse watches until her eye waters, then steps back and lets you look. On the moon’s dark face, a light blinks: long, short, long. And far nearer, on the high plateau beyond the valley, something tall and metal stands in a cradle of scaffolding, with men swarming over it.',
+          '“That is a ship,” says Ilse. “And the stones have all been falling from where that light is. Something up there does not want it to come.”',
+        ],
+        found: 'Pinned to the telescope’s eyepiece, a page torn from your master’s notebook:',
+        page: [
+          'The stones are aimed. Whoever signals from the moon has been knocking down every ship this valley has ever started, for a hundred years. I need a heart that never goes out, to power a ship that can’t be stopped.',
+          'There is one under the mountain: the old uranium seam. It is waking, and the town over it is shaking. I am going down to put it to work.',
+        ],
+        sign: '— O.',
+      },
+      part: 'Ilse’s star chart, with the launch plateau marked.',
+      failText: 'A stone came through the open dome and smashed the telescope’s lens.',
+
+      build(w, s) {
+        const { W, H } = w;
+        const k = K.kit(w);
+        const n = noise1();
+        const g = 140, hillTop = 112;
+        const ROCK = [0x55585e, 0x5e6168, 0x4d5056];
+        const ground = new Int32Array(W);
+        for (let x = 0; x < W; x++) {
+          ground[x] = x < 170 ? g + Math.round(n(x) * 1.5) : Math.max(hillTop, g - Math.round((x - 170) * 0.7));
+          strata(w, x, ground[x], [[ID.DIRT, 3, [0x4d4438, 0x463e33]], [ID.STONE, 60, ROCK]]);
+        }
+        K.grassOver(w, 0, 319, 0.7);
+        // three cottages with flat slate roofs and a tray round each for whatever you can pour on top
+        s.huts = []; s.villagers = 0;
+        for (const hx of [22, 70, 118]) {
+          const x0 = hx, x1 = hx + 26, top = g - 15;
+          rect(w, x0, top, x0 + 1, g - 1, ID.STONE); rect(w, x1 - 1, top, x1, g - 1, ID.STONE);
+          rect(w, x0 - 1, top, x1 + 1, top, ID.STONE);                     // the slate roof
+          rect(w, x0 - 1, top - 7, x0 - 1, top - 1, ID.STONE); rect(w, x1 + 1, top - 7, x1 + 1, top - 1, ID.STONE); // the tray's lips
+          rect(w, x0 + 2, top + 1, x1 - 2, g - 1, ID.EMPTY);
+          paintBox(w, x0 - 1, top - 7, x1 + 1, g - 1, ID.STONE, [0x6a6e76, 0x737781]);
+          rect(w, x0 + 3, g - 9, x0 + 5, g - 7, ID.GLASS);                  // a window
+          s.villagers += villagers(w, x0 + 6, x1 - 3, 2, () => g - 1);
+          s.huts.push({ x: (x0 + x1) >> 1, roof: top - 1, tray: { x0, x1, y0: top - 7, y1: top - 1 } });
+        }
+        // the observatory on the hill: a brick dome with a slit in its roof, and a shutter of two iron
+        // plates on sticky pistons that close the slit when powered. The telescope stands to one side
+        // of the slit and looks out through it at a slant, the way the stones come in.
+        const d0 = 214, d1 = 286, roof = 70, slit0 = 244, slit1 = 262, rb = roof + 4;
+        rect(w, d0, roof, d0 + 2, hillTop - 1, ID.BRICK); rect(w, d1 - 2, roof, d1, hillTop - 1, ID.BRICK);
+        rect(w, d0, roof, d1, rb, ID.BRICK);
+        for (let k2 = 1; k2 <= 8; k2++) rect(w, d0 + k2 * 4, roof - k2, d1 - k2 * 4, roof - k2, ID.BRICK); // the dome
+        rect(w, d0 + 3, rb + 1, d1 - 3, hillTop - 1, ID.EMPTY);
+        rect(w, slit0, roof - 8, slit1, rb, ID.EMPTY);                       // the slit, through dome and roof
+        paintBox(w, d0, roof - 8, d1, hillTop - 1, ID.BRICK, [0x9a8e7e, 0x8f8474, 0xa49888]);
+        const STICKY = 4;
+        k.part(slit0 - 14, roof, slit0 - 11, rb, ID.PISTON, (i) => { w.aux[i] = 1 | STICKY; w.sap[i] = 0; });  // pushes right
+        k.part(slit1 + 11, roof, slit1 + 14, rb, ID.PISTON, (i) => { w.aux[i] = 3 | STICKY; w.sap[i] = 0; });  // pushes left
+        rect(w, slit0 - 10, roof, slit0 - 1, rb, ID.METAL);                 // the plates, drawn back
+        rect(w, slit1 + 1, roof, slit1 + 10, rb, ID.METAL);
+        s.slit = { x0: slit0, x1: slit1, y0: roof, y1: rb };
+        // the telescope: a glass lens on an iron stand, below and to the west of the slit
+        const ly = 100;
+        rect(w, 230, ly, 240, ly + 1, ID.GLASS);
+        s.lens = { x0: 230, x1: 240, y0: ly, y1: ly + 1 };
+        s.lens0 = 22;
+        s.aim = 235;
+        rect(w, 233, ly + 2, 237, hillTop - 5, ID.METAL);
+        rect(w, 229, hillTop - 4, 241, hillTop - 1, ID.METAL);
+        K.person(w, 252, hillTop);
+        s.villagers += 1;
+        // the shutter's battery and switch outside the door, wired through the walls to both pistons
+        const bx = 290, by = ground[290];
+        rect(w, bx, by - 4, bx + 2, by - 1, ID.BATTERY);
+        k.part(bx - 3, by - 3, bx - 1, by - 1, ID.SWITCH, k.switched(0));
+        s.switchAt = { x: bx - 2, y: by - 2 };
+        rect(w, bx - 4, by - 2, bx - 4, by - 2, ID.WIRE);
+        rect(w, bx - 4, by - 2, bx - 4, by + 1, ID.WIRE);
+        rect(w, d0 + 1, by + 1, bx - 4, by + 1, ID.WIRE);                    // under the hill, west
+        rect(w, d0 + 1, rb + 1, d0 + 1, by + 1, ID.WIRE);                    // up the west wall
+        rect(w, d0 + 1, rb + 1, slit0 - 13, rb + 1, ID.WIRE);                // under the roof to the west piston
+        rect(w, slit1 + 12, rb + 1, d1 - 1, rb + 1, ID.WIRE);                // and from the east wall to the east piston
+        rect(w, d1 - 1, rb + 1, d1 - 1, by + 1, ID.WIRE);
+        rect(w, d1 - 1, by + 1, bx - 4, by + 1, ID.WIRE);
+        s.dome = { x0: d0, x1: d1, y0: roof - 10, y1: hillTop };
+        s.waves = [35, 70, 105].map((t) => t * SEC);
+        s.stones = [];
+        s.watch = 0;
+      },
+
+      script(w, s) {
+        flyStones(w, s);
+        const metalIn = countIn(w, s.slit, [ID.METAL, ID.ROD]);
+        s.open = metalIn < 8;
+        const falling = s.stones.length > 0;
+        s.lensLeft = countIn(w, s.lens, [ID.GLASS]);
+        if (s.open && !falling && s.lensLeft >= s.lens0 * 0.5) s.watch++;
+        for (const T of s.waves) {
+          if (s.t === T - 6 * SEC) s.say.push({ eyebrow: 'Ilse', name: 'Stones in the east!', how: 'Close the dome. They will be here in a few seconds.' });
+          // the shower: one stone at the dome, two at the cottages, a moment apart
+          if (s.t === T) throwStone(w, s, s.aim, s.lens.y0);
+          if (s.t === T + 30 || s.t === T + 60) {
+            const h = s.huts[(Math.random() * s.huts.length) | 0];
+            throwStone(w, s, h.x + ((Math.random() * 7) | 0) - 3, h.roof);
+          }
+          if (s.t === T + 4 * SEC) s.say.push({ eyebrow: 'Ilse', name: 'It’s passed', how: s.waves.indexOf(T) < 2 ? 'Open the dome! I need to see.' : 'That was the last. Open up and let me look.' });
+        }
+        if (s.t === 3 * SEC) s.say.push({ eyebrow: 'Skywatch', name: 'The first shower is half a minute away', how: 'The cottages’ roofs are only slate.' });
+      },
+
+      goals: [
+        {
+          id: 'watch', main: true, text: 'Watch the sky for 30 seconds',
+          eval(w, s) {
+            const done = s.t > s.waves[2] + 4 * SEC;
+            const want = 30 * SEC;
+            return { met: done && s.watch >= want, progress: Math.min(1, s.watch / want), value: `${Math.floor(s.watch / SEC)} s${s.open ? ' · open' : ' · shut'}` };
+          },
+        },
+        nobodyHurt('safe', 'Nobody in Skywatch is hurt'),
+        {
+          id: 'lens', keep: true, text: 'Not a scratch on the lens',
+          eval(w, s) { return { holds: (s.lensLeft ?? s.lens0) >= s.lens0, value: `${s.lensLeft ?? s.lens0} / ${s.lens0}` }; },
+        },
+      ],
+      fail(w, s) { return (s.lensLeft ?? s.lens0) < s.lens0 * 0.5 ? this.failText : null; },
+    },
+
+    {
+      id: 'deepdown',
+      num: 'VIII',
+      title: 'The Sleeping Heart',
+      place: 'Deepdown power station',
+      blurb: 'The uranium heart under the mountain is waking, and its keeper is broken.',
+      size: [320, 180],
+      sky: 'dusk',
+      weather: { mode: 'natural', wind: 0, ambient: 12 },
+      rules: {},
+      pouch: [
+        { kind: 'element', key: 'wire', n: 30 },
+        { kind: 'element', key: 'switch', n: 1 },
+      ],
+      intro: {
+        body: [
+          'Deepdown lives on the heart: a low core of uranium in a concrete vessel, cut into sections with hafnium columns between them. Its heat comes up through a diamond plate to a strip of tellurium that makes the town’s current. A heat sensor on the plate pushes the columns up into the core when it runs hot, and lets them drop as it cools. It has run itself for forty years.',
+          'Tonight the seam it was dug from is waking: more neutrons are coming up out of the rock every minute. And the sensor’s wire has been cut, neatly, with snips. The station keeper looks at you. “Your master was down here this morning,” he says. “Took a lump of the core’s curium for their ship. Said you would fix whatever they broke.”',
+        ],
+        task: 'Keep the heart from melting, and keep Deepdown lit: 40 seconds of light with the plant running on its own control, the SCRAM switch released.',
+      },
+      guide: [
+        {
+          title: 'SCRAM the heart', use: ['switch'],
+          note: 'The core is heating up. Select Switch and click the SCRAM switch outside the vessel: the hafnium columns drive into the core.',
+          at: (w, s) => ({ x0: s.scramAt.x - 4, x1: s.scramAt.x + 4, y0: s.scramAt.y - 5, y1: s.scramAt.y + 4 }),
+          done: (w, s) => !!(s.scrammed || s.mended),
+        },
+        {
+          title: 'Mend the sensor’s wire', use: ['wire'],
+          note: 'The heat sensor’s wire runs down inside the vessel’s west wall, and a stretch is gone. Draw Wire into the gap.',
+          at: (w, s) => pad(s.gapBox, 4),
+          done: (w, s) => !!s.mended,
+        },
+        {
+          title: 'Release the SCRAM', use: ['switch'],
+          note: 'Click the SCRAM switch again. Now the plant pushes its columns in by itself whenever it runs hot, and the town stays lit.',
+          at: (w, s) => ({ x0: s.scramAt.x - 4, x1: s.scramAt.x + 4, y0: s.scramAt.y - 5, y1: s.scramAt.y + 4 }),
+          done: (w, s) => goalMet(s, 'lit') || (s.mended && !s.scrammed && s.lit > 3 * SEC),
+        },
+      ],
+      outro: {
+        title: 'The Heart Keeps Time',
+        body: [
+          'The columns rise and fall in the core like a slow breath, and the lamps of Deepdown burn steady. The keeper sits down for the first time in a day and puts his feet on the console. “Forty years,” he says. “And it took a stranger with a reel of wire.”',
+        ],
+        found: 'Stuck to the snipped end of the wire with a blob of solder:',
+        page: [
+          'Forgive me the wire. I needed to know you could keep a heart, not just stop one. A ship needs a heart that never goes out, and mine is in the hold now: a curium cell against tellurium, warm for a hundred years.',
+          'The proving ground is on the high plateau. The stones are falling faster; I can’t wait any more. If you see me go, don’t try to stop me. My first ship is still in the hangar; it never flew. You will see why.',
+        ],
+        sign: '— O.',
+      },
+      part: 'A curium power cell, and the knack of keeping a heart.',
+      failText: 'The heart ran away. The core slumped into a white-hot puddle at the bottom of its vessel, and Deepdown will be dark for a generation.',
+
+      build(w, s) {
+        G.Scenes.reactor(w);
+        const U = byKey.el_u.id, HF = byKey.el_hf.id;
+        const box = (pred) => {
+          let x0 = 1e9, x1 = -1, y0 = 1e9, y1 = -1;
+          for (let i = 0; i < w.N; i++) {
+            if (!pred(w.type[i], i)) continue;
+            const x = i % w.SW, y = (i / w.SW) | 0;
+            if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+          }
+          return { x0, x1, y0, y1 };
+        };
+        s.core = box((t) => t === U);
+        s.U = U; s.HF = HF;
+        s.u0 = countIn(w, s.core, [U]);
+        s.ore = [];
+        for (let y = s.core.y0; y <= s.core.y1; y++) for (let x = s.core.x0; x <= s.core.x1; x++) { const i = w.idx(x, y); if (w.type[i] === U) s.ore.push(i); }
+        s.hf0 = countIn(w, box((t) => t === HF), [HF]);
+        // the SCRAM switch is the one that starts off (the breaker on the vessel starts on)
+        for (let i = 0; i < w.N; i++) if (w.type[i] === ID.SWITCH && !w.aux[i]) { s.scram = i; break; }
+        s.scramAt = { x: s.scram % w.SW, y: (s.scram / w.SW) | 0 };
+        // cut the heat sensor's wire inside the vessel wall
+        const sensor = box((t) => t === ID.SENSOR);
+        const wx = sensor.x0 - 1;
+        s.gap = [];
+        for (let y = sensor.y1 + 2; y <= sensor.y1 + 11; y++) { const i = w.idx(wx, y); if (w.type[i] === ID.WIRE) { w.place(i, ID.EMPTY); s.gap.push(i); } }
+        s.gapBox = { x0: wx, x1: wx, y0: sensor.y1 + 2, y1: sensor.y1 + 11 };
+        const gases = ['el_ne', 'el_ar', 'el_kr', 'el_xe', 'el_he'].map((k) => byKey[k].id);
+        s.lamps = [];
+        for (let i = 0; i < w.N; i++) if (gases.includes(w.type[i])) s.lamps.push(i);
+        s.lit = 0; s.hot = 0; s.peak = 0;
+      },
+
+      script(w, s) {
+        // the waking seam: neutrons come up into the core, more as the minute goes on, unless the
+        // hafnium columns are up between its sections to drink them
+        if (s.t % 6 === 0) {
+          const hf = countIn(w, s.core, [s.HF]);
+          const wake = Math.min(1, s.t / (20 * SEC));
+          if (Math.random() < 0.6 * wake * Math.max(0, 1 - hf / (s.hf0 * 0.5))) {
+            const i = s.ore[(Math.random() * s.ore.length) | 0];
+            if (w.type[i] === s.U) w.fireNeutrons(i, 2);
+          }
+        }
+        if (s.t % 30 === 0) {
+          let hot = 0;
+          const z = s.core;
+          for (let y = z.y0; y <= z.y1; y++) for (let x = z.x0; x <= z.x1; x++) { const i = w.idx(x, y); if (w.type[i] === s.U && w.temp[i] > hot) hot = w.temp[i]; }
+          s.hot = hot; s.peak = Math.max(s.peak, hot);
+          s.uLeft = countIn(w, s.core, [s.U]);
+          s.scrammed = w.type[s.scram] === ID.SWITCH && w.aux[s.scram] === 1;
+          s.lampsOn = s.lamps.some((i) => w.charge[i]);
+          if (s.lampsOn && !s.scrammed) s.lit += 30;
+          if (!s.warned && hot > 900) { s.warned = true; s.say.push({ eyebrow: 'The keeper', name: 'It’s running hot!', how: 'SCRAM it! The switch outside the vessel!' }); }
+          if (!s.mended && s.gap.every((i) => w.type[i] === ID.WIRE)) { s.mended = true; s.say.push({ eyebrow: 'The keeper', name: 'The sensor’s back on the line', how: 'Release the SCRAM and let her run.' }); }
+        }
+        if (s.t === 3 * SEC) s.say.push({ eyebrow: 'Deepdown', name: 'The seam is waking', how: 'More neutrons every minute, and the sensor is cut.' });
+      },
+
+      goals: [
+        {
+          id: 'lit', main: true, text: 'Light Deepdown on the plant’s own control',
+          eval(w, s) {
+            const want = 40 * SEC;
+            const value = `${Math.floor(s.lit / SEC)} s${s.scrammed ? ' · SCRAM on' : s.lampsOn ? ' · lit' : ' · dark'}`;
+            return { met: s.lit >= want, progress: Math.min(1, s.lit / want), value };
+          },
+        },
+        {
+          id: 'cool', keep: true, text: 'The core never melts (1,132°C)',
+          eval(w, s) { return { holds: s.peak < 1132, value: `${Math.round(s.hot)}°C` }; },
+        },
+        beforeBell('swift', 'Lit before the night shift', 150),
+      ],
+      // the uranium melts at 1,132°C; well past it, the core slumps together and there is no stopping it
+      fail(w, s) { return s.hot >= 1350 || (s.uLeft != null && s.uLeft < s.u0 * 0.55) ? this.failText : null; },
+    },
+
+    {
+      id: 'proving',
+      num: 'IX',
+      title: 'The Proving Ground',
+      place: 'The high plateau',
+      blurb: 'Your master’s ship goes up as you arrive. Theirs is not the only ship here.',
+      size: [320, 180],
+      sky: 'dusk',
+      weather: { mode: 'natural', wind: 0, ambient: 8 },
+      rules: {},
+      pouch: [
+        { kind: 'element', key: 'switch', n: 3 },
+      ],
+      intro: {
+        body: [
+          'The road to the plateau ends at a canyon. On the far side, in a cradle of scaffolding, your master’s ship stands with steam curling off its tanks. As you come over the rise its engines light.',
+          'On this side, by the canyon’s edge, sits the sledge your master tested everything on: a glass cabin on three engines, one to lift and one to push each way, each on its own switch. Chalked on its door: “To get across, you have to fly. Land on the legs.”',
+        ],
+        task: 'Fly the test sledge across the canyon and land it on the far pad, standing on its legs.',
+      },
+      guide: [
+        {
+          title: 'Lift off', use: ['switch'],
+          note: 'Select Switch and click the sledge’s middle switch, under the battery: the lift engine fires. Click it again to cut it.',
+          at: (w, s) => pad(sledgeBox(w) || s.pad, 3),
+          done: (w, s) => { const b = sledgeBox(w); return !!b && b.y1 < s.sledgeFloor - 4; },
+        },
+        {
+          title: 'Fly east', use: ['switch'],
+          note: 'Click the left switch to push east, over the canyon. The air brakes slow the sledge whenever its engines are off.',
+          at: (w, s) => { const b = sledgeBox(w) || s.pad; return { x0: b.x0 - 3, x1: s.pad.x1, y0: Math.min(b.y0 - 3, s.pad.y - 40), y1: s.pad.y + 2 }; },
+          done: (w, s) => { const b = sledgeBox(w); return !!b && (b.x0 + b.x1) / 2 > 200; },
+        },
+        {
+          title: 'Land on the pad', use: ['switch'],
+          note: 'Over the pad, cut the lift and let the sledge settle onto its legs.',
+          at: (w, s) => ({ x0: s.pad.x0, x1: s.pad.x1, y0: s.pad.y - 30, y1: s.pad.y + 1 }),
+          done: (w, s) => goalMet(s, 'land'),
+        },
+      ],
+      outro: {
+        title: 'Landed',
+        body: [
+          'The sledge settles on its legs with a creak, and the engines tick as they cool. Your master’s ship is a speck of flame high above the plateau, then nothing. In the cradle where it stood there is only steam, and a page weighted down with a spanner.',
+        ],
+        found: 'Under the spanner:',
+        page: [
+          'I am sorry. The stones were falling faster every night, and I could not wait for you.',
+          'My first ship is in the hangar below the plateau. It never flew: I could not see why. You have done everything it needs, one piece at a time, all the way from Millbrook. If you are as good as I think you are, follow me. I will leave a light on.',
+        ],
+        sign: '— O.',
+      },
+      part: 'Your master’s last page, and the hangar key.',
+      failText: 'The sledge broke up against the rock. The canyon is still there.',
+
+      build(w, s) {
+        const { W, H } = w;
+        const n = noise1();
+        const ROCK = [0x8a5a44, 0x7d5140, 0x93624b, 0x6f4838], PAD = 0x8d8b86;
+        // the plateau: a near rim, a deep canyon, a far rim with the landing pad and the launch cradle
+        const ground = new Int32Array(W);
+        for (let x = 0; x < W; x++) {
+          ground[x] = x < 70 ? 128 : x < 236 ? 176 - Math.round(Math.max(0, Math.sin(((x - 70) / 166) * Math.PI)) * 6 + n(x) * 3) : 116;
+          strata(w, x, ground[x], [[ID.STONE, 70, ROCK]]);
+        }
+        rect(w, 4, 127, 60, 127, ID.STONE); paintBox(w, 4, 127, 60, 127, ID.STONE, PAD);
+        rect(w, 244, 115, 290, 115, ID.STONE); paintBox(w, 244, 115, 290, 115, ID.STONE, PAD);
+        s.pad = { x0: 244, x1: 290, y: 115 };
+        // the test sledge: glass cabin, a battery and three switches, a lift engine in the floor and a
+        // pushing engine in each wall, all fed from tanks of oil, standing on four legs
+        const sx = 20, sy = 127 - 11; // its roof row; the legs stand on the pad (row 127)
+        s.sledgeFloor = sy + 8;
+        const at = (dx, dy, t, set) => { const i = w.idx(sx + dx, sy + dy); w.place(i, t); if (set) set(i); return i; };
+        for (let dx = 0; dx <= 14; dx++) at(dx, 0, ID.GLASS);
+        for (let dy = 1; dy <= 4; dy++) { at(0, dy, ID.GLASS); at(14, dy, ID.GLASS); }
+        at(7, 1, ID.BATTERY); at(7, 2, ID.BATTERY);
+        const off = (i) => { w.aux[i] = 0; };
+        s.swLift = at(7, 3, ID.SWITCH, off); s.swEast = at(6, 1, ID.SWITCH, off); s.swWest = at(8, 1, ID.SWITCH, off);
+        for (let dx = 1; dx <= 5; dx++) at(dx, 1, ID.WIRE);                 // east engine's wire
+        for (let dy = 2; dy <= 4; dy++) at(1, dy, ID.WIRE);
+        at(0, 4, ID.WIRE);
+        for (let dx = 9; dx <= 13; dx++) at(dx, 1, ID.WIRE);                // west engine's wire
+        for (let dy = 2; dy <= 4; dy++) at(13, dy, ID.WIRE);
+        at(14, 4, ID.WIRE);
+        for (let dy = 4; dy <= 7; dy++) at(7, dy, ID.WIRE);                 // lift engine's wire
+        const fuel = (amount) => (i) => { w.aux[i] = ID.OIL; w.data[i] = amount; };
+        for (let dy = 5; dy <= 7; dy++) {
+          at(0, dy, ID.THRUSTER, (i) => { w.aux[i] = 1; });                // pushes east
+          at(14, dy, ID.THRUSTER, (i) => { w.aux[i] = 3; });               // pushes west
+          at(1, dy, ID.TANK, fuel(40)); at(13, dy, ID.TANK, fuel(40));
+          for (let dx = 3; dx <= 6; dx++) at(dx, dy, ID.TANK, fuel(24));
+          for (let dx = 8; dx <= 11; dx++) at(dx, dy, ID.TANK, fuel(24));
+        }
+        for (let dx = 0; dx <= 14; dx++) at(dx, 8, dx >= 6 && dx <= 8 ? ID.THRUSTER : ID.GLASS, (i) => { if (w.type[i] === ID.THRUSTER) w.aux[i] = 0; });
+        for (const dx of [0, 1, 13, 14]) { at(dx, 9, ID.LEGS); at(dx, 10, ID.LEGS); }
+        s.legs0 = 8; s.glass0 = countIn(w, { x0: sx, x1: sx + 14, y0: sy, y1: sy + 10 }, [ID.GLASS]);
+        // your master's ship in its cradle at the far end, already lit
+        const ox = 298, ob = 115;
+        rect(w, ox - 2, ob - 40, ox - 2, ob - 1, ID.WOOD); rect(w, ox + 14, ob - 40, ox + 14, ob - 1, ID.WOOD); // the scaffold
+        const mk = (x, y, t, set) => { const i = w.idx(x, y); w.place(i, t); if (set) set(i); };
+        for (let y = ob - 34; y <= ob - 3; y++) for (let x = ox; x <= ox + 12; x++) {
+          const edge = x === ox || x === ox + 12 || y === ob - 34 || y === ob - 3;
+          if (y < ob - 34 + (Math.abs(x - ox - 6) >> 1)) continue; // a pointed nose
+          if (edge) mk(x, y, ID.METAL);
+        }
+        for (let x = ox + 1; x <= ox + 11; x++) for (let y = ob - 10; y <= ob - 4; y++) mk(x, y, ID.TANK, fuel(40));
+        for (let x = ox + 3; x <= ox + 9; x++) mk(x, ob - 3, ID.THRUSTER, (i) => { w.aux[i] = 0; }); // its engines, in the floor
+        mk(ox + 2, ob - 3, ID.BATTERY);                                       // wired straight in: it is going
+        mk(ox + 6, ob - 20, ID.GLASS); mk(ox + 5, ob - 19, ID.GLASS); mk(ox + 7, ob - 19, ID.GLASS); // its porthole
+        rect(w, ox, ob - 2, ox + 1, ob - 1, ID.STONE); rect(w, ox + 11, ob - 2, ox + 12, ob - 1, ID.STONE); // the cradle's blocks
+        s.villagers = 0;
+        s.cutscene = true;
+      },
+
+      script(w, s) {
+        // the opening: your master's ship climbs out of its cradle and away into the dusk
+        if (s.cutscene) {
+          if (s.t === SEC) s.say.push({ eyebrow: 'The plateau', name: 'Your master’s ship is lifting off', how: 'You are too late to stop it.' });
+          let top = w.H; // its engines' row: it is the only thing over there that flies
+          for (let y = 0; y < 116 && top === w.H; y++) for (let x = 280; x < w.W; x++) if (w.type[w.idx(x, y)] === ID.THRUSTER) { top = y; break; }
+          if (top < 40 || s.t > 20 * SEC) {
+            // gone into the sky: clear away all that is left of it
+            const z = { x0: 280, x1: 319, y0: 0, y1: 114 };
+            for (let y = z.y0; y <= z.y1; y++) for (let x = z.x0; x <= z.x1; x++) {
+              const i = w.idx(x, y), t = w.type[i];
+              if (t === ID.METAL || t === ID.TANK || t === ID.THRUSTER || t === ID.BATTERY || t === ID.WIRE || t === ID.GLASS || t === ID.SCRAP) w.place(i, ID.EMPTY);
+            }
+            s.cutscene = false;
+            s.flown = s.t;
+            s.say.push({ eyebrow: 'The plateau', name: 'Gone', how: 'Now you. Fly the sledge across.' });
+          }
+          return;
+        }
+        // the sledge flies with its air brakes out: big canvas flaps that bleed off its speed, so it
+        // drifts to a stop and falls no faster than its legs can take (a ship's speed is kept in its
+        // engines, so damping theirs slows the whole sledge)
+        for (let y = 0; y < w.H; y++) {
+          for (let x = 0, i = w.idx(0, y); x < 280; x++, i++) {
+            if (w.type[i] !== ID.THRUSTER) continue;
+            w.vx[i] *= 0.975; w.vy[i] *= w.vy[i] > 0 ? 0.95 : 0.985;
+          }
+        }
+        if (s.t % 10 === 0) {
+          // where the sledge is: its engines carry its speed
+          let x0 = w.W, x1 = -1, y1 = -1, vx = 0, vy = 0, n = 0;
+          for (let y = 0; y < w.H; y++) for (let x = 0; x < 300; x++) {
+            const i = w.idx(x, y);
+            if (w.type[i] !== ID.THRUSTER) continue;
+            x0 = Math.min(x0, x); x1 = Math.max(x1, x); y1 = Math.max(y1, y); vx += w.vx[i]; vy += w.vy[i]; n++;
+          }
+          s.engines = n;
+          // at rest: it hasn't moved a cell since the last look (a grounded ship keeps a little
+          // downward speed that the ground cancels, so its position says more than its speed)
+          const pos = `${x0},${y1}`, still = n && pos === s.lastPos;
+          s.lastPos = pos;
+          const onPad = n && x0 >= s.pad.x0 && x1 <= s.pad.x1 && y1 < s.pad.y;
+          s.rest = still && onPad ? (s.rest || 0) + 10 : 0;
+          s.scrap = w.counts[ID.SCRAP] + w.counts[ID.SHARDS];
+          s.legs = w.counts[ID.LEGS];
         }
       },
 
       goals: [
         {
-          id: 'quiet', main: true, text: 'Quiet the heart for 10 seconds',
+          id: 'land', main: true, text: 'Land the sledge on the far pad',
           eval(w, s) {
-            // judged once the seam has stopped moving: quiet for ten seconds after that
-            const q = s.quietSince < 0 || s.t < 22 * SEC ? 0 : s.t - Math.max(s.quietSince, 22 * SEC);
-            return { met: q >= 10 * SEC, progress: Math.min(1, q / (10 * SEC)), value: `${s.splits.length} splits / 10 s` };
+            const want = 2 * SEC;
+            return { met: (s.rest || 0) >= want, progress: s.cutscene ? 0 : Math.min(1, (s.rest || 0) / want), value: s.cutscene ? 'watch' : s.rest ? 'settling' : 'flying' };
           },
         },
         {
-          id: 'master', keep: true, text: 'Your master survives',
-          eval(w) {
-            const alive = w.counts[ID.HUMAN] >= 1;
-            return { holds: alive, value: alive ? 'alive' : 'lost' };
-          },
+          id: 'whole', keep: true, text: 'Not a scratch on the sledge',
+          eval(w, s) { return { holds: !(s.scrap > 0), value: s.scrap > 0 ? 'dented' : 'whole' }; },
+        },
+        beforeBell('swift', 'Across within two minutes', 120),
+      ],
+      fail(w, s) { return !s.cutscene && s.engines != null && s.engines < 5 ? this.failText : null; },
+    },
+
+    {
+      id: 'launch',
+      num: 'X',
+      title: 'The Launch',
+      place: 'The hangar under the plateau',
+      blurb: 'Your master’s first ship never flew. Five things are wrong with it.',
+      size: [320, 180],
+      sky: 'night',
+      weather: { mode: 'natural', wind: 0, ambient: 6 },
+      rules: {},
+      pouch: [
+        { kind: 'tool', name: 'erase', n: 60 },
+        { kind: 'element', key: 'glass', n: 20 },
+        { kind: 'element', key: 'battery', n: 2 },
+        { kind: 'element', key: 'thruster', n: 6 },
+        { kind: 'element', key: 'legs', n: 16 },
+        { kind: 'element', key: 'switch', n: 2 },
+      ],
+      intro: {
+        body: [
+          'The hangar is a silo cut down into the plateau, open to the sky at the top. In it stands your master’s first ship on its pad, cold, a fuel depot on stilts beside it. You climb into its cabin and sit where the pilot sits, and the light from the moon falls through the hole where its porthole should be.',
+          'Your master said they couldn’t see why it never flew. You can. You have mended every one of its faults before, one at a time, from Millbrook to here.',
+        ],
+        task: 'Make the ship fly, with you in it, and take it up out of the silo into the sky. Before you go: a ship for the moon needs a sealed cabin and legs to stand on.',
+      },
+      guide: [
+        {
+          title: 'Seal it and rewire it', use: ['glass', 'tool:erase', 'battery'],
+          note: 'Mend the smashed porthole with Glass. Erase the battery on the floor (it touches the iron hull) and put a new one on the shelf against the switch.',
+          at: (w, s) => ({ x0: s.hull.x0 - 2, x1: s.hull.x1 + 2, y0: s.hull.top - 7, y1: s.hull.base }),
+          done: (w, s) => !!(s.lifted || (s.ready && s.ready[0] && s.ready[1])),
         },
         {
-          id: 'cool', keep: true, text: 'The ore never melts',
-          eval(w, s) {
-            let hot = 0;
-            const z = s.core;
-            for (let y = z.y0; y <= z.y1; y++) for (let x = z.x0; x <= z.x1; x++) { const T = w.temp[w.idx(x, y)]; if (T > hot) hot = T; }
-            return { holds: hot < 1132, value: `${Math.round(hot)}°C` };
-          },
+          title: 'Engines and legs', use: ['thruster', 'legs'],
+          note: 'Draw Thrusters into the four empty sockets in the floor, facing up (Faces in the panel). Stand Landing legs against both sides of its foot.',
+          at: (w, s) => ({ x0: s.hull.x0 - 4, x1: s.hull.x1 + 4, y0: s.hull.base - 4, y1: s.hull.base + 1 }),
+          done: (w, s) => !!(s.lifted || (s.ready && s.ready[2] && s.ready[4])),
+        },
+        {
+          title: 'Fuel up and fly', use: ['switch'],
+          note: 'Select Switch and click the depot’s switch: fuel runs down the line into the ship. When Fuel aboard comes up, switch it off and click the ship’s switch. The line lets go.',
+          at: (w, s) => ({ x0: s.hull.x1 - 1, x1: s.fuelSwitch.x + 4, y0: s.valveOut.y - 6, y1: s.hull.base + 1 }),
+          done: (w, s) => !!s.lifted,
         },
       ],
-      fail(w, s) { return w.counts[ID.EL_U] < s.u0 * 0.7 ? this.failText : null; },
+      outro: {
+        title: 'The Moon',
+        body: [
+          'The ship climbs out of the silo on a column of flame, and the plateau drops away beneath you, and the valley, and the sky turns from blue to black. For a long time there is only the hum of the engines and the moon growing in the porthole.',
+          'You come down in a grey plain of dust under a black sky, the Earth hanging over the horizon like a blue lantern. Fifty paces away your master’s ship stands on its legs, its hatch open, empty. A line of footprints leads away from it toward the crater rim, and beyond the rim the light is blinking: long, short, long.',
+        ],
+        found: 'Pressed into the dust at the foot of your master’s ladder, a last page:',
+        page: [
+          'You came. Of course you did. I left the table half empty so you would.',
+          'Follow the footprints. Bring everything you have learned. Up here the world does not fall the way it does at home, and whoever is calling has been waiting a very long time.',
+        ],
+        sign: '— O.',
+      },
+      failText: 'The apprentice didn’t make it.',
+
+      build(w, s) {
+        const { W, H } = w;
+        const k = K.kit(w);
+        const ROCK = [0x8a5a44, 0x7d5140, 0x93624b, 0x6f4838], CONC = [0x9b9a95, 0x8f8e89];
+        // the plateau, with the silo cut down into it
+        const top = 40, floor = 167;
+        rect(w, 0, top, W - 1, H - 1, ID.STONE);
+        paintBox(w, 0, top, W - 1, H - 1, ID.STONE, ROCK);
+        rect(w, 120, top, 250, floor - 1, ID.EMPTY);                        // the hangar
+        rect(w, 120, floor, 250, floor, ID.CONCRETE); paintBox(w, 120, floor, 250, floor, ID.CONCRETE, CONC);
+        // the ship: an iron hull 15 wide with a nose, standing on the pad
+        const x0 = 150, x1 = 164, base = floor - 1, hullTop = base - 26;
+        s.shipBox = { x0: x0 - 4, x1: x1 + 4, y0: hullTop - 8, y1: base };
+        s.hull = { x0, x1, top: hullTop, base };
+        rect(w, x0, hullTop, x1, base, ID.METAL);
+        rect(w, x0 + 1, hullTop + 1, x1 - 1, base - 1, ID.EMPTY);
+        for (let q = 1; q <= 6; q++) rect(w, x0 + q, hullTop - q, x1 - q, hullTop - q, ID.METAL);
+        paintBox(w, x0, hullTop - 6, x1, base, ID.METAL, [0x9aa0a8, 0x8f959d]);
+        // the engines in the floor: two fitted, four sockets empty
+        const thr = (x) => { const i = w.idx(x, base); w.place(i, ID.THRUSTER); w.aux[i] = 0; };
+        thr(x0 + 4); thr(x0 + 5);
+        rect(w, x0 + 6, base, x0 + 9, base, ID.EMPTY);
+        s.sockets = [6, 7, 8, 9].map((d) => w.idx(x0 + d, base));
+        // the tank over them (empty), and its fuel port out through the starboard side
+        k.part(x0 + 5, base - 6, x1 - 4, base - 1, ID.TANK);
+        k.pipe([[x1 - 3, base - 4], [x1 + 2, base - 4]], 0, [[x1 + 2, base - 4, 0]]);
+        for (const dx of [-1, 0, 1]) for (const dy of [-1, 1]) { const i = w.idx(x1 + 2 + dx, base - 4 + dy); if (w.type[i] !== ID.PIPE) w.place(i, ID.CASING); } // open only straight ahead
+        s.port = { x: x1 + 2, y: base - 4 };
+        // the shelf with the switch and its wire down to the engines; the battery belongs on the
+        // shelf against the switch, but it has been left on the floor against the hull
+        rect(w, x0 + 3, base - 12, x0 + 8, base - 12, ID.GLASS);
+        k.part(x0 + 5, base - 14, x0 + 5, base - 13, ID.SWITCH, k.switched(0));
+        rect(w, x0 + 6, base - 13, x0 + 6, base - 12, ID.WIRE);
+        rect(w, x0 + 4, base - 11, x0 + 6, base - 11, ID.WIRE);
+        rect(w, x0 + 4, base - 11, x0 + 4, base - 1, ID.WIRE);
+        rect(w, x0 + 1, base - 2, x0 + 1, base - 1, ID.BATTERY);
+        s.shelf = { x0: x0 + 3, x1: x0 + 4, y0: base - 14, y1: base - 13 };
+        // the smashed porthole, its shards on the shelf
+        rect(w, x0, hullTop + 4, x0, hullTop + 6, ID.EMPTY);
+        s.porthole = [hullTop + 4, hullTop + 5, hullTop + 6].map((y) => w.idx(x0, y));
+        for (let x = x0 + 7; x <= x0 + 8; x++) w.place(w.idx(x, base - 13), ID.SHARDS); // (clear of the wire)
+        // you, in the pilot's place on top of the tank
+        s.seat = { x: x1 - 3, y: base - 7 };
+        w.place(w.idx(x1 - 3, base - 7), ID.HUMAN); w.place(w.idx(x1 - 3, base - 8), ID.HEAD);
+        s.villagers = 1;
+        // the fuel depot on concrete stilts, its valve wired to a switch at its foot
+        const t0 = 205, t1 = 225, tt = 104, tb = 111, vc = 215;
+        k.part(t0, tt, t1, tb, ID.TANK, k.holding(ID.OIL, 40));
+        rect(w, t0 + 1, tb + 1, t0 + 2, floor - 1, ID.CONCRETE); rect(w, t1 - 2, tb + 1, t1 - 1, floor - 1, ID.CONCRETE);
+        paintBox(w, t0, tb + 1, t1, floor - 1, ID.CONCRETE, CONC);
+        k.part(vc, tb + 1, vc, tb + 3, ID.VALVE);                         // a valve under the tank, walled in, open below
+        rect(w, vc - 1, tb + 1, vc - 1, tb + 3, ID.CASING); rect(w, vc + 1, tb + 1, vc + 1, tb + 3, ID.CASING);
+        s.valveOut = { x: vc, y: tb + 4 };
+        k.pipe([[vc, tb + 4], [vc, base - 4], [x1 + 3, base - 4]], 0);           // the fuel line, joined to the port
+        rect(w, vc + 1, tb + 2, 230, tb + 2, ID.WIRE);
+        rect(w, 230, tb + 2, 230, floor - 4, ID.WIRE);
+        k.part(231, floor - 4, 231, floor - 3, ID.SWITCH, k.switched(0));
+        rect(w, 232, floor - 4, 233, floor - 1, ID.BATTERY);
+        s.fuelSwitch = { x: 231, y: floor - 3 };
+        // a workbench, some crates and the hangar's lamps
+        rect(w, 124, floor - 7, 140, floor - 7, ID.WOOD); rect(w, 125, floor - 6, 125, floor - 1, ID.WOOD); rect(w, 139, floor - 6, 139, floor - 1, ID.WOOD);
+        rect(w, 242, floor - 8, 249, floor - 1, ID.WOOD);
+        s.line = 26; // the sky line: past it, the ship is away
+        s.phase = 'build';
+      },
+
+      script(w, s) {
+        if (s.phase === 'build') return launchPad(w, s);
+        if (s.phase === 'moon') return moonfall(w, s);
+      },
+
+      goals: [
+        {
+          id: 'fly', main: true, text: 'Fly to the moon',
+          eval(w, s) {
+            const ready = s.ready || [];
+            const n = ready.filter(Boolean).length;
+            const value = s.phase === 'moon' ? (s.landed ? 'landed' : 'coming down') : s.phase === 'gone' ? 'away' : `${n} / 5 ready`;
+            const progress = s.phase === 'moon' ? (s.landed ? 1 : 0.9) : n / 5 * 0.7;
+            return { met: !!s.landed, progress, value };
+          },
+        },
+        nobodyHurt('safe', 'You come to no harm'),
+        {
+          id: 'whole', keep: true, text: 'Not a scratch on the ship',
+          eval(w, s) { return { holds: !s.dented, value: s.dented ? 'dented' : 'whole' }; },
+        },
+      ],
+      fail(w, s) {
+        if (w.counts[ID.HEAD] < 1) return this.failText;
+        return s.abort || null;
+      },
+    },
+
+    {
+      id: 'moon',
+      num: 'XI',
+      title: 'The Moon',
+      place: 'The dark face of the moon',
+      blurb: 'Who has been signalling, and where your master went.',
+      sealed: true,
     },
   ];
 
@@ -955,15 +2050,26 @@
     if (s.over) return s.over;
     s.t++;
     if (ch.script) ch.script(w, s);
+    // a step of the guide done: say so, and what comes next
+    if (ch.guide && s.t % 15 === 0) {
+      const before = (s.stepsDone || []).slice();
+      const r = step(ch, w, s);
+      const k = s.stepsDone.findIndex((d, q) => d && !before[q]);
+      if (k >= 0 && s.t > SEC) {
+        s.say.push({ eyebrow: `Step ${k + 1} of ${r.n} done`, name: ch.guide[k].title, how: r.k >= 0 ? `Next: ${r.step.title.toLowerCase()}. Hint shows you how.` : 'Nearly there.' });
+      }
+    }
     if (s.t % EVAL_EVERY) return null;
     judge(ch, w, s);
     const reason = ch.fail && ch.fail(w, s);
     if (reason) s.over = { won: false, reason };
     else if (s.goals.filter((g) => g.main).every((g) => g.met)) {
-      s.over = { won: true, stars: s.goals.filter((g) => (g.main ? g.met : !g.lost)).length };
+      // one star for the win, one for each star goal kept
+      s.over = { won: true, stars: Math.min(3, 1 + s.goals.filter((g) => !g.main && !g.lost).length) };
+      if (ch.guide) s.stepsDone = ch.guide.map(() => true); // won: every step of the guide is done
     }
     return s.over;
   }
 
-  G.Story = { chapters, prologue, start, update, clock, SEC };
+  G.Story = { chapters, prologue, start, update, step, clock, SEC };
 })(globalThis);

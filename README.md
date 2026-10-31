@@ -209,7 +209,10 @@ seconds.
 
 ## Machines
 
-The **Machines** section holds the Battery and, once you have made a battery, the machine parts.
+The **Machines** section holds the Battery and the machine parts. Each part opens the first time a
+battery touches its partner in your world: metal for Wire, wood for Switch, fire for Sensor, water
+for Pipe, oil for Pump, steam for Valve, glass for Tank, stone for Piston, methane for Thruster and
+rubble for Landing legs (chapters of the Journey hand out whatever their pouch holds).
 Whatever you draw in one brush stroke is one machine: a blob of pump is one big pump, a thick
 valve one valve, and power reaching any cell of a machine runs all of it. Valves, pumps and
 pistons run on current (each pulse keeps one going for 24 ticks, longer than a battery's 16 between
@@ -408,6 +411,46 @@ broken stone, brick and obsidian, is a powder you discover too, and **dry ice** 
 
 Embers still fly off fires, but have no tile.
 
+## Earned, not given
+
+Most of the game is earned (`js/unlocks.js`, checked by `tools/unlocktest.js`). Whatever you had
+already done counts; the feats in your own world (never in a chapter) count from when they were
+added; sandbox mode opens everything. Locked things stay out of sight until they open, each with a
+toast.
+
+- **The Journey** opens once 30 elements are found (the header's count), the **Weapons** tab at 50.
+- **Weapons:**
+  - Tsunami: flood your world until the water stands above a line 15% below the top. Its hint draws the line.
+  - Volcano: comes with the Volcano scene.
+  - Lightning storm: a storm cloud you brewed throws its own bolt.
+  - Earthquake: smash 5,000 cells.
+  - Ice age: 3,000 cells of ice at once.
+  - Tornado: 10 big explosions, a moment apart.
+  - Hydrogen bomb: 5 Nukes set off beside 60 or more hydrogen.
+  - From the Journey: Acid rain (V), Solar storm (VI), Meteor (VII), Nuke (VIII) and Black hole (X).
+  A hydrogen bomb that falls inside a black hole's reach (the ring its brush shows) is caught: still whistling, it spirals into the middle over a second or so, turning its nose inward
+  and shrinking into the dark. Swallowed, it makes no blast and no sound: the hole grows half as
+  big again (smoothly, once the bomb is in), lasts 5 s longer and rumbles louder. It holds five;
+  the sixth bursts it, and the whole map goes up in one fireball (only Wall survives).
+- **Scenes** (the plain Island is always open):
+  - Canyon: clay, brick, bird and pine.
+  - Volcano: obsidian, and lava heated past 3,000°C.
+  - Forest: oak, pine, willow and firefly.
+  - Caves: limestone, coal and diamond.
+  - Workshop: 25 finds.
+  - Village: cow, human and 3 stained-glass colours.
+  - Waterworks: every machine part but thruster and landing legs.
+  - Electric workshop: tungsten's Try it star.
+  - Magnet lab: its Lab elements.
+  - Nuclear plant: its Lab elements and chapter VIII.
+  - City: its noble gases and 5 stained-glass colours.
+  - Empty bench: 20 finds.
+- **Skies:** Dusk opens with the Volcano or the Nuclear plant, Night with the Empty bench or another
+  night scene.
+- **Hint** gives the answer in a little box. On the Alchemy tab, a recipe you can make now
+  (Ash + Salt → Gunpowder, or Battery + Metal → Wire). With the Weapons tab open, how to earn the
+  next weapon, with your progress. The Scenes menu's last row does the same for scenes.
+
 ## Weapons
 
 The **Weapons** tab holds eleven catastrophes. Pick one and click the map to set it off; the
@@ -419,10 +462,11 @@ painted on:
 | --- | --- |
 | Tsunami | A wall of sea water rises at the nearer edge and rolls in, driving the whole sea inland ahead of it: it breaks over the shore, floods the land and sweeps sand and people along. Then the backwash runs out over the edges and the sea settles back to its old level (water left in hollows stays). It roars with a real recording of heavy surf (see Credits). |
 | Earthquake | Set its magnitude in the box at the top of the tab (2.0 to 9.5, typed or on the slider), then click. The magnitude decides everything, as in reality (see below): how hard the ground shakes, how far, for how long, and so what breaks. Its rumble (a recording, see Credits) starts with the shaking, roars louder the bigger the quake and stops when it does, and you hear the rock crack as it breaks. |
-| Tornado | A funnel of rising, whirling air drops from a storm cloud and travels along the ground, tearing up plants and timber, scouring a trench through loose ground and whirling sand, water, people and animals up and out of its top. Like real wind it is invisible, seen only by what it carries; the Air view (`V`) shows the funnel itself. Hold the button to steer it. |
+| Tornado | A funnel of rising, whirling air drops from a storm cloud and travels along the ground, tearing up plants and timber, scouring a trench through loose ground and whirling sand, water, people and animals up and out of its top. You see it as you would a real one: a grey funnel hanging from a dark wall cloud, a thin rope low down that flares into the storm, bending back from the way it goes, with bands of cloud winding round it as it turns and a whirl of dust and debris round its foot (white spray over water: a waterspout). The Air view (`V`) shows the winds themselves. Hold the button to steer it. |
 | Volcano | Magma rises slowly from the bottom of the map under the cursor, melting a glowing pipe up through the rock. How far it can rise grows with the brush size (a third of the map at the smallest, all of it at the largest; the cursor's dotted line shows how far): if it runs out underground it stays there as a pocket of lava, and if it reaches open air or water it erupts, with a lava fountain that cools into a cone of new stone, glowing bombs and a column of ash, none of it higher than its reach. Over open ground it erupts straight from the bottom, to that height and no higher. |
 | Meteor | A burning rock streaks in at a slant and digs a crater, throwing out rubble and melting the rim, with its iron left glowing at the bottom. Two fragments follow it down. |
 | Lightning storm | Storm clouds roll in and call down bolt after bolt, with a downpour. |
+| Solar storm | Charged particles from the sun sweep over the whole map. Every switch trips off at once (and stays off until you flip it back), and while the storm lasts no circuit works: no battery, cell, panel or sensor can drive a current, so lamps and neon go dark, pumps, valves and pistons stop and a flying ship's thrusters cut out and it falls. Surges crackle along wire and metal and warm it, enough to set a wooden house alight. Green and violet aurora curtains ripple across the sky. The brush size sets how long it lasts (10 to 30 seconds). Undo ends the blackout. |
 | Ice age | A front of cold spreads out to −100°C and below: water and lava freeze, fires go out, plants die of frost and people freeze solid. |
 | Acid rain | A dark cloud bank rains acid that eats into what it lands on. |
 | Nuke | A fireball that vaporises everything near it, a blast wave, a heat flash that sets fire to whatever burns in sight, radiation, and a mushroom cloud (the air turns over in a ring under the cap, as in a real one). |
@@ -477,22 +521,35 @@ about more than heavy ones.
 
 ## The Apprentice's Journey
 
-A story mode on top of the lab. Your master has left the Elementarium to find out why the
-valley's elements are falling out of balance, leaving you a letter and a half-filled table.
-Each chapter is a problem in a real place, solved with alchemy and a limited pouch: you can
-only use what you carry, undo is off, and Restart refills the pouch. Every chapter has one goal
-that wins it and two more for stars, and ends with a page from your master's journal.
-Open it with **Journey** in the panel (or **Begin the journey** on the welcome card).
+A story mode on top of the lab, in ten chapters. For forty nights a light has blinked on the moon's
+dark face, and since it came the valley has gone wrong. Your master, O., has gone to build a ship
+and fly up to see who is calling, leaving you a letter and a half-filled table. You follow their
+trail from village to village: every chapter is a crisis in a real place, solved with a limited
+pouch, and every chapter ends with a page from your master pointing to the next place and to the
+part of the ship they took from it. Each one leans on a different part of the lab and is a little
+harder than the one before; the tenth is the ship itself. You can only use what you carry, undo is
+off, and Restart refills the pouch. Every chapter has a goal that wins it (two, in the first) and
+star goals beside it. Each chapter has its own sky (day, dusk or night; out past the air, black and
+full of stars). **Hint** is a visual guide in three steps, one per thing to do, in the order you do
+them: the page dims but for the place on the map where it happens and the pouch items it takes,
+with the recipe (Ash + Salt → Gunpowder) and a line of advice, and the game waits while it is up.
+It always shows the step you are on: when a step is done a message says so and names the next one,
+and the button counts along (Hint 1/3, 2/3, 3/3). **Leave** asks on a journal page before it takes
+you back to the lab. Open it with **Journey** in the panel (or **Begin the journey** on the welcome card).
 
 | Chapter | Place | The problem | Pouch |
 | --- | --- | --- | --- |
-| I · The Dry Season | Millbrook | No rain since spring; seeds won't take in dry dirt, only mud | Heat, Fire, Seed |
-| II · Wildfire | Hollow End | Lightning in a dry forest; the rain comes at 0:30 and the chapter ends the moment no fire is left | Erase, Water |
-| III · The Broken Bridge | The canyon road | Travellers stranded by a gorge; fill it with water and freeze an ice bridge | Water, Cool |
-| IV · The Flooded Mine | Under the foothills | A spring floods the gallery; freeze its crack shut (draining only buys time) | Cool, Erase, Sand |
-| V · The Waking Mountain | Ashford | An eruption heads for the village; quench the crater or turn the flow | Water, Erase |
-| VI · The Dark City | Gaslight | The lamps are out; place a battery and mend four breaks in the line | Battery, Metal |
-| VII · The Heart | Beneath the mountain | A natural reactor waking; rod its channels with gadolinium before they close | Gadolinium, Water, Cool |
+| I · The Dry Season | Millbrook | No rain since spring. Heat the millpond into clouds until the field turns to mud (once the rain has really come it soaks the whole field), then sow it: the miller's seed grows into leafy crops, and the field counts as green once crops stand along most of it. The dry ground drinks the rest of the rain, and the clouds never build into thunderheads | Heat, Fire, Seed |
+| II · The Cold Kiln | Sandmouth glassworks | Sand melts at 1,700°C and the coal is gone: ash + salt make gunpowder, gunpowder + rust make thermite, and burning oil lights it. Wenna stirs what you pour into the crucible | Ash, Salt, Rust, Oil, Fire |
+| III · The Dark Lighthouse | Gull Point | Boats out in a gale and the lamp dark. Run current from a battery up the tower to the krypton lamp; spray rusts bare metal through, so use coated wire, and put a switch in the line | Battery, Wire, Metal, Switch |
+| IV · The Iron Hills | Copperhill foundry | Cast a hull plate of pure iron from a heap of iron, nickel and copper: warm the heap past nickel's Curie point (358°C) and below iron's (770°C) so the Magnet lifts only iron, then melt it in the mould | Magnet (magnetic only), Heat, Cool |
+| V · The Bitter Spring | Saltmarsh | Zinc in a sour (acid) spring fizzes hydrogen into a glass gasholder, but its top has a hole under a lit lantern: mend it with glass first | Zinc, Glass, Water |
+| VI · The Pumphouse | Oilbeck | Fill a depot on the hill with oil: mend the pipeline over a ravine, then power the pump and the inlet valve. Pump through the gap and the oil pours onto the smith's forge | Pipe, Battery, Switch, Wire |
+| VII · Falling Stars | Skywatch observatory | Three showers of falling stones. Shut the dome's piston shutter (a switch) for each and open it between, so the astronomer watches for 30 s; roof the cottages with concrete (lime + sand → cement) | Sand, Lime, Water, Switch |
+| VIII · The Sleeping Heart | Deepdown power station | The Nuclear plant, with its seam waking and its heat sensor's wire cut. SCRAM it, mend the wire, release the SCRAM, and keep the town lit for 40 s on the plant's own control | Wire, Switch |
+| IX · The Proving Ground | The high plateau | Your master's ship lifts off as you arrive. Fly the test sledge (lift, east and west engines on three switches, air brakes) across the canyon and land it on its legs | Switch |
+| X · The Launch | The hangar under the plateau | Your master's first ship never flew: mend its porthole, move its battery off the hull onto the switch's shelf, fill four empty engine sockets, fit legs, and fuel it from the depot (its fuel line is laid: flip the depot's switch). Light the engines and the line lets go, once all five are fixed; it holds the ship down until then. Fly it out of the silo: it lands on the moon | Erase, Glass, Battery, Thruster, Legs, Switch |
+| XI · The Moon | | Coming soon (moon physics) | |
 
 Discoveries made during a chapter count toward the table, and leaving a chapter hands the lab
 back exactly as it was (world, selection and undo history).
@@ -545,11 +602,11 @@ carries clouds and fog across the map, and open water evaporates faster the warm
 384×240 and Large 512×320), sets the **Sky** behind the map and holds the save slot. The sky only shows
 where nothing is (and through water and glass), so it changes no cell's colour. Auto suits the scene: a
 blue day sky with the sun high over the Island, Canyon, Forest, Caves, Village and Waterworks; dusk over
-the Volcano and the Nuclear plant; night for the City, the indoor scenes, story chapters and the
-Thermal and Air views. Day, Dusk or Night pins it. Rain and storms cloud a day or dusk sky over grey. Undo keeps the last few dozen changes (strokes, scenes, clears, loads).
+the Volcano and the Nuclear plant; night for the City, the indoor scenes and the Thermal and Air
+views. Story chapters bring their own sky, and the moon is always under the stars. Day, Dusk or Night pins it. Rain and storms cloud a day or dusk sky over grey. Undo keeps the last few dozen changes (strokes, scenes, clears, loads).
 
 Discoveries are saved in the browser, along with one world slot.
-**Scenes** offers thirteen starting worlds: Island (every game starts on the plain one, sea, sand and a garden; once every plant and creature has been found it grows into a tropical island with palm beaches, a jungle hill, a coral reef, a hut on stilts and a sea stack), Canyon (rock layers in the Grand Canyon’s real colours, from pale limestone at the rim down through red shales and the Redwall to dark schist, a green river and a rope bridge), Volcano (a dark brown cone with a red-hot mouth holding a lava lake, fed up a pipe from a chamber on the hot world floor: deep magma stays molten until it meets the open air. Fire the Volcano weapon into the middle of the mountain and its magma climbs the pipe and erupts out of the mouth: magma already in its way costs it none of its reach), Forest (dense tall pines and broad oaks, willows over a lily pond, bushes, flowers, a fallen log and mushrooms), Caves (a limestone cavern hung with stalactites under an underground lake, iron, copper and gold ores, a coal seam, an amethyst geode, diamonds round a magma pocket, a lake and an oil pocket), Workshop (jars, blocks and pots of every starter, and a fire in the grate), Village (a limestone church with a spire and rose window, brick, timber and wooden houses, a red barn, cows in a fenced pasture, a well, a pond, crops and a windmill), Nuclear plant (a reactor that runs itself and lights a town), City (skyscrapers whose floors are lit by tubes of helium, neon, argon, krypton and xenon, stained-glass crowns, a spire with a red beacon, neon signs and street lamps), Electric workshop (three benches of working circuits: a light bulb, a carbon arc, a sparkler, a solar panel, lemon and car batteries, a tantalum capacitor firing a xenon flash, a red-green-blue phosphor screen, and switched machines: a lamp, a kettle, a pumped fountain, a piston lift and a fire alarm), Magnet lab (three floors: a separator pulling iron out of falling sand, which metals a magnet takes, bismuth pushed away, an electromagnet crane, neodymium and samarium magnets on heaters, iron dropping out of a fire past its Curie point, chilled gadolinium and filings drawn up in a jar), Waterworks and an empty bench. **Hint** names something you can make with what you already have. The **Codex** lists
+**Scenes** offers thirteen starting worlds: Island (every game starts on the plain one, sea, sand and a garden; once every plant and creature has been found it grows into a tropical island with palm beaches, a jungle hill, a coral reef, a hut on stilts and a sea stack), Canyon (rock layers in the Grand Canyon’s real colours, from pale limestone at the rim down through red shales and the Redwall to dark schist, a green river and a rope bridge), Volcano (a dark brown cone with a red-hot mouth holding a lava lake, fed up a pipe from a chamber on the hot world floor: deep magma stays molten until it meets the open air. Fire the Volcano weapon into the middle of the mountain and its magma climbs the pipe and erupts out of the mouth: magma already in its way costs it none of its reach), Forest (dense tall pines and broad oaks, willows over a lily pond, bushes, flowers, a fallen log and mushrooms), Caves (a limestone cavern hung with stalactites under an underground lake, iron, copper and gold ores, a coal seam, an amethyst geode, diamonds round a magma pocket, a lake and an oil pocket), Workshop (jars, blocks and pots of every starter, and a fire in the grate), Village (a limestone church with a spire and rose window, brick, timber and wooden houses, a red barn, cows in a fenced pasture, a well, a pond, crops and a windmill), Nuclear plant (a reactor that runs itself and lights a town), City (skyscrapers whose floors are lit by tubes of helium, neon, argon, krypton and xenon, stained-glass crowns, a spire with a red beacon, neon signs and street lamps), Electric workshop (three benches of working circuits: a light bulb, a carbon arc, a sparkler, a solar panel, lemon and car batteries, a tantalum capacitor firing a xenon flash, a red-green-blue phosphor screen, and switched machines: a lamp, a kettle, a pumped fountain, a piston lift and a fire alarm), Magnet lab (three floors: a separator pulling iron out of falling sand, which metals a magnet takes, bismuth pushed away, an electromagnet crane, neodymium and samarium magnets on heaters, iron dropping out of a fire past its Curie point, chilled gadolinium and filings drawn up in a jar), Waterworks and an empty bench (each but the plain Island is earned: see "Earned, not given"). **Hint** shows a recipe you can make with what you already have. The **Codex** lists
 everything found so far, with recipes and the temperatures where each element changes.
 Clone unlocks after 8 discoveries and Void after 16. Sandbox mode in the Codex unlocks
 everything at once.
@@ -654,8 +711,12 @@ mercury, criticality, control rods, decay chains, neon lamps, people fleeing fir
 `stormtest` checks that a player can brew a thunderstorm by boiling water.
 `weathertest` checks the weather (rain, snow, hail, fog, lightning, wind, evaporation into
 clouds) and the newest elements, plus undo snapshots and that saves survive new elements.
-`storytest` plays each chapter headless on three seeded maps: doing nothing must not win, and
-the intended solutions must (heating the pond; a firebreak, early or late; soaking the meadow).
+`storytest` checks every chapter's guide (three steps, each lighting a real place, wanting only what the
+pouch holds), then plays each of the ten chapters headless on one seeded map: doing nothing must not win,
+the intended solution (played as a player would, from the pouch) must, walking the guide's three steps
+in order, and several wrong ways must
+fail (bare metal in the spray, zinc under an open bell, pumping through the gap, a ship with no legs
+or still joined to its depot).
 `airtest` checks the air field and momentum against what the engine did before them: a bomb
 throws a heap of sand sideways, a blast blows a ring of smoke outward, a dropped column of water
 travels much further along the floor and splashes up a wall, a blast's pressure pushes oil,

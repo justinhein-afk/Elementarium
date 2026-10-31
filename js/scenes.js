@@ -1205,6 +1205,14 @@
           x += Math.cos(a); y += Math.sin(a) + rand(-0.6, 0.6);
         }
       }
+      // diamonds: a light scatter in a few pockets of the deep rock, a brush 4 across (a dab of spray)
+      for (let k = 0; k < 5; k++) {
+        const x0 = Math.round(rand(0.08, 0.92) * W), y0 = Math.round(rand(0.62, 0.95) * H), r = P(4);
+        for (let y = y0 - r; y <= y0 + r; y++) for (let x = x0 - r; x <= x0 + r; x++) {
+          if (!inRock(x, y) || (x - x0) ** 2 + (y - y0) ** 2 > r * r || Math.random() > 0.22) continue;
+          w.place(w.idx(x, y), ID.DIAMOND);
+        }
+      }
       // a coal seam
       const sy = Math.round(H * 0.25);
       for (let x = Math.round(W * 0.55); x < Math.round(W * 0.95); x++) {
@@ -1565,5 +1573,9 @@
   };
 
   G.Scenes = scenes;
-  G.SceneKit = { noise1, fillCol, blob }; // shared with the story chapters
+  // shared with the story chapters
+  G.SceneKit = {
+    noise1, fillCol, blob, rgb, mixRGB, tone, put, rect, paintBox, pick, topOf, rand,
+    oak, pine, palm, willow, bush, snag, flower, grassOver, person, scatter, pipe, kit, ground,
+  };
 })(globalThis);

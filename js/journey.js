@@ -11,7 +11,7 @@
 
   let game = null, api = null;
   // the chapter being played: its world state, what is left in the pouch, the lab waiting for us
-  const run = { ch: null, s: null, left: new Map(), lab: null, hint: 0, ending: false, emptyNote: 0 };
+  const run = { ch: null, s: null, left: new Map(), lab: null, ending: false, emptyNote: 0, magnet: null };
   const progress = Object.assign({ prologue: false, stars: {} }, UI.store.get('journey', {}));
   const saveProgress = () => UI.store.set('journey', progress);
 
@@ -19,6 +19,8 @@
   const selOf = (it) => (it.kind === 'tool' ? { kind: 'tool', name: it.name } : { kind: 'element', t: byKey[it.key].id });
   const nameOf = (it) => (it.kind === 'tool' ? UI.toolName(it.name) : byKey[it.key].name);
   const starText = (n) => '★'.repeat(n) + '☆'.repeat(3 - n);
+  const GLYPH = { heat: '▲', cool: '▼', erase: '⌫', magnet: '∩', smash: '✶' };
+  const glyphOf = (name) => GLYPH[name] || '⌫';
   const chapterOpen = (k) => !Story.chapters[k].sealed && (k === 0 || progress.stars[Story.chapters[k - 1].id] > 0);
   const fmt = (n) => Math.max(0, Math.round(n)).toLocaleString();
 
@@ -64,12 +66,17 @@
         for (const it of b.pouch) {
           const chip = el('span', 'chip');
           if (it.kind === 'element') chip.append(UI.swatch(byKey[it.key].id, 14, 14));
-          else chip.append(el('span', `glyph ${it.name}`, it.name === 'heat' ? '▲' : it.name === 'cool' ? '▼' : '⌫'));
+          else chip.append(el('span', `glyph ${it.name}`, glyphOf(it.name)));
           chip.append(el('span', '', nameOf(it)), el('span', 'n', it.n == null ? '∞' : fmt(it.n)));
           row.append(chip);
         }
         box.append(row);
         body.append(box);
+      }
+      if (b.part) {
+        const t = el('div', 'task part');
+        t.append(el('div', 'label', 'For the ship'), el('p', '', b.part));
+        body.append(t);
       }
       if (b.goals) {
         const ul = el('ul', 'page-goals');
@@ -115,9 +122,11 @@
       b.disabled = !open;
       const txt = el('span', 'txt');
       txt.append(el('span', 'place', ch.place), el('span', 'title', ch.title), el('span', 'blurb', ch.blurb));
-      const state = ch.sealed ? 'Sealed' : !open ? 'Locked' : run.ch === ch ? 'Playing' : stars ? starText(stars) : 'Begin';
-      b.append(el('span', 'num', ch.num), txt, el('span', 'state', state));
-      if (ch.sealed) b.title = 'These pages are still sealed. More of the journey is coming.';
+      const state = ch.sealed ? 'Coming soon' : !open ? 'Locked' : run.ch === ch ? 'Playing' : stars ? starText(stars) : 'Begin';
+      const num = el('span', 'num', ch.num);
+      if (ch.num.length > 3) num.dataset.long = '';
+      b.append(num, txt, el('span', 'state', state));
+      if (ch.sealed) b.title = 'These pages are still sealed. This part of the journey is coming soon.';
       else if (!open) b.title = 'Finish the chapter before this one first.';
       b.addEventListener('click', () => { AudioFX.click(); intro(ch); });
       li.append(b);
@@ -147,9 +156,17 @@
       progress.stars[ch.id] = best;
       saveProgress();
       AudioFX.unlock();
+      // a win can earn a weapon (or open a scene): say so on the page, and with a toast
+      const fresh = G.Unlocks.check();
+      UI.announce(fresh);
       const blocks = [...ch.outro.body.map((p) => ({ p })), { goals: s.goals }];
+      for (const [kind, name] of fresh) {
+        if (kind === 'weapon') blocks.push({ p: `Unlocked: the ${UI.weaponName(name)} weapon, in the Weapons tab.`, cls: 'after' });
+        if (kind === 'scene') blocks.push({ p: `Unlocked: the ${UI.sceneName(name)} scene.`, cls: 'after' });
+      }
       if (ch.outro.page) blocks.push({ p: ch.outro.found, cls: 'found' }, { letter: ch.outro.page, sign: ch.outro.sign });
-      if (next && next.sealed) blocks.push({ p: `Chapter ${next.num}, “${next.title}”, is still sealed. More of the journey is coming.`, cls: 'after' });
+      if (ch.part) blocks.push({ part: ch.part });
+      if (next && next.sealed) blocks.push({ p: `Chapter ${next.num}, “${next.title}”, is coming soon.`, cls: 'after' });
       const actions = [];
       if (next && !next.sealed) actions.push({ label: `On to chapter ${next.num}`, primary: true, fn: () => intro(next) });
       actions.push({ label: 'Back to the map', primary: !next || next.sealed, fn: () => { leave(); openMap(); } });
@@ -170,14 +187,19 @@
 
   // ───── running a chapter ─────
   function start(ch) {
+    closeGuide();
     closeStory();
     if (!run.ch) run.lab = api.borrowLab();
     const w = api.newWorld(...ch.size);
     run.ch = ch;
     run.s = Story.start(ch, w);
     run.left = new Map(ch.pouch.map((it) => [keyOf(selOf(it)), it.n == null ? Infinity : it.n]));
-    run.hint = 0;
     run.ending = false;
+    $('#q-hint').textContent = ch.guide ? `Hint 1/${ch.guide.length}` : 'Hint';
+    // a chapter can say what the Magnet picks up (the lab's own setting comes back on leaving)
+    if (run.magnet == null) run.magnet = game.magnetOnly;
+    game.magnetOnly = ch.magnetOnly != null ? ch.magnetOnly : run.magnet;
+    document.body.classList.remove('cutscene');
     api.useWorld(w);
     game.selected = selOf(ch.pouch[0]);
     document.body.classList.add('questing');
@@ -194,10 +216,12 @@
   }
 
   function leave() {
+    closeGuide();
     if (!run.ch) return;
     run.ch = null;
     run.s = null;
-    document.body.classList.remove('questing');
+    document.body.classList.remove('questing', 'cutscene');
+    if (run.magnet != null) { game.magnetOnly = run.magnet; run.magnet = null; }
     $('#quest').hidden = true;
     $('#pouch').hidden = true;
     api.returnLab(run.lab);
@@ -215,6 +239,12 @@
       UI.toast({ eyebrow: m.eyebrow, name: m.name, how: m.how, ms: 5600 });
     }
     if (s.t % 10 === 0) renderGoals();
+    document.body.classList.toggle('cutscene', !!s.cutscene);
+    if (s.t % 15 === 0 && run.ch.guide) {
+      const n = run.ch.guide.length, k = (s.stepsDone || []).filter(Boolean).length;
+      const label = k < n ? `Hint ${k + 1}/${n}` : 'Hint';
+      if ($('#q-hint').textContent !== label) $('#q-hint').textContent = label;
+    }
     if (over && !run.ending) {
       run.ending = true;
       renderGoals();
@@ -255,7 +285,7 @@
       b.dataset.k = keyOf(sel);
       b.dataset.n = it.n == null ? '' : it.n;
       if (sel.kind === 'element') b.append(UI.swatch(sel.t, 40, 40));
-      else b.append(el('span', `pglyph ${it.name}`, it.name === 'heat' ? '▲' : it.name === 'cool' ? '▼' : '⌫'));
+      else b.append(el('span', `pglyph ${it.name}`, glyphOf(it.name)));
       const txt = el('span', 'ptxt');
       txt.append(el('span', 'pname', nameOf(it)), el('span', 'pleft'));
       const bar = el('span', 'pbar');
@@ -296,14 +326,130 @@
     UI.note(it ? `Your ${nameOf(it).toLowerCase()} is used up` : 'Not in your pouch', 'Restart the chapter to refill the pouch.');
   }
 
+  // ───── the guide: Hint lights up the next thing to do ─────
+  // The page dims but for the place on the map where it happens and the pouch items it takes, with a
+  // note and the recipe beside them. It always shows the step you are on (story.js keeps track), and
+  // the game waits while it is up.
+  const NS = 'http://www.w3.org/2000/svg';
+  let guide = null;
+  const useKey = (u) => (u.startsWith('tool:') ? u : `el:${byKey[u].id}`);
+  const useName = (u) => (u.startsWith('tool:') ? UI.toolName(u.slice(5)) : byKey[u].name);
+  function chipFor(u) {
+    const c = el('span', 'chip');
+    if (u.startsWith('tool:')) c.append(el('span', `glyph ${u.slice(5)}`, glyphOf(u.slice(5))));
+    else c.append(UI.swatch(byKey[u].id, 16, 16));
+    c.append(el('span', '', useName(u)));
+    return c;
+  }
   function hint() {
-    const hs = run.ch.hints;
-    const k = Math.min(run.hint, hs.length - 1);
-    run.hint++;
-    UI.toast({ eyebrow: `Hint ${k + 1} of ${hs.length}`, name: hs[k], note: true, ms: 9000 });
+    if (!run.ch) return;
+    const r = Story.step(run.ch, game.world, run.s);
+    if (!r || r.k < 0) {
+      const main = run.s.goals.find((g) => g.main && !g.met);
+      UI.toast({ eyebrow: 'Hint', name: main ? main.text : 'Nearly there', how: 'Every step of the guide is done. Keep at it.', note: true, ms: 6000 });
+      return;
+    }
+    openGuide(r);
+  }
+  function openGuide({ k, n, step }) {
+    closeGuide();
+    const root = el('div', 'guide');
+    root.setAttribute('role', 'dialog');
+    root.setAttribute('aria-label', `Step ${k + 1} of ${n}: ${step.title}`);
+    const svg = document.createElementNS(NS, 'svg');
+    svg.classList.add('guide-dim');
+    svg.addEventListener('click', () => { AudioFX.click(); closeGuide(); });
+    const tip = el('div', 'tour-tip guide-tip');
+    const head = el('div', 'tt-head');
+    head.append(el('span', 'tt-step', `Step ${k + 1} of ${n}`), el('b', '', step.title));
+    tip.append(head);
+    if (step.use.length) {
+      const row = el('div', 'guide-recipe');
+      step.use.forEach((u, q) => { if (q) row.append(el('span', 'op', '+')); row.append(chipFor(u)); });
+      if (step.makes) row.append(el('span', 'op', '→'), chipFor(step.makes));
+      tip.append(row);
+    }
+    tip.append(el('p', '', step.note));
+    const btns = el('div', 'tt-btns');
+    const later = el('button', 'tt-skip', 'Close');
+    later.type = 'button';
+    later.addEventListener('click', () => { AudioFX.click(); closeGuide(); });
+    const first = step.use.find((u) => run.left.has(useKey(u)));
+    const go = el('button', 'pill primary', first ? `Pick up ${useName(first)}` : 'Got it');
+    go.type = 'button';
+    go.addEventListener('click', () => {
+      AudioFX.click();
+      if (first) UI.select(first.startsWith('tool:') ? { kind: 'tool', name: first.slice(5) } : { kind: 'element', t: byKey[first].id });
+      closeGuide();
+    });
+    btns.append(later, go);
+    tip.append(btns);
+    root.append(svg, tip);
+    document.body.append(root);
+    guide = { root, svg, tip, step, paused: game.paused };
+    api.setPaused(true);
+    placeGuide();
+    go.focus();
+  }
+  function closeGuide() {
+    if (!guide) return;
+    const { root, paused } = guide;
+    guide = null;
+    root.remove();
+    for (const t of document.querySelectorAll('.ptile.guide-on')) t.classList.remove('guide-on');
+    if (!paused && run.ch) api.setPaused(false);
+  }
+  // the holes in the dimmed page: the place on the map, and the pouch tiles; the note beside the map's
+  function placeGuide() {
+    if (!guide || !run.ch) return;
+    const { svg, tip, step } = guide;
+    const W = innerWidth, H = innerHeight;
+    const holes = [];
+    const stage = $('#stage').getBoundingClientRect();
+    const z = step.at(game.world, run.s);
+    const a = game.renderer.worldToClient(Math.max(0, z.x0), Math.max(0, z.y0));
+    const b = game.renderer.worldToClient(Math.min(game.world.W, z.x1 + 1), Math.min(game.world.H, z.y1 + 1));
+    const spot = { left: Math.max(stage.left + 4, a.x - 6), top: Math.max(stage.top + 4, a.y - 6), right: Math.min(stage.right - 4, b.x + 6), bottom: Math.min(stage.bottom - 4, b.y + 6) };
+    if (spot.right - spot.left < 28) { const c = (spot.left + spot.right) / 2; spot.left = c - 14; spot.right = c + 14; }
+    if (spot.bottom - spot.top < 28) { const c = (spot.top + spot.bottom) / 2; spot.top = c - 14; spot.bottom = c + 14; }
+    holes.push(spot);
+    for (const t of document.querySelectorAll('.ptile.guide-on')) t.classList.remove('guide-on');
+    for (const u of step.use) {
+      const tile = document.querySelector(`#pouch-grid .ptile[data-k="${useKey(u)}"]`);
+      if (!tile) continue;
+      tile.classList.add('guide-on');
+      const r = tile.getBoundingClientRect();
+      if (r.width && r.bottom > 0 && r.top < H) holes.push({ left: r.left - 3, top: r.top - 3, right: r.right + 3, bottom: r.bottom + 3 });
+    }
+    svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    const rect = (h, attrs) => {
+      const e = document.createElementNS(NS, 'rect');
+      e.setAttribute('x', h.left); e.setAttribute('y', h.top); e.setAttribute('width', h.right - h.left); e.setAttribute('height', h.bottom - h.top);
+      for (const [k2, v] of Object.entries(attrs)) e.setAttribute(k2, v);
+      return e;
+    };
+    svg.innerHTML = '';
+    const defs = document.createElementNS(NS, 'defs'), mask = document.createElementNS(NS, 'mask');
+    mask.setAttribute('id', 'guide-mask');
+    mask.append(rect({ left: 0, top: 0, right: W, bottom: H }, { fill: 'white' }));
+    for (const h of holes) mask.append(rect(h, { fill: 'black', rx: 8 }));
+    defs.append(mask);
+    svg.append(defs, rect({ left: 0, top: 0, right: W, bottom: H }, { class: 'shade', mask: 'url(#guide-mask)' }));
+    for (const h of holes) svg.append(rect(h, { class: 'ring', rx: 8 }));
+    // the note: below the place on the map if there is room, else above it, else inside its top
+    const tw = tip.offsetWidth, th = tip.offsetHeight, gap = 12;
+    let top = spot.bottom + gap;
+    if (top + th > H - 8) top = spot.top - gap - th;
+    if (top < 8) top = Math.max(8, Math.min(H - th - 8, spot.top + 8));
+    const left = Math.max(8, Math.min(W - tw - 8, (spot.left + spot.right) / 2 - tw / 2));
+    Object.assign(tip.style, { left: `${left}px`, top: `${top}px` });
   }
 
   function openJourney() {
+    if (!G.Unlocks.has('journey')) { // it opens once enough elements are found
+      UI.note('The Journey is not open yet', `Find ${G.Unlocks.JOURNEY_AT} elements first: you have ${UI.found()}.`);
+      return;
+    }
     if (!progress.prologue) prologue(true);
     else openMap();
   }
@@ -365,16 +511,33 @@
       UI.store.set('questPos', null);
     });
     $('#q-restart').addEventListener('click', () => { AudioFX.click(); start(run.ch); });
+    // Leave asks on a journal page of its own: a browser's confirm() box can be refused without a
+    // word (the desktop app's browser pane does), and then Leave would do nothing
     $('#q-leave').addEventListener('click', () => {
-      if (!confirm('Leave this chapter? Your lab will be just as you left it, and the chapter waits on the journey map.')) return;
-      leave();
-      UI.note('Back in the lab', 'The Journey button opens the map again.');
+      if (!run.ch) return;
+      AudioFX.click();
+      const ch = run.ch;
+      page({
+        eyebrow: `Chapter ${ch.num} · ${ch.place}`,
+        title: 'Leave this chapter?',
+        blocks: [{ p: 'Your lab will be just as you left it, and the chapter waits on the journey map. Whatever you have done in it so far will be lost.' }],
+        actions: [
+          { label: 'Leave', primary: true, fn: () => { closeStory(); leave(); UI.note('Back in the lab', 'The Journey button opens the map again.'); } },
+          { label: 'Keep playing', fn: closeStory },
+        ],
+      });
     });
+    addEventListener('resize', placeGuide);
+    addEventListener('keydown', (e) => { if (guide && e.key === 'Escape') { e.preventDefault(); closeGuide(); } });
   }
 
   G.Journey = {
     init, afterTick, refreshPouch, hint, left, spend, empty,
     get active() { return !!run.ch; },
-    allows: (sel) => !!run.ch && run.left.has(keyOf(sel)),
+    // the chapter's sky: its own, or what its script has moved it to
+    get sky() { return run.s ? run.s.sky || run.ch.sky : null; },
+    // while a chapter plays a scene of its own, hands off the map
+    get locked() { return !!(run.s && run.s.cutscene); },
+    allows: (sel) => !!run.ch && !(run.s && run.s.cutscene) && run.left.has(keyOf(sel)),
   };
 })(globalThis);

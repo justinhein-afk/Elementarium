@@ -319,6 +319,52 @@ function check(label, ok, detail) { out.push({ label, ok, detail }); }
       + `${Math.round(gone * 100)}% of the rock inside gone, ${Math.round(standing * 100)}% of it beyond the edge still standing; ${people} people left; ${smokeHigh} smoke high up`);
 }
 
+// Solar storm: every circuit fails while it lasts and switches trip off; a lamp comes back on after it
+// (if nothing switched it), a ship's thrusters cut out, and the metal picks up surges.
+{
+  const lit = (w) => { let n = 0; for (let i = 0; i < w.N; i++) if (w.type[i] === ID.EL_NE && w.charge[i]) n++; return n; };
+  const w = world();
+  rect(w, 0, 150, 255, 159, ID.WALL);
+  rect(w, 40, 140, 120, 144, ID.GLASS); rect(w, 41, 141, 119, 143, ID.EL_NE); // a neon tube…
+  w.place(w.idx(42, 142), ID.BATTERY);                                         // …lit by a battery inside it
+  rect(w, 150, 149, 158, 149, ID.BATTERY); rect(w, 159, 149, 160, 149, ID.SWITCH); rect(w, 161, 149, 200, 149, ID.WIRE); // a switched circuit
+  for (let x = 159; x <= 160; x++) w.aux[w.idx(x, 149)] = 1;
+  rect(w, 20, 100, 230, 101, ID.METAL);                                         // a long metal girder
+  let before = 0, during = 0, after = 0, hottest = 0;
+  run(w, 60, (ww) => { before += lit(ww); });
+  w.launch('solar', 128, 50, 1.5);
+  const life = w.disasters[0].life, tripped = w.aux[w.idx(159, 149)] === 0 && w.aux[w.idx(160, 149)] === 0;
+  run(w, life, (ww, k) => {
+    if (k > 30) during += lit(ww);
+    for (let x = 20; x <= 230; x++) hottest = Math.max(hottest, ww.temp[ww.idx(x, 100)]);
+  }, 'solar');
+  run(w, 120, (ww) => { after += lit(ww); });
+  const still = w.aux[w.idx(159, 149)] === 0;
+  check('A solar storm knocks out every circuit, trips switches and heats the metal',
+    before > 100 && during === 0 && after > 100 && tripped && still && hottest > 120,
+    `lit neon cell-ticks: ${before} before, ${during} during, ${after} after; switches tripped: ${tripped}, still off after: ${still}; the girder got to ${Math.round(hottest)}°C`);
+}
+{
+  // a rocket in flight (its battery wired straight to its thruster) falls when the storm cuts it out
+  const w = world(160, 220);
+  rect(w, 0, 210, 159, 219, ID.STONE);
+  const x0 = 70, base = 207;
+  rect(w, x0, base - 20, x0 + 12, base, ID.METAL); rect(w, x0 + 1, base - 19, x0 + 11, base - 1, ID.EMPTY);
+  rect(w, x0 + 4, base, x0 + 8, base, ID.THRUSTER);
+  for (let i = 0; i < w.N; i++) if (w.type[i] === ID.TANK || w.type[i] === ID.THRUSTER) w.aux[i] = 0;
+  rect(w, x0 + 5, base - 6, x0 + 8, base - 1, ID.TANK);
+  for (let i = 0; i < w.N; i++) if (w.type[i] === ID.TANK) { w.aux[i] = ID.OIL; w.data[i] = 40; }
+  rect(w, x0 + 3, base - 9, x0 + 4, base - 9, ID.BATTERY); rect(w, x0 + 4, base - 8, x0 + 4, base - 1, ID.WIRE);
+  const topOf = () => { for (let y = 0; y < w.H; y++) for (let x = 0; x < w.W; x++) if (w.type[w.idx(x, y)] === ID.METAL) return y; return -1; };
+  run(w, 120);
+  const flying = topOf();
+  w.launch('solar', 80, 40, 1);
+  let firing = 0;
+  run(w, 200, (ww) => { for (let i = 0; i < ww.N; i++) if (ww.type[i] === ID.THRUSTER && (ww.aux[i] & 4)) { firing++; break; } });
+  check('…and a flying ship\'s thrusters cut out, so it falls', flying < base - 40 && firing < 40 && topOf() > flying + 20,
+    `it was up at y=${flying}; firing on ${firing} of 200 ticks of the storm; now at y=${topOf()}`);
+}
+
 // Undo: restoring a snapshot taken before a weapon went off stops it.
 {
   const w = world();
