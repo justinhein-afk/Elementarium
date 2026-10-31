@@ -687,6 +687,7 @@ the Codex unlocks everything at once.
 | `js/labview.js` | The Lab on screen: the sample, the test tube with its own renderer and loop, the handbook, and the cards |
 | `js/main.js` | Boot, fixed-timestep loop (60 ticks/s), pointer, touch and keyboard input, the saved worlds, full screen |
 | `rotate.html` | The game turned a quarter round in a frame, for a phone that won't turn the page itself |
+| `favicon.ico`, `icons/`, `manifest.webmanifest` | The icon: in the browser tab, on a phone's home screen, and for installing it as an app |
 
 Each cell's element is a 16-bit number, with room for 1,022 elements (`ELEM.NT` in `elements.js` sets
 the limit; the last two numbers are the map's invisible border and the mark for rainbow fire). Saves
