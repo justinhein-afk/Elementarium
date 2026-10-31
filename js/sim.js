@@ -391,7 +391,7 @@
     const disc = new Uint8Array(NT);
     const counts = new Int32Array(NT);
     // booms: x, y, radius, kind (the element whose colour the blast shows) for each blast this frame
-    const events = { sizzle: 0, ignite: 0, fizz: 0, zap: 0, burning: 0, fission: 0, decay: 0, rad: 0, naturalBolt: 0, booms: [], bolts: [], found: [], rx: [], fused: [] };
+    const events = { sizzle: 0, ignite: 0, fizz: 0, zap: 0, burning: 0, fission: 0, decay: 0, rad: 0, naturalBolt: 0, holeFed: 0, holeBurst: 0, booms: [], bolts: [], found: [], rx: [], fused: [] };
     // A contact reaction worth seeing: x, y and the element whose colour the renderer flashes there.
     // Capped per frame, so a whole pool of acid eating a heap of zinc doesn't flood the screen.
     function flashRx(i, t) {
@@ -739,6 +739,21 @@
     }
 
     // ───── electricity ─────
+    // The Ground tool, while it is held: every current within its reach runs to earth. No conductor in
+    // it carries a pulse on, the machines in it lose their power, and sparks and lightning vanish.
+    let gnd = null; // { x, y, r, r2 } while held
+    function ground(o) { gnd = o ? { x: o.x, y: o.y, r: o.r, r2: (o.r + 0.5) * (o.r + 0.5) } : null; }
+    const grounded = (i) => { const dx = cx(i) - gnd.x, dy = cy(i) - gnd.y; return dx * dx + dy * dy <= gnd.r2; };
+    function groundPass() {
+      forCircle(gnd.x, gnd.y, gnd.r, (i) => {
+        const t = type[i];
+        if (charge[i] && rnd() < 0.15) flashRx(i, SPARK); // a flicker where current is drawn off
+        charge[i] = 0;
+        if (P_CONSUMER[t]) sap[i] = 0;
+        else if (t === SPARK || t === LIGHTNING) place(i, EMPTY);
+      });
+    }
+
     function energize(n) {
       if (empLeft > 0) return; // a solar storm: nothing can drive a current
       if (charge[n] === 0) {
@@ -756,6 +771,7 @@
     const superconducting = (j) => P_SC[type[j]] !== 0 && temp[j] < P_SC[type[j]];
 
     function electric(i, t) {
+      if (gnd && grounded(i)) { charge[i] = 0; return; } // run to earth
       const c = charge[i];
       if (!P_CONDUCT[t] || empLeft > 0) { charge[i] = 0; return; }
       // a valve, a pump or a piston runs on the current and passes it no further; a switch that is
@@ -2798,12 +2814,19 @@
       let j = i;
       for (let s = 0; s < 3; s++) {
         const d = aux[j], n = j + RAY[d], nt = type[n];
-        if (nt === EMPTY || nt === LIGHT) { swap(j, n); j = n; continue; }
+        // another ray in the way: two meeting head on pass through each other; one going the same
+        // way (or across) is waited for, never shoved back, so a blob of light brushed on flies apart
+        // instead of shuffling in place
+        if (nt === LIGHT) {
+          if (aux[n] !== ((d + 4) & 7)) break;
+          swap(j, n); stamp[j] = now; j = n; continue;
+        }
+        if (nt === EMPTY) { swap(j, n); j = n; continue; }
         if (nt === BOUND) { unlight(j); return; }
         if (seeThrough(n)) {
           // through to the far side, taking stained glass's colour on the way
           let m = n, k = 0;
-          for (; k < 48 && type[m] !== BOUND && seeThrough(m); k++, m += RAY[d]) if (type[m] === GLASS && GLASS_RGB[aux[m]]) col[j] = GLASS_RGB[aux[m]];
+          for (; k < 48 && type[m] !== BOUND && (seeThrough(m) || type[m] === LIGHT); k++, m += RAY[d]) if (type[m] === GLASS && GLASS_RGB[aux[m]]) col[j] = GLASS_RGB[aux[m]];
           if (type[m] === EMPTY) { swap(j, m); j = m; continue; }
           if (type[m] !== BOUND && k < 48) shine(m);
           unlight(j); return;
@@ -2813,7 +2836,8 @@
           const dx = RDX[d], dy = RDY[d];
           let ndx = -dx, ndy = -dy;
           if (dx && dy) {
-            const hb = type[j + dx] !== EMPTY, vb = type[j + dy * SW] !== EMPTY;
+            const wall = (k) => type[k] !== EMPTY && type[k] !== LIGHT; // another ray is no face to bounce off
+            const hb = wall(j + dx), vb = wall(j + dy * SW);
             if (hb !== vb) { ndx = hb ? -dx : dx; ndy = vb ? -dy : dy; }
           }
           for (let q = 0; q < 8; q++) if (RDX[q] === ndx && RDY[q] === ndy) { aux[j] = q; break; }
@@ -3491,8 +3515,8 @@
             return;
           }
           if (t === WOOD || t === COAL || t === EL_C) {
-            // wood chars to coal, coal (or carbon) compresses to diamond — but only when sealed from air
-            if (!hasAir(i)) { transform(i, t === WOOD ? COAL : DIAMOND); return; }
+            // sealed from air, wood smoulders into embers (then ash) and coal (or carbon) compresses to diamond
+            if (!hasAir(i)) { transform(i, t === WOOD ? EMBER : DIAMOND); return; }
           } else {
             const to = P_HI_TO[t];
             if (to === STEAM) events.sizzle++;
@@ -3561,9 +3585,10 @@
           const n = i + N8[(rnd() * 8) | 0], nt = type[n];
           if (P_FLAM[nt] > 0 && !(flags[n] & BURN) && rnd() < P_FLAM[nt] * 0.25) { ignite(n); dye(n, flags[i]); }
           // flame test: a pinch of a flame-colouring element tints the fire that licks it, and the
-          // tint rises through the flame. Sodium's yellow swamps the others, as in a real flame.
+          // tint rises through the flame. Sodium's yellow swamps the others, as in a real flame: it
+          // takes over flame another element has tinted, too
           if (P_FLAME[nt] && !P_EXPL_R[nt]) { if (!aux[i] || nt === EL_NA) aux[i] = nt; }
-          else if (nt === FIRE && !aux[i] && aux[n] && rnd() < 0.7) aux[i] = aux[n];
+          else if (nt === FIRE && aux[n] && (!aux[i] || (aux[n] === EL_NA && aux[i] !== EL_NA)) && rnd() < 0.7) aux[i] = aux[n];
           moveFire(i);
           return;
         }
@@ -4031,6 +4056,7 @@
       if (hand.on) handPhysics();
       if ((tick & 15) === 0) rootPass();
       if (counts[THRUSTER]) ships();
+      if (gnd) groundPass();
       const ltr = tick & 1;
       for (let y = H; y >= 1; y--) {
         const row = y * SW;
@@ -5241,7 +5267,8 @@
       if (d.rad > b.rh * 0.6) return;
       d.life = d.age + 1; d.phase = 'gone';
       b.fed = (b.fed || 0) + 1;
-      if (b.fed > HOLE_HOLDS) { holeBurst(b); return; }
+      events.holeFed = Math.max(events.holeFed, b.fed); // how many one black hole holds now
+      if (b.fed > HOLE_HOLDS) { events.holeBurst++; holeBurst(b); return; }
       b.rTo = Math.min(Math.hypot(W, H), (b.rTo || b.r) * 1.5);
       b.rhTo = Math.min(40, (b.rhTo || b.rh) * 1.5);
       b.life += 300;
@@ -5571,15 +5598,29 @@
     // The Smash tool: what is brittle breaks, as an earthquake would break it: stone, brick and
     // concrete to rubble of their own colour, glass to shards of its colour, ice and hail to snow,
     // wood to splinters, plants to dead leaves, machines and batteries to scrap of their own colour.
-    // Metal bends instead, diamond is too hard, and creatures are left be.
-    const CRUSH = new Uint16Array(NT);
+    // A cast metal block breaks back into its metal's grains and diamond grinds to sparkling carbon
+    // dust, both slowly: the denser the metal, the longer it takes (gold and platinum hold out for a
+    // good while), and diamond longest of all. Plain metal bends, and creatures are left be.
+    const CRUSH = new Uint16Array(NT), TOUGH = new Float32Array(NT).fill(1);
     CRUSH[HAIL] = SNOW;
+    for (const d of list) {
+      if (d.castOf === undefined) continue;
+      CRUSH[d.id] = d.castOf;
+      TOUGH[d.id] = Math.min(1, (3 / (list[d.castOf].density / 10)) ** 2); // 1 for magnesium, about 0.15 for iron, 0.02 for platinum
+    }
+    CRUSH[DIAMOND] = EL_C; TOUGH[DIAMOND] = 0.006;
+    const DIAMOND_DUST = PAINTED | 0xd8eef4;
     function smash(x0, y0, r, max = Infinity) {
       let n = 0;
       forCircle(x0, y0, r, (i) => {
-        if (n >= max || rnd() > 0.35) return;
         const t = type[i];
-        if (t === EMPTY || t === METAL || t === DIAMOND || P_SOLID[t] || unbreakable(t)) return;
+        if (n >= max || rnd() > 0.35 * TOUGH[t]) return;
+        if (t === EMPTY || t === METAL || unbreakable(t)) return;
+        if (P_SOLID[t] || t === DIAMOND) { // hard: a block back to grains, a diamond to dust
+          const c = t === DIAMOND ? DIAMOND_DUST : col[i];
+          become(i, CRUSH[t]); if (c) col[i] = c; n++;
+          return;
+        }
         if (BREAKS[t] && P_CAT[t] === C_STATIC) { if (crumble(i)) n++; return; }
         const to = CRUSH[t];
         if (to) { const c = col[i]; become(i, to); if (c) col[i] = c; if (!disc[to]) discover(to, i); n++; }
@@ -5636,6 +5677,7 @@
 
     function resetEvents() {
       events.sizzle = 0; events.ignite = 0; events.fizz = 0; events.zap = 0; events.fission = 0; events.decay = 0; events.rad = 0; events.naturalBolt = 0;
+      events.holeFed = 0; events.holeBurst = 0;
       events.rumble = 0; events.cracks = 0; events.surge = 0; events.howl = 0; events.flash = 0; events.shake = 0;
       events.hbomb.length = 0; events.whistle = 0; events.pump = 0; events.piston = 0;
       events.booms.length = 0; events.bolts.length = 0; events.found.length = 0; events.rx.length = 0;
@@ -5722,7 +5764,7 @@
       disc, counts, events,
       get tick() { return tick; },
       idx, step, clear, place, transform, paint, erase, smash, flip, machine, beginStroke, encase, heat, sparkPaint, spawnBolt, explode, blastPaint, tintPaint, placeImage, livenTrees,
-      cell, resetEvents, serialize, load, rnd, ignite, snapshot, restore, weather, rules, setBrush, grab, holdTo, release,
+      cell, resetEvents, serialize, load, rnd, ignite, snapshot, restore, weather, rules, setBrush, grab, holdTo, release, ground,
       get holding() { return hand.on ? hand.n : 0; },
       get gripping() { return hand.on; },
       launch, steer, weaponReach, quakeInfo, dropPoint, volcanoReach, disasters,

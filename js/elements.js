@@ -64,8 +64,8 @@
       key: 'wood', name: 'Wood', group: 'Solids', cat: CAT.STATIC, density: 6, render: R.WOOD, starter: true,
       colors: ['#7d5231', '#8a5c37', '#714a2c', '#93653d'], cond: 0.06,
       flam: 0.25, ign: 300, burn: [260, 420], burnTemp: 850, fireEmit: 0.25,
-      burnInto: [['ash', 6], ['ember', 2], ['empty', 2]], hi: [350, 'coal', 0.01], blastRes: 0.3,
-      desc: 'Burns slow and hot. Heated without air, it turns to coal.',
+      burnInto: [['ash', 6], ['ember', 2], ['empty', 2]], hi: [350, 'ember', 0.01], blastRes: 0.3,
+      desc: 'Burns slow and hot. Heated without air, it smoulders into embers, then ash.',
     },
     {
       key: 'fire', name: 'Fire', group: 'Energy', cat: CAT.GAS, render: R.FIRE, starter: true,
@@ -342,7 +342,7 @@
       burn: [700, 1100], burnTemp: 1150, fireEmit: 0.2, burnInto: [['ash', 3], ['ember', 1]],
       hi: [2500, 'diamond', 0.01], acidRes: 0.85, blastRes: 0.35, // carbon: acid hardly touches it
       desc: 'Burns for ages. Sealed and heated, it turns rare.',
-      recipe: 'Wood heated above 350°C with no air', hint: 'Bury wood and heat it — don\'t let it breathe.', from: ['wood'],
+      recipe: 'Sugar charred by acid', hint: 'Acid tears the water out of something sweet and leaves black carbon behind.', from: ['sugar', 'acid'],
     },
     {
       key: 'diamond', name: 'Diamond', group: 'Solids', cat: CAT.STATIC, density: 35, render: R.DIAMOND,
@@ -414,12 +414,12 @@
 
     // ───────────────────────── milestone unlocks ─────────────────────────
     {
-      key: 'clone', name: 'Clone', group: 'Special', cat: CAT.SPECIAL, render: R.CLONE, special: true, unlockAt: 8,
+      key: 'clone', name: 'Clone', group: 'Special', cat: CAT.SPECIAL, render: R.CLONE, special: true, unlockAt: 40,
       colors: ['#c9a227', '#b38f1c'], cond: 0, acidRes: 1, blastRes: 99,
       desc: 'Copies the first thing that touches it, forever.',
     },
     {
-      key: 'void', name: 'Void', group: 'Special', cat: CAT.SPECIAL, render: R.VOID, special: true, unlockAt: 16,
+      key: 'void', name: 'Void', group: 'Special', cat: CAT.SPECIAL, render: R.VOID, special: true, unlockAt: 70,
       colors: ['#140b1f', '#1d0f2e'], cond: 0, acidRes: 1, blastRes: 99,
       desc: 'Deletes anything that touches it.',
     },

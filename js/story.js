@@ -203,105 +203,20 @@
     if (!s.lifted && r.vy < -0.05 && r.y1 < s.shipBox.y1 - 2) { s.lifted = true; s.say.push({ eyebrow: 'Lift-off', name: 'It flies', how: 'Up the silo and out.' }); }
     launchCheck(w, s, r);
   }
-  // through the silo's mouth and away: on to the moon
+  // through the silo's mouth and away, toward the moon: the chapter (and the story so far) ends here
   function launchCheck(w, s, r) {
     if (r.y0 <= 14 && r.vy < -0.1) {
       if (!r.sealed) { s.abort = 'Past the air there is nothing to breathe, and your cabin was open to it. You turned back and came down hard in the dark.'; return; }
       if (r.legs < 2) { s.abort = 'Halfway there you remembered: no legs. A ship that can’t stand can’t land. You turned back.'; return; }
-      toTheMoon(w, s, r);
+      s.phase = 'gone'; s.cutscene = true;
+      s.say.push({ eyebrow: 'The sky', name: 'Out of the silo and away', how: 'The plateau drops away beneath you.' });
     }
   }
-
-  // Lift the ship (and you) out of the world, build the moon, and set it down at the top of it.
-  function toTheMoon(w, s, r) {
-    const keep = [];
-    for (let y = r.y0; y <= r.y1; y++) for (let x = r.x0; x <= r.x1; x++) {
+  // the ship climbs on out of the top of the map: whatever reaches the top edge has gone
+  function flyOff(w) {
+    for (let y = 0; y < 3; y++) for (let x = 0; x < w.W; x++) {
       const i = w.idx(x, y), t = w.type[i];
-      if (!r.cells.has(i) && t !== ID.HUMAN && t !== ID.HEAD) continue;
-      keep.push([x - r.x0, y - r.y0, t, w.aux[i], w.data[i], Math.min(w.temp[i], 60), w.sap[i], w.col[i], w.flags[i]]);
-    }
-    w.clear();
-    w.ambient = 0;
-    w.weather.mode = 'clear'; w.weather.wind = 0;
-    buildMoon(w, s);
-    const ox = 160 - ((r.x1 - r.x0) >> 1), oy = 6;
-    for (const [dx, dy, t, aux, data, temp, sap, col, flags] of keep) {
-      const i = w.idx(ox + dx, oy + dy);
-      w.place(i, t);
-      w.aux[i] = t === ID.SWITCH ? 0 : aux; w.data[i] = data; w.temp[i] = temp; w.sap[i] = t === ID.SWITCH ? 0 : sap; w.col[i] = col; w.flags[i] = flags;
-      if (t === ID.THRUSTER) { w.vy[i] = 0.25; w.vx[i] = 0; }
-    }
-    s.phase = 'moon'; s.cutscene = true; s.sky = 'space'; s.landT = s.t;
-    s.say.push({ eyebrow: 'Space', name: 'The sky turns black', how: 'The engines fall quiet. The moon fills the porthole.' });
-  }
-
-  function buildMoon(w, s) {
-    const { W, H } = w;
-    const n = noise1();
-    const DUST = [0xb9b8b3, 0xadaca7, 0xc4c3be, 0xa5a49f], ROCK = [0x7d7c78, 0x72716d, 0x86857f];
-    const craters = [[58, 12], [112, 7], [214, 9], [292, 13]];
-    const ground = new Int32Array(W);
-    for (let x = 0; x < W; x++) {
-      let g = 150 + Math.round(n(x) * 4);
-      for (const [cx, r] of craters) {
-        const d = Math.abs(x - cx);
-        if (d < r) g += Math.round(Math.sqrt(r * r - d * d) * 0.45);  // the bowl
-        else if (d < r + 4) g -= 2;                                     // its rim
-      }
-      ground[x] = g;
-      strata(w, x, g, [[ID.ASH, 3, DUST], [ID.STONE, 40, ROCK]]);
-    }
-    // the Earth over the horizon: oceans, land and cloud
-    const ex = 54, ey = 34, er = 11;
-    for (let y = ey - er; y <= ey + er; y++) for (let x = ex - er; x <= ex + er; x++) {
-      const dx = x - ex, dy = y - ey;
-      if (dx * dx + dy * dy > er * er) continue;
-      const i = w.idx(x, y);
-      w.place(i, ID.STONE);
-      const v = Math.sin(x * 0.5) + Math.cos(y * 0.7 + x * 0.2);
-      const shade = dx < -4 && dx * dx + dy * dy > (er - 3) * (er - 3) ? 0.55 : 1;
-      const c = v > 1.1 ? 0xf2f4f8 : v > 0.3 ? 0x4f9a52 : 0x2f6fd0;
-      tone(w, i, shade < 1 ? mixRGB(c, 0x0a0f1a, 0.45) : c);
-    }
-    // your master's ship, standing on its legs with its hatch open
-    const mx = 230, mg = ground[mx];
-    const mb = Math.min(ground[mx - 2], ground[mx + 14]) - 3;
-    rect(w, mx, mb - 24, mx + 12, mb, ID.METAL);
-    rect(w, mx + 1, mb - 23, mx + 11, mb - 1, ID.EMPTY);
-    for (let q = 1; q <= 5; q++) rect(w, mx + q, mb - 24 - q, mx + 12 - q, mb - 24 - q, ID.METAL);
-    rect(w, mx + 12, mb - 6, mx + 12, mb - 2, ID.EMPTY);               // the open hatch
-    for (const lx of [mx - 2, mx - 1, mx + 13, mx + 14]) for (let y = mb + 1; y < ground[lx]; y++) w.place(w.idx(lx, y), ID.LEGS);
-    rect(w, mx + 3, mb - 1, mx + 9, mb - 1, ID.METAL);
-    paintBox(w, mx, mb - 30, mx + 14, mb, ID.METAL, [0xb0b5bc, 0xa3a8af]);
-    // footprints away from it toward the far crater, and the light beyond the rim
-    for (let x = mx + 16; x < 300; x += 4) { const i = w.idx(x, ground[x]); if (w.type[i] === ID.ASH) tone(w, i, 0x6d6c68); }
-    const bx = 312, by = ground[bx] - 2;
-    rect(w, bx - 2, by - 6, bx + 2, by, ID.GLASS);
-    rect(w, bx - 1, by - 5, bx + 1, by - 1, byKey.el_xe.id);
-    s.beacon = [];
-    for (let y = by - 5; y <= by - 1; y++) for (let x = bx - 1; x <= bx + 1; x++) s.beacon.push(w.idx(x, y));
-  }
-
-  function moonfall(w, s) {
-    // the ship comes down under its own gentle hand: engines off, the descent held to a safe speed
-    let nt = 0, x0 = w.W, y1 = -1;
-    for (let i = 0; i < w.N; i++) {
-      if (w.type[i] !== ID.THRUSTER) continue;
-      nt++; w.vx[i] = 0; if (w.vy[i] > 0.25) w.vy[i] = 0.25;
-      const x = i % w.SW, y = (i / w.SW) | 0;
-      if (x < x0) x0 = x; if (y > y1) y1 = y;
-    }
-    // the light beyond the rim blinks: long, short, long
-    const ph = Math.floor(s.t / 12) % 12;
-    const on = ph < 4 || ph === 5 || (ph >= 7 && ph < 11);
-    if (on) for (const i of s.beacon) w.charge[i] = 1;
-    if (s.t % 10) return;
-    const pos = `${x0},${y1}`;
-    s.still = pos === s.lastPos ? (s.still || 0) + 10 : 0;
-    s.lastPos = pos;
-    if (!s.landed && nt && s.still >= 2 * SEC) {
-      s.landed = true;
-      s.say.push({ eyebrow: 'The moon', name: 'Touchdown', how: 'Dust settles round the legs. Far off, a light is blinking.' });
+      if (SHIPPY.has(t) || t === ID.HUMAN || t === ID.HEAD || t === ID.FIRE) w.place(i, ID.EMPTY);
     }
   }
 
@@ -1474,6 +1389,11 @@
         k.part(slit1 + 11, roof, slit1 + 14, rb, ID.PISTON, (i) => { w.aux[i] = 3 | STICKY; w.sap[i] = 0; });  // pushes left
         rect(w, slit0 - 10, roof, slit0 - 1, rb, ID.METAL);                 // the plates, drawn back
         rect(w, slit1 + 1, roof, slit1 + 10, rb, ID.METAL);
+        // a rail down the middle of the slit that each plate closes against, so the two never shove
+        // (or, sticky, drag back) each other
+        const mid = (slit0 + slit1) >> 1;
+        rect(w, mid, roof, mid, rb, ID.WALL);
+        paintBox(w, mid, roof, mid, rb, ID.WALL, [0x6e655a, 0x645c52]);
         s.slit = { x0: slit0, x1: slit1, y0: roof, y1: rb };
         // the telescope: a glass lens on an iron stand, below and to the west of the slit
         const ly = 100;
@@ -1485,19 +1405,29 @@
         rect(w, 229, hillTop - 4, 241, hillTop - 1, ID.METAL);
         K.person(w, 252, hillTop);
         s.villagers += 1;
-        // the shutter's battery and switch outside the door, wired through the walls to both pistons
+        // the shutter's battery and switch outside the door, wired through the walls up to the roof.
+        // Current takes seconds to run that far, and the far piston would lag the near one, so each
+        // piston has a battery of its own in the roof and a relay switch between them that follows
+        // the door switch at once (see the script): both plates move together.
         const bx = 290, by = ground[290];
         rect(w, bx, by - 4, bx + 2, by - 1, ID.BATTERY);
         k.part(bx - 3, by - 3, bx - 1, by - 1, ID.SWITCH, k.switched(0));
         s.switchAt = { x: bx - 2, y: by - 2 };
+        s.door = w.idx(bx - 2, by - 2);
         rect(w, bx - 4, by - 2, bx - 4, by - 2, ID.WIRE);
         rect(w, bx - 4, by - 2, bx - 4, by + 1, ID.WIRE);
         rect(w, d0 + 1, by + 1, bx - 4, by + 1, ID.WIRE);                    // under the hill, west
         rect(w, d0 + 1, rb + 1, d0 + 1, by + 1, ID.WIRE);                    // up the west wall
-        rect(w, d0 + 1, rb + 1, slit0 - 13, rb + 1, ID.WIRE);                // under the roof to the west piston
-        rect(w, slit1 + 12, rb + 1, d1 - 1, rb + 1, ID.WIRE);                // and from the east wall to the east piston
+        rect(w, d0 + 1, rb + 1, slit0 - 17, rb + 1, ID.WIRE);                // under the roof to the west battery
+        rect(w, slit1 + 16, rb + 1, d1 - 1, rb + 1, ID.WIRE);                // and from the east wall to the east one
         rect(w, d1 - 1, rb + 1, d1 - 1, by + 1, ID.WIRE);
         rect(w, d1 - 1, by + 1, bx - 4, by + 1, ID.WIRE);
+        rect(w, slit0 - 17, roof, slit0 - 16, rb, ID.BATTERY);              // battery | relay | piston, west
+        k.part(slit0 - 15, roof, slit0 - 15, rb, ID.SWITCH, k.switched(0));
+        rect(w, slit1 + 16, roof, slit1 + 17, rb, ID.BATTERY);              // piston | relay | battery, east
+        k.part(slit1 + 15, roof, slit1 + 15, rb, ID.SWITCH, k.switched(0));
+        s.relays = [];
+        for (let y = roof; y <= rb; y++) s.relays.push(w.idx(slit0 - 15, y), w.idx(slit1 + 15, y));
         s.dome = { x0: d0, x1: d1, y0: roof - 10, y1: hillTop };
         s.waves = [35, 70, 105].map((t) => t * SEC);
         s.stones = [];
@@ -1505,6 +1435,9 @@
       },
 
       script(w, s) {
+        // the relays in the roof follow the door switch
+        const on = w.type[s.door] === ID.SWITCH ? w.aux[s.door] : 0;
+        for (const i of s.relays) if (w.type[i] === ID.SWITCH && w.aux[i] !== on) w.aux[i] = on;
         flyStones(w, s);
         const metalIn = countIn(w, s.slit, [ID.METAL, ID.ROD]);
         s.open = metalIn < 8;
@@ -1901,17 +1834,22 @@
         },
       ],
       outro: {
-        title: 'The Moon',
+        title: 'Into the Dark',
         body: [
-          'The ship climbs out of the silo on a column of flame, and the plateau drops away beneath you, and the valley, and the sky turns from blue to black. For a long time there is only the hum of the engines and the moon growing in the porthole.',
-          'You come down in a grey plain of dust under a black sky, the Earth hanging over the horizon like a blue lantern. Fifty paces away your master’s ship stands on its legs, its hatch open, empty. A line of footprints leads away from it toward the crater rim, and beyond the rim the light is blinking: long, short, long.',
+          'The ship climbs out of the silo on a column of flame, and the plateau drops away beneath you: the valley, the river, the field at Millbrook still green, the lighthouse turning on its point. Then the sky turns from blue to black, and the stars come out all at once.',
+          'For a long time there is only the hum of the engines and the moon growing in the porthole. On its dark face a light is blinking, long, short, long, the way it has every night since your master left.',
         ],
-        found: 'Pressed into the dust at the foot of your master’s ladder, a last page:',
+        found: 'Folded small behind the pilot’s seat, a page in your master’s hand:',
         page: [
-          'You came. Of course you did. I left the table half empty so you would.',
-          'Follow the footprints. Bring everything you have learned. Up here the world does not fall the way it does at home, and whoever is calling has been waiting a very long time.',
+          'If you are reading this, you are already flying. I left the table half empty so you would follow.',
+          'Bring everything you have learned. Up there the world does not fall the way it does at home, and whoever is calling has been waiting a very long time.',
         ],
         sign: '— O.',
+      },
+      // the last thing the story says for now, over a dark screen, before the journal's page
+      finale: {
+        line: 'Below you the valley sleeps, and every light you lit in it is still burning. Ahead, the moon is waiting.',
+        soon: 'Coming soon…',
       },
       failText: 'The apprentice didn’t make it.',
 
@@ -1983,18 +1921,15 @@
 
       script(w, s) {
         if (s.phase === 'build') return launchPad(w, s);
-        if (s.phase === 'moon') return moonfall(w, s);
+        if (s.phase === 'gone') return flyOff(w);
       },
 
       goals: [
         {
-          id: 'fly', main: true, text: 'Fly to the moon',
+          id: 'fly', main: true, text: 'Fly for the moon',
           eval(w, s) {
-            const ready = s.ready || [];
-            const n = ready.filter(Boolean).length;
-            const value = s.phase === 'moon' ? (s.landed ? 'landed' : 'coming down') : s.phase === 'gone' ? 'away' : `${n} / 5 ready`;
-            const progress = s.phase === 'moon' ? (s.landed ? 1 : 0.9) : n / 5 * 0.7;
-            return { met: !!s.landed, progress, value };
+            const n = (s.ready || []).filter(Boolean).length;
+            return { met: s.phase === 'gone', progress: s.phase === 'gone' ? 1 : n / 5 * 0.9, value: s.phase === 'gone' ? 'away' : `${n} / 5 ready` };
           },
         },
         nobodyHurt('safe', 'You come to no harm'),
@@ -2004,18 +1939,10 @@
         },
       ],
       fail(w, s) {
+        if (s.phase === 'gone') return null; // away: whatever leaves the top of the map has flown
         if (w.counts[ID.HEAD] < 1) return this.failText;
         return s.abort || null;
       },
-    },
-
-    {
-      id: 'moon',
-      num: 'XI',
-      title: 'The Moon',
-      place: 'The dark face of the moon',
-      blurb: 'Who has been signalling, and where your master went.',
-      sealed: true,
     },
   ];
 

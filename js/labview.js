@@ -276,6 +276,7 @@
     const ready = Lab.readyList().length;
     $('#lab-progress').textContent = `${Lab.count()} of ${P.length} unlocked · ${ready} ready to research`;
     const close = button('Back to the table', 'pill', () => UI.closeModal($('#lab')));
+    $('#lab-help').hidden = true; // the tour's ? shows only with a sample on the bench
 
     if (verdict) { renderVerdict(body, actions, close); return; }
     if (!cur && Date.now() < wait) {
@@ -297,6 +298,7 @@
       return;
     }
     renderBench(body);
+    $('#lab-help').hidden = false;
     actions.append(close);
     if (tourWanted) requestAnimationFrame(startTour); // once the bench is laid out
     else if (tour >= 0) requestAnimationFrame(drawTour);

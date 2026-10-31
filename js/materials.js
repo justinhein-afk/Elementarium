@@ -103,12 +103,12 @@
     },
     // ───── tools ─────
     {
-      key: 'paint', name: 'Paint', group: 'Special', cat: CAT.SPECIAL, render: R.CLONE, virtual: true, special: true, unlockAt: 24,
+      key: 'paint', name: 'Paint', group: 'Special', cat: CAT.SPECIAL, render: R.CLONE, virtual: true, special: true, unlockStars: 50,
       colors: ['#ff5a8a', '#5ab0ff', '#ffd25a'], acidRes: 1, blastRes: 0,
       desc: 'Recolours whatever is under the brush. Pick the colour with the dot on its tile.',
     },
     {
-      key: 'image', name: 'Image', group: 'Special', cat: CAT.SPECIAL, render: R.CLONE, virtual: true, special: true, unlockAt: 32,
+      key: 'image', name: 'Image', group: 'Special', cat: CAT.SPECIAL, render: R.CLONE, virtual: true, special: true, unlockStars: 80,
       colors: ['#c9b27a', '#7a9ac9', '#9ac97a'], acidRes: 1, blastRes: 0,
       desc: 'Place a picture from a file, built out of concrete in its own colours. The brush size sets how big.',
     },

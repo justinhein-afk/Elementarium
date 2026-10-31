@@ -4,8 +4,8 @@ A falling-sand alchemy lab. Every grain is simulated: heat diffuses, liquids set
 density, fire looks for fuel, current runs through metal, plants grow and fish swim.
 You start with 17 elements: wall, soil, stone, wood and metal; sand, dirt, salt and sugar; water, oil
 and lime; steam and fire; a plant, a flower, and a single living **cell**, which grows into every
-animal. Experiment to discover 65 more, and cast 12 metals into solid blocks. Paint, Image, Clone and
-Void open after enough discoveries.
+animal. Experiment to discover 65 more, and cast 12 metals into solid blocks. Clone and Void open at
+40 and 70 discoveries, Paint and Image at 50 and 80 Try it stars; only Hint says so.
 
 The alchemy table has eight sections: Solids, Powders, Liquids, Gases (clouds and fog among them),
 Energy, Plants, Life and Special.
@@ -200,8 +200,20 @@ with room round it, as people do; sharks and cells go into water too.
 
 **Smash** (`X`, beside the Magnet) breaks what is brittle under the brush, the way an earthquake would:
 stone, brick, obsidian, concrete and limestone to rubble of their own colour, glass to shards of its
-colour, ice and hail to snow, wood to splinters, plants to dead leaves. Metal bends and diamond holds. The
-**Magnetic** switch now sits in the Magnet's own box.
+colour, ice and hail to snow, wood to splinters, plants to dead leaves. A cast metal block breaks back
+into its metal's grains, slower the denser the metal (magnesium at once, iron in a moment, gold and
+platinum in a second or two), and diamond grinds to sparkling carbon dust slowest of all (about six
+seconds held). Plain metal bends. The **Magnetic** switch now sits in the Magnet's own box.
+
+**Ground** (`5`, in the brush row) draws current off to earth: hold it over a circuit and nothing
+within the brush carries a pulse on, the pumps, pistons, valves and thrusters in reach lose their
+power, and sparks and lightning there vanish, for as long as you hold it.
+
+**Cows and wolves swim.** In the water a cow or a wolf holds its head up out of it, its body under
+the water line, legs paddling, with ripples round its neck.
+
+**Light** rays fly three cells a tick. Two meeting head on pass through each other, and one behind
+another waits for it, so a blob of light brushed on flies apart at once instead of jostling in place.
 
 When every one of the 23 fire colours is made, **Rainbow** joins the Fire and Explosion colour
 pickers: flames that burn in each fire colour in turn, round the colour wheel, a new one every two
@@ -226,7 +238,7 @@ a battery’s yellow and black: batteries break the same way), which melts back 
 | Wire | Insulated copper: carries current without rusting, warming or leaking it into water |
 | Switch | Lets current through while on (green). Select Switch and click one to flip it and every switch joined to it |
 | Sensor | Sends current into wire beside it while something loose rests against it (a heap, a pool, a creature, but not a drop falling past), or while what touches it is hotter (or colder) than its setting |
-| Pipe | Draw it any width with any brush (circle, square, pen, spray, line, box or bucket): each stroke is one pipe, walled in on every edge. Erase a bit of its wall where you want it open; drawn onto a pump, a tank or a valve, it joins it. Liquid drains in at an opening, runs down or along, never up unless pumped, and pours out of the other end; gases go in only by a pump. What it carries boils, condenses or freezes with the pipe's temperature |
+| Pipe | Draw it any width with any brush (circle, square, pen or box, or a straight line with Shift): each stroke is one pipe, walled in on every edge. Erase a bit of its wall where you want it open; drawn onto a pump, a tank or a valve, it joins it. Liquid drains in at an opening, runs down or along, never up unless pumped, and pours out of the other end; gases go in only by a pump. What it carries boils, condenses or freezes with the pipe's temperature |
 | Valve | Passes things only while powered: a tap in a pipe (drawn over a pipe, it takes the place of its bore and keeps its walls), or a plug under a pool |
 | Pump | Faces a way (set in the panel); powered, it draws in what touches it on its other sides and drives it out of the side it faces: into a pipe with the push to climb about 240 cells, into a tank, or out as a jet |
 | Tank | Holds 40 cells' worth of one liquid or gas, shows its level, settles and levels out across several cells, and feeds a pipe below or beside it |
@@ -302,7 +314,7 @@ The bench gives the exact reading and the reason behind it. Name the sample righ
 unlocks with a card: when and by whom it was discovered, where its name comes from and what it is
 used for; the first of each family also brings that family's card. Name it wrong and the card says
 what it was and which test would have told the two apart; the element stays locked, and the next
-sample takes ten seconds to prepare (a flask bubbles on the bench while a bar fills). The first ten samples come with three candidates that one
+sample takes five seconds to prepare (a flask bubbles on the bench while a bar fills). The first ten samples come with three candidates that one
 well-chosen test can settle; after that there are four, and about a third of the samples need two
 tests together. Every sample can be settled in three tests or fewer.
 
@@ -345,11 +357,14 @@ your own. Reset discoveries clears the stars too.
 
 Earn every one of the 118 Try it stars and the book beside the Lab button on the Periodic table tab
 opens (until then it is grey, with a padlock, and says how many stars are left). Inside is every
-element sorted by what it does, 25 groups in five parts: the colours they give a flame, molten glass,
-a tube of gas, a spark or a blast; conductors and insulators, superconductors, what makes its own
-current, the devices to build, and magnetism; how they react in water and acid, what burns,
-corrosion, poison and contact reactions; radioactivity, decay chains, fission, neutrons and fusion;
-and state, melting point, density and family. It is all read from the game's own element data, so it
+element sorted by what it does, 30 groups in seven parts: the colours they give a flame, molten glass,
+a tube of gas, a spark or a blast (and that each one made can be painted from the Glass and Fire
+tiles); conductors and insulators, superconductors, what makes its own current, the devices to build,
+and magnetism (what the Magnet tool's Magnetic switch picks up); how they react in water and acid,
+what burns, corrosion, poison and contact reactions; radioactivity, decay chains, fission, neutrons
+and fusion; state, melting point, density and family; the metals that cast into blocks, each machine
+part and what a battery touches to open it, and ships and their fuel; and the scenes and the weapon
+the elements open. It is all read from the game's own element data, so it
 always matches what happens when you play. Click an element to pick it up.
 
 ## Search
@@ -400,13 +415,13 @@ broken stone, brick and obsidian, is a powder you discover too, and **dry ice** 
 | Tile | What it does |
 | --- | --- |
 | Soil (Solids) | packed earth that stays put; plants root in it as in dirt |
-| Concrete (Solids) | hard, heavy, fireproof. The dot on its tile lays it in any colour |
+| Concrete (Solids) | hard, heavy, fireproof. Once Paint opens, the dot on its tile lays it in any colour |
 | Cement (Liquids) | wet concrete: pour it into shape and it sets in about ten seconds (sooner when warm, never frozen), keeping any paint |
 | Alcohol (Liquids) | clear, light and very flammable: burns with a pale blue flame and leaves no smoke. Mixes into water, evaporates fast, kills plants, dissolves iodine into a brown tincture. Sodium, potassium and calcium fizz hydrogen off it gently, without the bang water brings |
 | Vinegar (Liquids) | a weak acid. Magnesium fizzes away in it, zinc and iron more slowly, calcium too; copper only turns green with verdigris, and silver and gold don't mind it. Fizzes carbon dioxide off ash, eats rust and slowly etches concrete, kills weeds, puts out fire, and carries current (a vinegar battery works like the lemon one) |
 | Explosion (Energy) | a blast in the shape of your brush (a circle, a square, a line, a box), about as fierce as black powder. The dot on its tile colours its flames in any fire colour you have made |
 | Light (Energy) | rays that fly out from the brush in straight lines, through air, water, ice, glass and diamond. Stained glass colours them, metal bounces them back, and where they land a phosphor glows, a solar cell makes current, a plant drinks it in and anything else warms a little |
-| Paint (Special) | recolours whatever is under the brush: stone, water, plants, even people. The dot on its tile picks the colour from a palette or the full colour picker; "Wash off" takes paint away. With the bucket shape it paints a whole area. Paint moves with what it is on, and is kept by saves and undo |
+| Paint (Special) | recolours whatever is under the brush: stone, water, plants, even people. The dot on its tile picks the colour from a palette or the full colour picker; "Wash off" takes paint away. Paint moves with what it is on, and is kept by saves and undo |
 | Image (Special) | click the tile to choose a picture file, then click the map: the picture is built out of concrete in its own colours, one cell a pixel, sized by the brush. See-through pixels leave what is there |
 
 Embers still fly off fires, but have no tile.
@@ -418,13 +433,20 @@ already done counts; the feats in your own world (never in a chapter) count from
 added; sandbox mode opens everything. Locked things stay out of sight until they open, each with a
 toast.
 
-- **The Journey** opens once 30 elements are found (the header's count), the **Weapons** tab at 50.
+- **The Journey** opens once 30 elements are found (the header's count), and its first page opens by
+  itself; the **Weapons** tab opens at 50.
+- **Machine parts** each open the first time a battery touches its partner (metal for Wire, wood for
+  a Switch, fire for a Sensor, water for Pipe, oil for a Pump, steam for a Valve, glass for a Tank,
+  stone for a Piston, methane for a Thruster, rubble for Landing legs), arriving like a discovery.
+- **Clone** opens at 40 discoveries and **Void** at 70; **Paint** at 50 Try it stars and **Image** at 80.
 - **Weapons:**
   - Tsunami: flood your world until the water stands above a line 15% below the top. Its hint draws the line.
   - Volcano: comes with the Volcano scene.
   - Lightning storm: a storm cloud you brewed throws its own bolt.
-  - Earthquake: smash 5,000 cells.
-  - Ice age: 3,000 cells of ice at once.
+  - Earthquake: make 7,000 cells of rubble in one scene.
+  - Ice age: make 5,000 cells of ice in one scene.
+  The count starts again with each new scene (and a cleared, resized or loaded map, or a reload);
+  rubble or ice laid with the brush doesn't count.
   - Tornado: 10 big explosions, a moment apart.
   - Hydrogen bomb: 5 Nukes set off beside 60 or more hydrogen.
   - From the Journey: Acid rain (V), Solar storm (VI), Meteor (VII), Nuke (VIII) and Black hole (X).
@@ -447,9 +469,30 @@ toast.
   - Empty bench: 20 finds.
 - **Skies:** Dusk opens with the Volcano or the Nuclear plant, Night with the Empty bench or another
   night scene.
-- **Hint** gives the answer in a little box. On the Alchemy tab, a recipe you can make now
-  (Ash + Salt → Gunpowder, or Battery + Metal → Wire). With the Weapons tab open, how to earn the
-  next weapon, with your progress. The Scenes menu's last row does the same for scenes.
+- **Hint** gives the answer in a little box, picked at random each press. On the Alchemy tab, a
+  recipe you can make now (Ash + Salt → Gunpowder, or Battery + Metal → Wire) or how to open a locked
+  special tool, with your progress. With the Weapons tab open, how to earn a weapon you haven't got.
+  The Scenes menu's last row does the same for scenes. Clicking a locked tile (or Hint in the Codex)
+  shows that element's own answer at once: its recipe, with anything still to find dashed.
+
+## Achievements
+
+The trophy button beside Help opens the achievements (`js/achieve.js`, checked by
+`tools/achievetest.js`), 45 of them in five sections, each with a toast when it is earned:
+
+- **Milestones:** 10, 25, 50 and 75 elements found; 20 and 59 periodic elements unlocked; the first
+  and the 25th Try it star; the first machine part, scene and weapon; the first chapter won.
+- **Staying put:** an hour, 4 hours and 8 hours in one scene (a new scene starts the clock again).
+- **Destruction:** destroy everything on the map (a weapon leaving under 5% of what was there) once,
+  5 times and 10 times; feed one black hole 5 hydrogen bombs; feed it a sixth.
+- **Secrets:** 18 hidden ones, shown as ??? until found, one for each element only the world makes:
+  the seeds each plant drops, dead leaves, dry grass, splinters, an ember, a metal spark, radiation, a
+  pipe's wall and a piston's rod. What a scene sets out doesn't count; the world has to make it.
+- **The whole of it,** at the bottom: every element, every Try it star, every chapter, every weapon,
+  every scene, every secret, and all the rest.
+
+What you had already done counts as soon as the game loads. Feats in a scene count only in your own
+world (not in a chapter), and nothing is earned in sandbox mode.
 
 ## Weapons
 
@@ -529,8 +572,7 @@ pouch, and every chapter ends with a page from your master pointing to the next 
 part of the ship they took from it. Each one leans on a different part of the lab and is a little
 harder than the one before; the tenth is the ship itself. You can only use what you carry, undo is
 off, and Restart refills the pouch. Every chapter has a goal that wins it (two, in the first) and
-star goals beside it. Each chapter has its own sky (day, dusk or night; out past the air, black and
-full of stars). **Hint** is a visual guide in three steps, one per thing to do, in the order you do
+star goals beside it. Each chapter has its own sky (day, dusk or night). **Hint** is a visual guide in three steps, one per thing to do, in the order you do
 them: the page dims but for the place on the map where it happens and the pouch items it takes,
 with the recipe (Ash + Salt → Gunpowder) and a line of advice, and the game waits while it is up.
 It always shows the step you are on: when a step is done a message says so and names the next one,
@@ -545,11 +587,10 @@ you back to the lab. Open it with **Journey** in the panel (or **Begin the journ
 | IV · The Iron Hills | Copperhill foundry | Cast a hull plate of pure iron from a heap of iron, nickel and copper: warm the heap past nickel's Curie point (358°C) and below iron's (770°C) so the Magnet lifts only iron, then melt it in the mould | Magnet (magnetic only), Heat, Cool |
 | V · The Bitter Spring | Saltmarsh | Zinc in a sour (acid) spring fizzes hydrogen into a glass gasholder, but its top has a hole under a lit lantern: mend it with glass first | Zinc, Glass, Water |
 | VI · The Pumphouse | Oilbeck | Fill a depot on the hill with oil: mend the pipeline over a ravine, then power the pump and the inlet valve. Pump through the gap and the oil pours onto the smith's forge | Pipe, Battery, Switch, Wire |
-| VII · Falling Stars | Skywatch observatory | Three showers of falling stones. Shut the dome's piston shutter (a switch) for each and open it between, so the astronomer watches for 30 s; roof the cottages with concrete (lime + sand → cement) | Sand, Lime, Water, Switch |
+| VII · Falling Stars | Skywatch observatory | Three showers of falling stones. Shut the dome's shutter (a switch; two plates on sticky pistons, each with its own battery and a relay that follows the switch, closing against a rail in the middle) for each and open it between, so the astronomer watches for 30 s; roof the cottages with concrete (lime + sand → cement) | Sand, Lime, Water, Switch |
 | VIII · The Sleeping Heart | Deepdown power station | The Nuclear plant, with its seam waking and its heat sensor's wire cut. SCRAM it, mend the wire, release the SCRAM, and keep the town lit for 40 s on the plant's own control | Wire, Switch |
 | IX · The Proving Ground | The high plateau | Your master's ship lifts off as you arrive. Fly the test sledge (lift, east and west engines on three switches, air brakes) across the canyon and land it on its legs | Switch |
-| X · The Launch | The hangar under the plateau | Your master's first ship never flew: mend its porthole, move its battery off the hull onto the switch's shelf, fill four empty engine sockets, fit legs, and fuel it from the depot (its fuel line is laid: flip the depot's switch). Light the engines and the line lets go, once all five are fixed; it holds the ship down until then. Fly it out of the silo: it lands on the moon | Erase, Glass, Battery, Thruster, Legs, Switch |
-| XI · The Moon | | Coming soon (moon physics) | |
+| X · The Launch | The hangar under the plateau | Your master's first ship never flew: mend its porthole, move its battery off the hull onto the switch's shelf, fill four empty engine sockets, fit legs, and fuel it from the depot (its fuel line is laid: flip the depot's switch). Light the engines and the line lets go, once all five are fixed; it holds the ship down until then. Fly it out of the silo and away, toward the moon: the screen goes dark on a last line, then “Coming soon…”, and the journal's last page follows | Erase, Glass, Battery, Thruster, Legs, Switch |
 
 Discoveries made during a chapter count toward the table, and leaving a chapter hands the lab
 back exactly as it was (world, selection and undo history).
@@ -576,7 +617,7 @@ an edit. Saved discoveries and worlds belong to the address, so stick to the one
 | Scroll | Zoom in and out around the cursor |
 | Middle-drag, Alt+drag, `WASD` / arrows | Move around the map |
 | `+` `-` `0` | Zoom in, zoom out, show the whole map |
-| Ctrl+Scroll, `[` `]` | Brush size |
+| Ctrl+Scroll, `[` `]` | Brush size, 0 to 50 (weapons stop growing past 24) |
 | Ctrl+Z / Ctrl+Shift+Z (or Ctrl+Y) | Undo / redo |
 | Middle-click | Pick up the element under the cursor |
 | `Space` / `.` | Pause / step one tick |
@@ -584,11 +625,15 @@ an edit. Saved discoveries and worlds belong to the address, so stick to the one
 | `V` | Air view: pressure in red and blue, wind as streaks (the readout adds wind and pressure) |
 | `L` | Magnifying lens (3× zoom under the cursor) |
 | `M` | Sound on/off |
+| `F` | Full screen (the ⛶ button at the end of the toolbar) |
 | `E` `H` `C` `G` `X` | Erase / Heat / Cool / Magnet / Smash tools |
 | Magnetic switch (in the Magnet's box) | On: the Magnet picks up only what a real magnet would (iron, cobalt, nickel, neodymium, cold gadolinium, liquid oxygen…) and drops what is heated past its Curie point. Off: it carries any loose matter |
 | Magnet: hold and drag | Carry what is inside the ring; while the button is down it keeps pulling in every grain and drop that comes inside. It hangs from the cursor on a spring, so it trails, swings and sloshes; flick as you let go to throw it |
-| `1`–`7` | Brush shape: circle, square, pen, spray, line (drag), box (drag), fill (paint bucket) |
-| Shift while dragging a Line or Box | Keep it straight, as in a slides or drawing app: a Line snaps to flat, upright or a true diagonal, and a Box becomes a square |
+| `1`–`4` | Brush shape: circle, square, pen, box (drag) |
+| `5` | Ground: hold it over a circuit to draw its current off to earth |
+| Shift+drag | A straight line from where you pressed to where you let go, at any angle (no snapping), drawn with the circle, square or pen brush; on a Box, Shift makes it a square |
+| Touch: two fingers | Pinch to zoom, drag to move the map (a stroke the first finger had only just begun is taken back); on a touch screen the toolbar's − and + size the brush instead |
+| Turn-sideways button (touch screens) | Play in landscape: full screen held sideways where the browser allows it (Android), otherwise the page turned a quarter round (iPhone). In the turned page the button turns it back, and the world comes with you |
 | Weapons tab: click the map | Set off the selected catastrophe there; the brush size sets how big (an earthquake's magnitude is set in the box at the top of the tab). Hold the button to steer a tornado toward the cursor |
 | Drag the divider between the map and the panel | Give the panel more room (wider beside the map, taller under it on narrow screens); double-click resets it |
 | `‹` in the panel's header (phones and tablets) | Slide out Journey, Lab, Codex, Hint and Help, which fold away on screens up to 1,024 px wide. On a phone the toolbar is two compact rows: time, undo and zoom, then the views, Weather, Scenes and Map |
@@ -599,17 +644,24 @@ Heatwave. Rain turns to snow below 0°C, cool storms drop hail, storms throw lig
 carries clouds and fog across the map, and open water evaporates faster the warmer it is.
 
 **Map** chooses the map size, all four the same 8 : 5 shape (Small 256×160, Fit 320×200, Wide
-384×240 and Large 512×320), sets the **Sky** behind the map and holds the save slot. The sky only shows
+384×240 and Large 512×320), sets the **Sky** behind the map and opens the **saved worlds**. The sky only shows
 where nothing is (and through water and glass), so it changes no cell's colour. Auto suits the scene: a
 blue day sky with the sun high over the Island, Canyon, Forest, Caves, Village and Waterworks; dusk over
 the Volcano and the Nuclear plant; night for the City, the indoor scenes and the Thermal and Air
-views. Story chapters bring their own sky, and the moon is always under the stars. Day, Dusk or Night pins it. Rain and storms cloud a day or dusk sky over grey. Undo keeps the last few dozen changes (strokes, scenes, clears, loads).
+views. Story chapters bring their own sky. Day, Dusk or Night pins it. Rain and storms cloud a day or dusk sky over grey. Undo keeps the last few dozen changes (strokes, scenes, clears, loads).
 
-Discoveries are saved in the browser, along with one world slot.
-**Scenes** offers thirteen starting worlds: Island (every game starts on the plain one, sea, sand and a garden; once every plant and creature has been found it grows into a tropical island with palm beaches, a jungle hill, a coral reef, a hut on stilts and a sea stack), Canyon (rock layers in the Grand Canyon’s real colours, from pale limestone at the rim down through red shales and the Redwall to dark schist, a green river and a rope bridge), Volcano (a dark brown cone with a red-hot mouth holding a lava lake, fed up a pipe from a chamber on the hot world floor: deep magma stays molten until it meets the open air. Fire the Volcano weapon into the middle of the mountain and its magma climbs the pipe and erupts out of the mouth: magma already in its way costs it none of its reach), Forest (dense tall pines and broad oaks, willows over a lily pond, bushes, flowers, a fallen log and mushrooms), Caves (a limestone cavern hung with stalactites under an underground lake, iron, copper and gold ores, a coal seam, an amethyst geode, diamonds round a magma pocket, a lake and an oil pocket), Workshop (jars, blocks and pots of every starter, and a fire in the grate), Village (a limestone church with a spire and rose window, brick, timber and wooden houses, a red barn, cows in a fenced pasture, a well, a pond, crops and a windmill), Nuclear plant (a reactor that runs itself and lights a town), City (skyscrapers whose floors are lit by tubes of helium, neon, argon, krypton and xenon, stained-glass crowns, a spire with a red beacon, neon signs and street lamps), Electric workshop (three benches of working circuits: a light bulb, a carbon arc, a sparkler, a solar panel, lemon and car batteries, a tantalum capacitor firing a xenon flash, a red-green-blue phosphor screen, and switched machines: a lamp, a kettle, a pumped fountain, a piston lift and a fire alarm), Magnet lab (three floors: a separator pulling iron out of falling sand, which metals a magnet takes, bismuth pushed away, an electromagnet crane, neodymium and samarium magnets on heaters, iron dropping out of a fire past its Curie point, chilled gadolinium and filings drawn up in a jar), Waterworks and an empty bench (each but the plain Island is earned: see "Earned, not given"). **Hint** shows a recipe you can make with what you already have. The **Codex** lists
+Discoveries are saved in the browser. **Save world…** and **Load a saved world…** in the Map menu open
+five slots, each kept with a name and a description you give it, the time it was saved and a small
+picture of the map; load one back, save over it, or delete it (a second click makes sure). A world
+saved before there were slots arrives in the first one.
+
+Every notification has a × to close it, and one that isn't about an element shows what kind of
+thing it is: a scene, a sky, a weapon (its own icon), an achievement, a colour, the Journey.
+**Scenes** offers thirteen starting worlds: Island (every game starts on the plain one, sea, sand and a garden; once every plant and creature has been found it grows into a tropical island with palm beaches, a jungle hill, a coral reef, a hut on stilts and a sea stack), Canyon (rock layers in the Grand Canyon’s real colours, from pale limestone at the rim down through red shales and the Redwall to dark schist, a green river and a rope bridge), Volcano (a dark brown cone with a red-hot mouth holding a lava lake, fed up a pipe from a chamber on the hot world floor: deep magma stays molten until it meets the open air. Fire the Volcano weapon into the middle of the mountain and its magma climbs the pipe and erupts out of the mouth: magma already in its way costs it none of its reach), Forest (dense tall pines and broad oaks, willows over a lily pond, bushes, flowers, a fallen log and mushrooms), Caves (a limestone cavern hung with stalactites under an underground lake, iron, copper and gold ores, a coal seam, an amethyst geode, diamonds round a magma pocket, a lake and an oil pocket), Workshop (jars, blocks and pots of every starter, and a fire in the grate), Village (a limestone church with a spire and rose window, brick, timber and wooden houses, a red barn, cows in a fenced pasture, a well, a pond, crops and a windmill), Nuclear plant (a reactor that runs itself and lights a town), City (skyscrapers whose floors are lit by tubes of helium, neon, argon, krypton and xenon, stained-glass crowns, a spire with a red beacon, neon signs and street lamps), Electric workshop (three benches of working circuits: a light bulb, a carbon arc, a sparkler, a solar panel, lemon and car batteries, a tantalum capacitor firing a xenon flash, a red-green-blue phosphor screen, and switched machines: a lamp, a kettle, a pumped fountain, a piston lift and a fire alarm), Magnet lab (three floors: a separator pulling iron out of falling sand, which metals a magnet takes, bismuth pushed away, an electromagnet crane, neodymium and samarium magnets on heaters, iron dropping out of a fire past its Curie point, chilled gadolinium and filings drawn up in a jar), Waterworks and an empty bench (each but the plain Island is earned: see "Earned, not given"). **Hint** shows how to make or earn something, picked at random; click a locked tile for that element's own answer. The **Codex** lists
 everything found so far, with recipes and the temperatures where each element changes.
-Clone unlocks after 8 discoveries and Void after 16. Sandbox mode in the Codex unlocks
-everything at once.
+The Codex is sorted into the table's categories, each with how many of it you have found; an
+undiscovered element shows only a Hint button. Every toast has a × to dismiss it. Sandbox mode in
+the Codex unlocks everything at once.
 
 ## How it works
 
@@ -623,6 +675,8 @@ everything at once.
 | `js/tryit.js` | Try it (no DOM): each element's experiment, and the watcher that spots it being done in the world |
 | `js/search.js` | Search (no DOM): the index of everything, atomic numbers, ranking and highlighting |
 | `js/groups.js` | Element Groups (no DOM): every element sorted by what it does, built from the element data |
+| `js/unlocks.js` | What is earned (no DOM): the Journey, the Weapons tab, each weapon, scene, sky and machine part, and the feats in your own world that open them |
+| `js/achieve.js` | Achievements (no DOM): milestones, time in a scene, destruction, the secret elements and the big ones |
 | `js/sim.js` | The cellular automaton (typed arrays, no DOM): movement and momentum, the air field, heat diffusion, combustion, electricity, lightning, explosions, life, contact reactions |
 | `js/render.js` | Writes cells to an `ImageData`, plus a light buffer blurred into two bloom layers, and the thermal and air views |
 | `js/audio.js` | All sound synthesised with WebAudio, driven by per-frame simulation events |
@@ -631,7 +685,8 @@ everything at once.
 | `js/story.js` | The journey's chapters as data: world builders, pouches, scripted events, goals and journal text (no DOM) |
 | `js/journey.js` | The journey on screen: map, journal pages, the goals card and the pouch, and running a chapter in its own world |
 | `js/labview.js` | The Lab on screen: the sample, the test tube with its own renderer and loop, the handbook, and the cards |
-| `js/main.js` | Boot, fixed-timestep loop (60 ticks/s), pointer and keyboard input |
+| `js/main.js` | Boot, fixed-timestep loop (60 ticks/s), pointer, touch and keyboard input, the saved worlds, full screen |
+| `rotate.html` | The game turned a quarter round in a frame, for a phone that won't turn the page itself |
 
 Each cell's element is a 16-bit number, with room for 1,022 elements (`ELEM.NT` in `elements.js` sets
 the limit; the last two numbers are the map's invisible border and the mark for rainbow fire). Saves
@@ -702,6 +757,8 @@ node tools/materialstest.js
 node tools/lifetest.js
 node tools/machinetest.js
 node tools/shiptest.js
+node tools/unlocktest.js
+node tools/achievetest.js
 ```
 
 `simtest` runs the simulation headless and checks that every discovery is reachable from the
@@ -783,6 +840,13 @@ misspelt name still finds its element, that undiscovered alchemy stays hidden, a
 with the best match comes first.
 `groupstest` checks that the Element Groups book builds every group, shows every element, has a colour
 for every swatch and a group for every jump link, and that nothing in it comes out blank.
+`unlocktest` checks every unlock: the Journey at 30 finds and the Weapons tab at 50, each weapon's
+quest (water above the line, lava past 3,000°C, a storm's own bolt, rubble and ice made in one scene
+but not laid by the brush, blasts, Nukes beside hydrogen, chapters won), each scene, the skies, the
+battery opening each machine part, sandbox, and the black hole swallowing hydrogen bombs.
+`achievetest` checks the achievements: milestones from finds and stars, hours in one scene, a black
+hole fed five bombs and burst by a sixth wiping the map, clearing by hand not counting, a secret made
+in the world but not one a scene set out, the big ones listed last, and nothing in sandbox mode.
 `casttest` melts each of the 12 castable metals the way its hint says and checks it sets solid and is
 discovered as it does; that magnesium in open air and tungsten in air don't cast; that powder that
 never melted stays powder; that a block stands in mid-air, melts back into liquid metal and sets again;
@@ -810,7 +874,7 @@ Obsidian (lava + water) · Molten glass, Glass (heat sand, let it cool) · Mud (
 Brick (heat mud) · Saltwater (salt + water) ·
 Rust (metal in water) · Molten metal (heat metal past 1500°C) · Snow (freeze steam) ·
 Gunpowder (ash + salt) · Acid (smoke drifting into a cooled cloud) ·
-Methane (plants in mud) · Coal (wood heated with no air) · Diamond (sealed coal at 2500°C) ·
+Methane (plants in mud) · Coal (sugar charred by acid) · Diamond (sealed coal at 2500°C) ·
 Battery (acid on metal) · Electricity (battery on metal) · Lightning (a big, dense steam
 cloud high up) · Plasma (lightning) · Fish (lightning into saltwater) ·
 Worm (lightning into mud) · Firefly (electricity on a flower) · Thermite (rust + gunpowder) ·

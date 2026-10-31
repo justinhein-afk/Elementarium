@@ -20,8 +20,8 @@
     tsunami: { line: 'Flood your world until the water stands above the dashed line', feat: 'flood' },
     volcano: { line: 'Open the Volcano scene', scene: 'volcano' },
     storm: { line: 'Brew a storm cloud big enough to throw its own lightning', feat: 'bolt' },
-    quake: { line: 'Smash 5,000 cells with the Smash tool', count: ['smashed', 5000] },
-    freeze: { line: 'Have 3,000 cells of ice in your world at once', feat: 'ice' },
+    quake: { line: 'Make 7,000 cells of rubble in one scene', made: ['rubble', 7000] },
+    freeze: { line: 'Make 5,000 cells of ice in one scene', made: ['ice', 5000] },
     tornado: { line: 'Set off 10 big explosions that throw the wind about', count: ['blasts', 10] },
     hbomb: { line: 'Set off 5 Nukes right beside hydrogen', count: ['hnukes', 5] },
     acidrain: chapter('spring', 'V', 'The Bitter Spring'),
@@ -50,8 +50,12 @@
 
   // ───── what is open ─────
   const got = { weapon: new Set(), scene: new Set(), part: new Set(), sky: new Set(), journey: false, weapons: false };
-  const feats = { smashed: 0, blasts: 0, hnukes: 0, flood: false, lava: false, bolt: false, ice: false };
-  let store = null, facts = null, lastBlast = -1e9;
+  // made: rubble and ice made in the scene you are in (back to nothing when the scene changes)
+  const FEATS = () => ({ blasts: 0, hnukes: 0, flood: false, lava: false, bolt: false, made: { rubble: 0, ice: 0 } });
+  const feats = FEATS();
+  const MADE = { rubble: ID.RUBBLE, ice: ID.ICE };
+  const seen = { rubble: -1, ice: -1 }, painted = { rubble: 0, ice: 0 }, paintedAt = { rubble: 0, ice: 0 }; // last frame's count; what the brush laid, and when
+  let store = null, facts = null, lastBlast = -1e9, madeMore = false;
 
   function init(s, f) {
     store = s; facts = f;
@@ -59,7 +63,7 @@
     const g = saved.got || {};
     for (const k of ['weapon', 'scene', 'part', 'sky']) { got[k].clear(); for (const n of g[k] || []) got[k].add(n); }
     got.journey = !!g.journey; got.weapons = !!g.weapons;
-    Object.assign(feats, { smashed: 0, blasts: 0, hnukes: 0, flood: false, lava: false, bolt: false, ice: false }, saved.feats || {});
+    Object.assign(feats, FEATS(), saved.feats || {}, { made: FEATS().made }); // every game starts on a fresh Island
     check(); // what you had already done opens now, without a fanfare
   }
   function save() {
@@ -72,9 +76,19 @@
   function reset() {
     for (const k of ['weapon', 'scene', 'part', 'sky']) got[k].clear();
     got.journey = false; got.weapons = false;
-    Object.assign(feats, { smashed: 0, blasts: 0, hnukes: 0, flood: false, lava: false, bolt: false, ice: false });
+    Object.assign(feats, FEATS());
+    newScene();
     save();
   }
+  // a new scene (or a cleared or resized map): the rubble and ice made in it count from nothing
+  function newScene() {
+    for (const k of Object.keys(MADE)) { feats.made[k] = 0; seen[k] = -1; painted[k] = 0; }
+    save();
+  }
+  // the world was put back (undo): count on from what is there now
+  function rebase() { for (const k of Object.keys(MADE)) { seen[k] = -1; painted[k] = 0; } }
+  // the brush laid down n cells of t on tick `tick`: that isn't making them
+  function laid(t, n, tick) { for (const [k, m] of Object.entries(MADE)) if (m === t) { painted[k] += n; paintedAt[k] = tick; } }
 
   const open = (kind, name) => (facts && facts.sandbox()) || (kind === 'journey' ? got.journey : kind === 'weapons' ? got.weapons : got[kind].has(name));
 
@@ -85,8 +99,8 @@
     if (kind === 'weapons') return [facts.found(), WEAPONS_AT];
     if (!q) return null;
     if (kind === 'weapon' && q.count) return [Math.min(feats[q.count[0]], q.count[1]), q.count[1]];
+    if (kind === 'weapon' && q.made) return [Math.min(feats.made[q.made[0]], q.made[1]), q.made[1]];
     if (q.feat === 'flood' && w) return [Math.min(floodShare(w), 0.4), 0.4];
-    if (q.feat === 'ice' && w) return [Math.min(w.counts[ID.ICE], 3000), 3000];
     if (kind === 'scene') {
       const parts = [];
       if (q.finds) for (const k of q.finds) parts.push(facts.known(id(k)));
@@ -132,6 +146,7 @@
       if (q.journey) return facts.journeyWon(q.journey);
       if (q.scene) return got.scene.has(q.scene);
       if (q.count) return feats[q.count[0]] >= q.count[1];
+      if (q.made) return feats.made[q.made[0]] >= q.made[1];
       return !!feats[q.feat];
     }
     if (kind === 'scene') { const p = progress('scene', name); return p[0] >= p[1]; }
@@ -169,10 +184,17 @@
     for (let k = 0; k < ev.booms.length; k += 4) {
       if (ev.booms[k + 2] >= 4 && w.tick - lastBlast >= 30 && feats.blasts < 10) { feats.blasts++; lastBlast = w.tick; changed = true; }
     }
-    if (w.tick % 30 === 0) {
-      if (!feats.flood && floodShare(w) >= 0.4) { feats.flood = true; changed = true; }
-      if (!feats.ice && w.counts[ID.ICE] >= 3000) { feats.ice = true; changed = true; }
+    if (w.tick % 30 === 0 && !feats.flood && floodShare(w) >= 0.4) { feats.flood = true; changed = true; }
+    // rubble and ice made in this scene: what there is more of than last frame, less what the brush laid
+    for (const [k, t] of Object.entries(MADE)) {
+      const n = w.counts[t], more = seen[k] < 0 ? 0 : n - seen[k];
+      seen[k] = n;
+      const own = Math.min(Math.max(0, more), painted[k]);
+      painted[k] -= own;
+      if (w.tick > paintedAt[k] + 1) painted[k] = 0; // what was laid is counted by the next tick
+      if (more > own) { feats.made[k] += more - own; madeMore = true; }
     }
+    if (madeMore && w.tick % 30 === 0) { madeMore = false; changed = true; } // looked at twice a second
     // often, as these don't last: lava held white-hot, and (every frame) a battery touching a
     // machine part's partner (water runs off, fire dies down, a gas drifts away)
     if (w.tick % 5 === 0 && !feats.lava && w.counts[ID.LAVA]) {
@@ -186,23 +208,15 @@
           if (w.type[i] !== ID.BATTERY) continue;
           for (const d of [1, -1, w.SW, -w.SW]) {
             const p = want.get(w.type[i + d]);
-            if (p) { got.part.add(p); want.delete(w.type[i + d]); partsNew.push(p); changed = true; }
+            if (p) { got.part.add(p); want.delete(w.type[i + d]); partsNew.push(['part', p, (i % w.SW) - 1, ((i / w.SW) | 0) - 1]); changed = true; }
           }
         }
       }
     }
     if (changed) save();
-    const fresh = partsNew.splice(0).map((p) => ['part', p]);
-    return fresh.concat(changed ? check() : []);
+    return partsNew.splice(0).concat(changed ? check() : []); // a part comes with where the battery touched
   }
   const partsNew = [];
-  // the Smash tool broke n cells
-  function smashed(n) {
-    if (!n || feats.smashed >= 5000 || (facts && facts.sandbox())) return [];
-    feats.smashed = Math.min(5000, feats.smashed + n);
-    save();
-    return feats.smashed >= 5000 ? check() : [];
-  }
   // a Nuke went off at (x, y) with reach r: beside hydrogen, it counts toward the H-bomb
   function nuked(w, x, y, r) {
     if (feats.hnukes >= 5 || (facts && facts.sandbox())) return [];
@@ -230,7 +244,7 @@
   }
 
   G.Unlocks = {
-    init, reset, check, frame, smashed, nuked, line, progress, partner, nextLocked,
+    init, reset, check, frame, nuked, line, progress, partner, nextLocked, newScene, rebase, laid,
     has: open, FLOOD_ROW, JOURNEY_AT, WEAPONS_AT,
     isPart: (key) => !!PARTS[key],
     scenes: Object.keys(SCENES), weapons: Object.keys(WEAPONS),

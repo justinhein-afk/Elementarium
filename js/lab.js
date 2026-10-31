@@ -16,7 +16,7 @@
   const TEST_BUDGET = 3;      // tests you may run on one sample
   const EASY_UNTIL = 10;      // until this many have been identified, samples come with 3 candidates, then 4
   const POOL = 6;             // the sample is one of the six lowest-numbered elements ready to research
-  const RETRY_MS = 10000;     // after a wrong answer, the next sample takes this long to prepare
+  const RETRY_MS = 5000;      // after a wrong answer, the next sample takes this long to prepare
   const FURNACE = 2000;       // the hottest the bench's furnace goes
   const AIR_GL = 1.29;        // air at 0°C in g/L (periodic.js gives gas densities at 0°C too)
 

@@ -83,22 +83,42 @@ const opened = (fresh, kind, name) => fresh.some(([k, n]) => k === kind && n ===
   const natural = run(w, 5, (ww, k) => { if (k === 1) ww.spawnBolt(80, 10, true); });
   check('A storm cloud’s own bolt earns the Lightning storm; a weapon’s doesn’t', !opened(weapon, 'weapon', 'storm') && opened(natural, 'weapon', 'storm'));
 }
-{ // the earthquake: 5,000 cells smashed, counted over many strokes
-  setup();
-  let fresh = [];
-  for (let k = 0; k < 49; k++) fresh = fresh.concat(Unlocks.smashed(100));
-  const at4900 = Unlocks.has('weapon', 'quake');
-  fresh = fresh.concat(Unlocks.smashed(150));
-  check('Smashing 5,000 cells earns the Earthquake', !at4900 && opened(fresh, 'weapon', 'quake'), `at 4,900 ${at4900}; smashed ${Unlocks.feats().smashed}`);
-}
-{ // the ice age: 3,000 cells of ice at once
+{ // the earthquake: 7,000 cells of rubble made in one scene; rubble the brush lays doesn't count,
+  // and a new scene starts the count again
   setup();
   const w = world();
-  rect(w, 0, 190, 199, 199, ID.ICE);
-  const few = run(w, 31);
-  rect(w, 0, 170, 319, 199, ID.ICE);
+  rect(w, 0, 100, w.W - 1, w.H - 1, ID.STONE);
+  run(w, 2);
+  rect(w, 0, 0, w.W - 1, 24, ID.RUBBLE); // 8,000 cells laid by the brush
+  Unlocks.laid(ID.RUBBLE, w.W * 25, w.tick);
+  const laid = run(w, 5), afterLaid = Unlocks.feats().made.rubble;
+  const smashAll = (y0, y1) => { for (let y = y0; y <= y1; y += 8) for (let x = 4; x < w.W; x += 8) w.smash(x, y, 6, Infinity); };
+  smashAll(170, 199);
+  run(w, 3);
+  const before = Unlocks.feats().made.rubble;
+  Unlocks.newScene();
+  const reset = Unlocks.feats().made.rubble;
+  run(w, 2);
+  smashAll(100, 168);
   const lots = run(w, 31);
-  check('3,000 cells of ice earn the Ice age', !opened(few, 'weapon', 'freeze') && opened(lots, 'weapon', 'freeze'), `${w.counts[ID.ICE]} ice`);
+  check('7,000 cells of rubble made in one scene earn the Earthquake; laid rubble and an earlier scene don’t count',
+    !opened(laid, 'weapon', 'quake') && afterLaid < 50 && before > 0 && reset === 0 && opened(lots, 'weapon', 'quake'),
+    `laid ${afterLaid}, before the new scene ${before}, after ${reset}, then ${Unlocks.feats().made.rubble}`);
+}
+{ // the ice age: 5,000 cells of ice made in one scene
+  setup();
+  const w = world();
+  run(w, 2);
+  rect(w, 0, 180, w.W - 1, 192, ID.ICE); // 4,160
+  const first = run(w, 31);
+  Unlocks.newScene();
+  run(w, 2);
+  rect(w, 0, 150, w.W - 1, 162, ID.ICE); // 4,160 more, in the new scene
+  const second = run(w, 31);
+  rect(w, 0, 130, w.W - 1, 133, ID.ICE); // 1,280 more
+  const third = run(w, 31);
+  check('5,000 cells of ice made in one scene earn the Ice age; a new scene starts again',
+    !opened(first, 'weapon', 'freeze') && !opened(second, 'weapon', 'freeze') && opened(third, 'weapon', 'freeze'), `${Unlocks.feats().made.ice} made in this scene`);
 }
 { // the tornado: 10 big blasts, a moment apart
   setup();

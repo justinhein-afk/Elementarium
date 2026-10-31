@@ -36,8 +36,10 @@ const s = (ticks) => `${(ticks / 60).toFixed(1)} s`;
     'mushroom', 'lily', 'human', 'bird', 'ant', 'cloud', 'raincloud', 'stormcloud', 'snowcloud', 'fog', 'hail', 'limestone', 'cow', 'wolf', 'shark'];
   check('What was on the board from the start is found in the world now, each with a recipe', found.every((k) => !byKey[k].starter && byKey[k].hint && byKey[k].fromIds.length && byKey[k].fromIds.every((f) => f >= 0)),
     found.filter((k) => byKey[k].starter || !byKey[k].hint).join(', ') || `${found.length} elements`);
-  check('Paint and Image open after enough discoveries, like Clone and Void', ['clone', 'void', 'paint', 'image'].every((k) => byKey[k].special && byKey[k].unlockAt > 0),
-    ['clone', 'void', 'paint', 'image'].map((k) => `${k} ${byKey[k].unlockAt}`).join(', '));
+  check('Clone and Void open at 40 and 70 discoveries, Paint and Image at 50 and 80 Try it stars',
+    byKey.clone.unlockAt === 40 && byKey.void.unlockAt === 70 && byKey.paint.unlockStars === 50 && byKey.image.unlockStars === 80
+      && ['clone', 'void', 'paint', 'image'].every((k) => byKey[k].special),
+    ['clone', 'void', 'paint', 'image'].map((k) => `${k} ${byKey[k].unlockAt || `${byKey[k].unlockStars}★`}`).join(', '));
   const w0 = Sim.createWorld(10, 10);
   check('Element numbers are 16-bit, with room for 1,022 elements', w0.type instanceof Uint16Array && w0.aux instanceof Uint16Array
     && Sim.BOUND === ELEM.NT - 1 && Sim.RAINBOW === ELEM.NT - 2 && list.length <= ELEM.NT - 2,
@@ -308,9 +310,21 @@ const s = (ticks) => `${(ticks / 60).toFixed(1)} s`;
   w.setBrush('box', 0, 28, 59, 39);
   for (let k = 0; k < 8; k++) w.smash(30, 33, 30);
   const stoneRubble = cells(w, (t, i) => t === ID.RUBBLE && w.aux[i] === ID.STONE); // rubble the colour of what it was
-  check('Smash breaks stone to rubble of its colour and glass to shards, as a quake would; metal and diamond hold',
-    count(w, ID.STONE) < 10 && stoneRubble > 40 && count(w, ID.GLASS) < 10 && count(w, ID.SHARDS) > 40 && count(w, ID.METAL) === 60 && count(w, ID.DIAMOND) === 48 && count(w, ID.SAND) === 0,
+  check('Smash breaks stone to rubble of its colour and glass to shards, as a quake would; metal holds, and diamond barely gives',
+    count(w, ID.STONE) < 10 && stoneRubble > 40 && count(w, ID.GLASS) < 10 && count(w, ID.SHARDS) > 40 && count(w, ID.METAL) === 60 && count(w, ID.DIAMOND) >= 44 && count(w, ID.SAND) === 0,
     `stone ${count(w, ID.STONE)}, stone rubble ${stoneRubble}, sand ${count(w, ID.SAND)}, glass ${count(w, ID.GLASS)}, shards ${count(w, ID.SHARDS)}, metal ${count(w, ID.METAL)}, diamond ${count(w, ID.DIAMOND)}`);
+}
+{ // hard things: a cast block breaks back into its metal's grains, slower the denser it is; diamond to carbon dust, slowest
+  const left = (key) => {
+    const w = world(40, 30), t = byKey[key].id;
+    rect(w, 10, 10, 29, 19, t);
+    for (let k = 0; k < 40; k++) w.smash(20, 15, 14);
+    return { left: count(w, t), into: key === 'diamond' ? count(w, byKey.el_c.id) : count(w, byKey[key].castOf) };
+  };
+  const mg = left('solid_mg'), fe = left('solid_fe'), pt = left('solid_pt'), dm = left('diamond');
+  check('Cast metal smashes back into its grains, the denser the slower; diamond grinds to carbon slowest of all',
+    mg.left === 0 && mg.into === 200 && fe.left < pt.left && pt.left < dm.left && pt.into > 0 && dm.into > 0 && dm.left > 150,
+    `of 200 after 40 strokes: magnesium ${mg.left} left, iron ${fe.left}, platinum ${pt.left}, diamond ${dm.left} (${dm.into} carbon dust)`);
 }
 
 // ── rainbow fire ──

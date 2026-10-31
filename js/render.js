@@ -378,6 +378,7 @@
       // stand in show what is around them instead, so no upright outline shows behind the figure
       const figures = view.s >= 1;
       const swimming = (j) => (aux[j] & SWIMS) && (liquidAt(j + SW) || liquidAt(j - 1) || liquidAt(j + 1));
+      const paddling = (j) => liquidAt(j + SW) || liquidAt(j - 1) || liquidAt(j + 1); // a cow or a wolf in the water
       for (let y = 0; y < H; y++) {
         let i = (y + 1) * SW + 1;
         for (let x = 0; x < W; x++, i++, o++) {
@@ -407,7 +408,7 @@
             if (nBeasts === beasts.length) { const n = new Int32Array(nBeasts * 2); n.set(beasts); beasts = n; }
             beasts[nBeasts++] = i;
           }
-          if (figures && ((t === HUMAN && swimming(i)) || (t === HEADT && type[i + SW] === HUMAN && swimming(i + SW)))) {
+          if (figures && ((t === HUMAN && swimming(i)) || (t === HEADT && type[i + SW] === HUMAN && swimming(i + SW)) || ((t === COW || t === WOLF) && paddling(i)))) {
             // in the water, the water beside it; above the surface, nothing (the air)
             const j = liquidAt(i - 1) ? i - 1 : liquidAt(i + 1) ? i + 1 : -1;
             if (j < 0) { out[o] = 0; glow[o] = 0; depth[x] = 0; continue; }
@@ -1430,16 +1431,21 @@
         const x = (i % SW) - 1, y = ((i / SW) | 0) - 1;
         const fx = ox + sx + (x + 0.5) * s, fy = oy + sy + (y + 1) * s, face = aux[i] & 1 ? 1 : -1;
         const burning = flags[i] & 1;
-        if (t === SHARK) drawShark(fx, fy - s * 0.5, face, s, tick + x * 5, burning);
-        else drawBeast(t === COW, fx, fy, face, s, ((tick >> 3) + x) & 1, shade[i], burning);
+        if (t === SHARK) { drawShark(fx, fy - s * 0.5, face, s, tick + x * 5, burning); continue; }
+        // in water (beside it, or floating on it): swimming, its head up out of the water line
+        const side = wetAt(i - 1) ? i - 1 : wetAt(i + 1) ? i + 1 : -1, under = wetAt(i + SW) ? i + SW : -1;
+        if (side >= 0 || under >= 0) {
+          const j = side >= 0 ? side : under, q = type[j] * 16 + (shade[j] >> 4);
+          drawBeastSwim(t === COW, fx, side >= 0 ? fy - s : fy, face, s, tick + x * 5, shade[i], burning, `rgba(${PR[q]},${PG[q]},${PB[q]},0.62)`);
+        } else drawBeast(t === COW, fx, fy, face, s, ((tick >> 3) + x) & 1, shade[i], burning);
       }
     }
     // A cow (white with black patches, horns and a pink snout) or a wolf (grey, pointed ears and a
     // bushy tail) standing on the bottom of its cell, about the size of a person.
     function drawBeast(isCow, fx, fy, face, s, stepping, sh, burning) {
-      const L = isCow ? 2.2 : 1.9, top = isCow ? 2.6 : 2.2, belly = isCow ? 1.2 : 1.1;
-      const body = burning ? '#ff8a2a' : isCow ? '#f2efe6' : '#7d7a76', dark = isCow ? '#2a2420' : '#55524e';
-      ctx.lineWidth = Math.max(1, s * 0.45);
+      const L = isCow ? 2.2 : 2.1, top = isCow ? 2.6 : 2.3, belly = isCow ? 1.2 : 1.25;
+      const body = burning ? '#ff8a2a' : isCow ? '#f2efe6' : '#7d7a76', dark = isCow ? '#2a2420' : '#4a4743';
+      ctx.lineWidth = Math.max(1, s * (isCow ? 0.45 : 0.38)); // a wolf's legs: long and lean
       ctx.strokeStyle = dark;
       ctx.beginPath(); // four legs, walking
       const st = stepping ? 0.25 : -0.25;
@@ -1455,9 +1461,34 @@
         const p = (sh >> 4) & 3;
         ctx.fillRect(fx + (p - 1.6) * 0.5 * s, fy - top * s, 1.1 * s, 0.8 * s);
         ctx.fillRect(fx - (p * 0.3 + 0.4) * s * face, fy - (top - 0.7) * s, 0.8 * s, 0.6 * s);
+        beastHead(true, fx + face * (L + 0.5) * s, fy - (top + 0.3) * s, face, s, body, dark); // out front and a little up
+        ctx.strokeStyle = dark; ctx.lineWidth = Math.max(1, s * 0.3);
+        ctx.beginPath(); // the tail, hanging
+        const tx = fx - face * L * s, ty = fy - (top - 0.2) * s;
+        ctx.moveTo(tx, ty); ctx.lineTo(tx - face * 0.4 * s, ty + 1.2 * s);
+        ctx.stroke();
+        return;
       }
-      // the head, out front and a little up
-      const hx = fx + face * (L + 0.5) * s, hy = fy - (top + (isCow ? 0.3 : 0.5)) * s, hw = (isCow ? 1.2 : 1.1) * s;
+      // a wolf: a pale belly, a deep chest with a ruff, its head level with its back and thrust
+      // forward on a long muzzle, and a bushy tail carried low
+      ctx.fillStyle = burning ? body : '#bdb6a8';
+      ctx.fillRect(fx - L * 0.75 * s, fy - (belly + 0.35) * s, L * 1.5 * s, 0.35 * s);
+      ctx.fillStyle = body;
+      ctx.fillRect(fx + (face > 0 ? L * 0.35 : -L) * s, fy - (top + 0.15) * s, L * 0.65 * s, (top - belly + 0.4) * s);
+      beastHead(false, fx + face * (L + 0.25) * s, fy - (top + 0.25) * s, face, s, body, dark);
+      wolfTail(fx - face * L * s, fy - (top - 0.25) * s, face, s, body, dark);
+    }
+    // a wolf's tail: thick, carried low and out behind, with a dark tip
+    function wolfTail(tx, ty, face, s, body, dark) {
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = body; ctx.lineWidth = Math.max(1, s * 0.75);
+      ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(tx - face * 0.8 * s, ty + 0.7 * s); ctx.stroke();
+      ctx.strokeStyle = dark; ctx.lineWidth = Math.max(1, s * 0.6);
+      ctx.beginPath(); ctx.moveTo(tx - face * 0.8 * s, ty + 0.7 * s); ctx.lineTo(tx - face * 1.15 * s, ty + 1.25 * s); ctx.stroke();
+    }
+    // a cow's or a wolf's head, its top-middle at (hx, hy)
+    function beastHead(isCow, hx, hy, face, s, body, dark) {
+      const hw = (isCow ? 1.2 : 1.1) * s;
       ctx.fillStyle = body;
       ctx.fillRect(hx - hw / 2, hy, hw, (isCow ? 1.2 : 0.9) * s);
       if (isCow) {
@@ -1466,17 +1497,59 @@
         ctx.strokeStyle = '#d8ceb8'; ctx.lineWidth = Math.max(1, s * 0.3);
         ctx.beginPath(); ctx.moveTo(hx - hw * 0.35, hy); ctx.lineTo(hx - hw * 0.5, hy - 0.5 * s); ctx.moveTo(hx + hw * 0.35, hy); ctx.lineTo(hx + hw * 0.5, hy - 0.5 * s); ctx.stroke();
       } else {
-        ctx.fillRect(hx + face * hw * 0.4 - hw * 0.25, hy + 0.35 * s, hw * 0.6, 0.45 * s); // muzzle
-        ctx.fillStyle = dark; // pointed ears
-        ctx.beginPath(); ctx.moveTo(hx - hw * 0.45, hy); ctx.lineTo(hx - hw * 0.25, hy - 0.7 * s); ctx.lineTo(hx - hw * 0.02, hy); ctx.fill();
+        // a long muzzle out in front of the skull, pale beneath, with a black nose at its tip
+        const m = 1.0 * s, mx = face > 0 ? hx + hw / 2 - 0.1 * s : hx - hw / 2 - m + 0.1 * s;
+        ctx.fillRect(mx, hy + 0.35 * s, m, 0.4 * s);
+        ctx.fillStyle = '#bdb6a8';
+        ctx.fillRect(mx, hy + 0.62 * s, m, 0.2 * s);
+        ctx.fillStyle = '#141210';
+        ctx.fillRect(face > 0 ? mx + m - 0.3 * s : mx, hy + 0.3 * s, 0.3 * s, 0.3 * s);
+        ctx.fillStyle = dark; // two pointed ears, set back on the skull
+        for (const [a, b, h] of [[-0.5, -0.1, 0.75], [-0.05, 0.3, 0.6]]) {
+          ctx.beginPath();
+          ctx.moveTo(hx + face * hw * a, hy + 0.05 * s); ctx.lineTo(hx + face * hw * ((a + b) / 2 - 0.05), hy - h * s); ctx.lineTo(hx + face * hw * b, hy + 0.05 * s);
+          ctx.fill();
+        }
+        ctx.fillStyle = '#e0b04a'; // an amber eye
+        ctx.fillRect(hx + face * hw * 0.22 - s * 0.15, hy + 0.2 * s, Math.max(1, s * 0.3), Math.max(1, s * 0.25));
+        return;
       }
       ctx.fillStyle = '#1c1a18'; // an eye
       ctx.fillRect(hx + face * hw * 0.2 - s * 0.15, hy + 0.3 * s, Math.max(1, s * 0.3), Math.max(1, s * 0.3));
-      ctx.strokeStyle = isCow ? dark : body; ctx.lineWidth = Math.max(1, s * (isCow ? 0.3 : 0.55));
-      ctx.beginPath(); // the tail
-      const tx = fx - face * L * s, ty = fy - (top - 0.2) * s;
-      if (isCow) { ctx.moveTo(tx, ty); ctx.lineTo(tx - face * 0.4 * s, ty + 1.2 * s); }
-      else { ctx.moveTo(tx, ty + 0.2 * s); ctx.lineTo(tx - face * 1.1 * s, ty - 0.3 * s); }
+    }
+    // A cow or a wolf swimming: its body just under the water line (wl), seen through the water, legs
+    // paddling below, its head held up out of the water and bobbing, ripples where its neck breaks
+    // the surface.
+    function drawBeastSwim(isCow, fx, wl, face, s, ph, sh, burning, water) {
+      const L = isCow ? 2.2 : 1.9, bh = isCow ? 1.4 : 1.1, hh = (isCow ? 1.2 : 0.9) * s, hw = (isCow ? 1.2 : 1.1) * s;
+      const body = burning ? '#ff8a2a' : isCow ? '#f2efe6' : '#7d7a76', dark = isCow ? '#2a2420' : '#55524e';
+      const by = wl - 0.15 * s, p = Math.sin(ph * 0.35), bob = Math.sin(ph * 0.12) * 0.15 * s;
+      ctx.lineWidth = Math.max(1, s * 0.45);
+      ctx.strokeStyle = dark;
+      ctx.beginPath(); // legs paddling, front and back pairs out of step
+      [-0.7, -0.45, 0.45, 0.7].forEach((lx, k) => {
+        const sw = (k % 2 ? p : -p) * 0.6 * s;
+        ctx.moveTo(fx + lx * L * s, by + bh * s); ctx.lineTo(fx + lx * L * s + face * sw, by + (bh + 0.9) * s);
+      });
+      ctx.stroke();
+      ctx.fillStyle = body;
+      ctx.fillRect(fx - L * s, by, L * 2 * s, bh * s);
+      if (isCow) { ctx.fillStyle = dark; ctx.fillRect(fx + (((sh >> 4) & 3) - 1.6) * 0.5 * s, by, 1.1 * s, 0.7 * s); }
+      // the neck, up from the front of the body, and the head on it, above the water
+      const hx = fx + face * (L + 0.3) * s, hy = wl - hh - 0.45 * s + bob;
+      ctx.fillStyle = body;
+      ctx.fillRect(hx - hw * 0.3, hy + hh * 0.5, hw * 0.6, wl - hy - hh * 0.5 + s * 0.4);
+      beastHead(isCow, hx, hy, face, s, body, dark);
+      // the water over what is under it
+      const x0 = Math.min(fx - (L + 0.3) * s, hx - hw), x1 = Math.max(fx + (L + 0.3) * s, hx + hw);
+      ctx.fillStyle = water;
+      ctx.fillRect(x0, wl, x1 - x0, (bh + 1.1) * s);
+      // ripples running out from the neck
+      const r = ((ph % 30) / 30) * 1.4 * s;
+      ctx.strokeStyle = 'rgba(232,244,255,0.75)'; ctx.lineWidth = Math.max(1, s * 0.25);
+      ctx.beginPath();
+      ctx.moveTo(hx - hw * 0.6 - r, wl); ctx.lineTo(hx - hw * 0.6 - r - 0.7 * s, wl);
+      ctx.moveTo(hx + hw * 0.6 + r, wl); ctx.lineTo(hx + hw * 0.6 + r + 0.7 * s, wl);
       ctx.stroke();
     }
     // A shark: a grey torpedo with a white belly, a tall fin and a beating tail.
@@ -1571,14 +1644,6 @@
           outline(cellBox(brush.x, brush.y, brush.x, brush.y));
           outline(cross(Math.max(6 * dpr, s * 2)));
           break;
-        case 'spray':
-          outline(circle(rad), [1.5 * dpr, 5 * dpr]);
-          ctx.fillStyle = brush.color;
-          for (let k = 0; k < 6; k++) {
-            const a = (k / 6) * Math.PI * 2 + 0.4, d = rad * (0.35 + (k % 2) * 0.3);
-            ctx.fillRect(px + Math.cos(a) * d - dpr, py + Math.sin(a) * d - dpr, 2 * dpr, 2 * dpr);
-          }
-          break;
         case 'line':
           if (brush.anchor) {
             const a = worldToCanvas(brush.anchor.x + 0.5, brush.anchor.y + 0.5);
@@ -1600,18 +1665,6 @@
           } else outline(cellBox(brush.x, brush.y, brush.x, brush.y));
           outline(cross(Math.max(7 * dpr, s * 2.5)));
           break;
-        case 'fill': {
-          // a paint bucket: a tilted pail with a drop falling from its lip
-          const u = Math.max(5 * dpr, s * 1.6);
-          outline(() => {
-            ctx.beginPath();
-            ctx.moveTo(px - u, py - u * 0.2); ctx.lineTo(px - u * 0.2, py - u); ctx.lineTo(px + u * 0.6, py - u * 0.2);
-            ctx.lineTo(px - u * 0.2, py + u * 0.6); ctx.closePath();
-          });
-          ctx.fillStyle = brush.color;
-          ctx.beginPath(); ctx.arc(px + u * 0.75, py + u * 0.55, u * 0.22, 0, Math.PI * 2); ctx.fill();
-          break;
-        }
         case 'weapon': {
           // a sight on where it will strike, and how far it reaches
           const kind = brush.weapon, notch = 5 * dpr;
@@ -1720,6 +1773,7 @@
       flash(a) { flashAmt = Math.min(1, flashAmt + a); },
       glare(a) { glareAmt = Math.min(1.4, glareAmt + a); },
       get cellSize() { return view.s / dpr; },
+      get cells() { return wc; }, // the world one pixel a cell, as last drawn (for a save's picture)
     };
   }
 

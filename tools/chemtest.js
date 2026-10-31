@@ -64,10 +64,11 @@ function campfire(colourant) {
   check('Strontium turns it red', sr.tinted > sr.fire * 0.15, `${sr.tinted} of ${sr.fire} tinted by strontium`);
   check('A plain wood fire stays orange', plain.fire > 1000 && plain.tinted === 0, `${plain.fire} fire cell-ticks, ${plain.tinted} tinted`);
 }
-{ // sodium's yellow swamps the copper's green
+{ // sodium's yellow swamps the copper's green (in a coal fire: wood sealed under the grains would
+  // smoulder into embers and tumble the sodium out of the flames)
   const w = world();
   rect(w, 0, 90, 159, 99, ID.STONE);
-  rect(w, 60, 80, 100, 89, ID.WOOD);
+  rect(w, 60, 80, 100, 89, ID.COAL);
   for (let x = 60; x <= 100; x++) w.place(w.idx(x, 79), x & 1 ? ID.EL_CU : ID.EL_NA);
   for (let x = 60; x <= 100; x++) w.ignite(w.idx(x, 80));
   let na = 0, cu = 0;

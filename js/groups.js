@@ -1,7 +1,8 @@
 /* Elementarium — Element Groups (no DOM; ui.js shows them in their own window).
  * Every periodic element grouped by what it does in the game: the colours it gives a flame, glass,
  * a tube of gas or a spark, how it carries current and what to build with it, magnetism, how it
- * reacts, its radioactivity, and its state, melting point and density. All of it is read from the
+ * reacts, its radioactivity, its state, melting point and density, the metals that cast, the
+ * machines and ships it powers, and the scenes and weapons it opens. All of it is read from the
  * game's own element data, so it always matches what happens when you play. Built as HTML text;
  * each element is a button carrying its type id (data-t) so the window can pick it up. */
 (function (G) {
@@ -49,7 +50,7 @@
       const order = ['crimson', 'red', 'red-violet', 'pink', 'orange-red', 'yellow', 'pale yellow', 'brilliant white', 'white', 'apple green',
         'bright green', 'green', 'blue-green', 'pale blue', 'blue', 'indigo', 'blue-violet', 'lilac'];
       const names = [...by.keys()].sort((a, b) => order.indexOf(a) - order.indexOf(b));
-      add('Colours', 'flame', 'Flame colours', 'Sprinkle the element into any fire, or drop an alkali metal into water. Sodium’s yellow swamps every other colour in the same fire.',
+      add('Colours', 'flame', 'Flame colours', 'Sprinkle the element into any fire, or drop an alkali metal into water. Sodium’s yellow swamps every other colour in the same fire. Each colour you make yourself can then be painted with the dot on the Fire tile; make every one for rainbow fire.',
         names.map((n) => hue(n, by.get(n)[0].flameColor, by.get(n).map((d) => [d.sym, d.flam ? 'burns itself' : null, d.flameColor]))).join(''));
     }
     { // glow with current
@@ -64,7 +65,7 @@
         + hue('white-hot', '#fff4dc', [['W', 'filament, up to 2,600°C'], ['Mo', 'filament, up to 2,300°C']], 'burns out in open air past 1,500°C')
         + hue('red-hot', '#ff5a2a', [['Ni', 'touching chromium'], ['Cr', 'touching nickel']], 'nichrome'));
     }
-    add('Colours', 'glass', 'Glass colours', 'Stir a pinch of the metal into molten glass (sand past 1,700°C). The stain spreads through the melt and stays through any number of remelts.',
+    add('Colours', 'glass', 'Glass colours', 'Stir a pinch of the metal into molten glass (sand past 1,700°C). The stain spreads through the melt and stays through any number of remelts. Each colour you make can then be painted with the dot on the Glass tile.',
       P.filter((d) => d.glassColor).map((d) => hue((d.desc.match(/turns molten glass ([^,.]+)/) || [])[1] || 'stained', d.glassColor, [[d.sym, null, d.glassColor]])).join(''));
     { // sparks
       const how = { Mg: 'while it burns', Al: 'its dust flashing in a fire', Ti: 'red-hot in open air', Fe: 'filings red-hot in open air', Zr: 'burning past 1,100°C', Ce: 'dropped hard: a lighter flint' };
@@ -113,7 +114,7 @@
       + recipe('Capacitor', `${chip('Ta')}${plus}${thing('battery')}`, 'Tantalum soaks up a dozen pulses, glowing bluer, then lets them all go in one crack of sparks.')
       + recipe('Neon sign', `${chip('Ne')}${plus}${thing('sealed glass')}${plus}${thing('2 batteries')}`, 'Any glowing gas from Glow with current works the same way.')
       + recipe('Electromagnet', `${chip('Fe')}${plus}${thing('battery')}`, 'Iron, cobalt or nickel carrying current lifts filings; take the battery away and they fall.'));
-    add('Electricity and magnetism', 'magnets', 'Magnetism', 'Magnetic only below the real Curie temperature: heat one past it and it lets go of everything.',
+    add('Electricity and magnetism', 'magnets', 'Magnetism', 'Magnetic only below the real Curie temperature: heat one past it and it lets go of everything. Switch the Magnet tool to Magnetic and it picks up only these.',
       row('Permanent magnets', P.filter((d) => d.chem.magnet).map((d) => [d.sym, `up to ${deg(d.chem.curie)}`]))
       + row('Pulled by a magnet', P.filter((d) => d.chem.curie !== null && !d.chem.magnet).sort((a, b) => b.chem.curie - a.chem.curie).map((d) => [d.sym, `below ${deg(d.chem.curie)}`]))
       + row('Clings to a magnet as a liquid', [['O', `below ${deg(S.O.bp)}`]])
@@ -199,6 +200,27 @@
     }
     add('Physical', 'families', 'Families', 'The table’s own groups, as coloured on the Periodic table tab.',
       Object.entries(ELEM.FAMILY).map(([f, name]) => { const l = P.filter((d) => d.fam === f); return row(plural(name), l.map((d) => d.sym), `${l.length}`); }).join(''));
+    // ───── machines and building ─────
+    add('Machines and building', 'cast', 'Cast metals', 'Melt the metal in your world and let it cool: it sets into a solid block that stays where you put it, and the block joins the alchemy table. Magnesium has to be sealed in, packed full, or it burns; tungsten is melted sealed in argon.',
+      chips(ELEM.list.filter((d) => d && d.castOf !== undefined).map((d) => ELEM.list[d.castOf]).sort((a, b) => a.mp - b.mp).map((d) => [d.sym, `melts ${deg(d.mp)}`])));
+    { // each part opens the first time a battery touches its partner
+      const parts = ELEM.list.filter((d) => d && d.special && d.needs);
+      add('Machines and building', 'parts', 'Machine parts', 'Each part opens the first time a battery touches the right thing in your world. Any conductor above carries their current; wire does it without rusting or leaking into water.',
+        parts.map((d) => recipe(d.name, `${thing('Battery')}${plus}${thing(ELEM.byKey[G.Unlocks.partner(d.key)].name)}`, d.desc.split('. ')[0].replace(/\.$/, '') + '.')).join(''));
+    }
+    add('Machines and building', 'ships', 'Ships and fuel', 'Whatever a thruster is joined to in metal, glass or machine parts flies as one ship. Hydrogen is the only element on this table a thruster burns; the other fuels come from the alchemy table.',
+      recipe('Rocket', `${thing('Thruster')}${plus}${thing('battery')}${plus}${chip('H')}${or}${thing('oil, methane, alcohol or napalm')}`, 'Each thruster lifts up to 75 cells of ship. Land on landing legs and a hard landing breaks nothing.'));
+
+    // ───── what they open ─────
+    { // a scene built from periodic elements opens once every one of them is unlocked
+      const needs = Lab.sceneNeeds(G.Scenes), name = (n) => (G.UI ? G.UI.sceneName(n) : n);
+      const also = { reactor: 'and win chapter VIII of the Journey', city: 'and make 5 colours of stained glass' };
+      add('What they open', 'scenes', 'Scenes they open', 'A scene built from periodic elements opens once you have unlocked every one of them in the Lab.',
+        ['magnets', 'reactor', 'city'].filter((n) => needs[n]).map((n) => row(name(n), needs[n].map((t) => ELEM.list[t].sym), also[n])).join('')
+        + row(name('electrics'), [['W', 'its Try it star']], 'a light bulb'));
+    }
+    add('What they open', 'weapons', 'Weapons they earn', 'Most weapons are earned in your own world or in the Journey. One of them needs an element of this table.',
+      recipe('Hydrogen bomb', `${thing('Nuke')}${plus}${chip('H')}`, 'Set off 5 Nukes with 60 or more cells of hydrogen in their reach.'));
     return groups;
   }
 

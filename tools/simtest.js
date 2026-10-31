@@ -109,10 +109,11 @@ scenario('Methane (plant + mud)', [ID.METHANE], 20000, (w) => {
   rect(w, 40, 76, 120, 79, ID.PLANT);
 });
 
-scenario('Coal (sealed wood heated)', [ID.COAL], 4000, (w) => {
-  rect(w, 40, 60, 120, 99, ID.SAND);
-  rect(w, 70, 80, 90, 92, ID.WOOD);
-}, (w) => heatRect(w, 70, 80, 90, 92, 15));
+scenario('Coal (sugar charred by acid)', [ID.COAL], 4000, (w) => {
+  rect(w, 39, 60, 39, 99, ID.WALL); rect(w, 121, 60, 121, 99, ID.WALL);
+  rect(w, 40, 90, 120, 99, ID.SUGAR);
+  rect(w, 40, 80, 120, 86, ID.ACID);
+});
 
 scenario('Diamond (sealed coal at 2500°C)', [ID.DIAMOND], 6000, (w) => {
   rect(w, 40, 60, 120, 99, ID.STONE);

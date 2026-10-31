@@ -257,7 +257,7 @@ function sledge(w) {
   expect('IX   · fly the sledge across and land', 'won', play('proving', 120, pilot));
 }
 
-// ── X · The Launch: five faults mended, fuelled down the laid line, flown to the moon ──
+// ── X · The Launch: five faults mended, fuelled down the laid line, flown out of the silo for the moon ──
 const launch = (opts) => {
   const x0 = 150, x1 = 164, base = 166;
   let fuelled = -1;
@@ -281,7 +281,7 @@ const launch = (opts) => {
   };
 };
 expect('X    · do nothing', 'unsolved', play('launch', 60));
-expect('X    · mend, fuel, fly to the moon', 'won', play('launch', 150, launch({})));
+expect('X    · mend, fuel, fly out of the silo', 'won', play('launch', 150, launch({})));
 expect('X    · with a fuel pipe of your own too', 'won', play('launch', 150, launch({ ownLine: true })));
 {
   const r = play('launch', 90, launch({ noLegs: true }));

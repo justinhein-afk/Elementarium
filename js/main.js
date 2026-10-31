@@ -2,7 +2,7 @@
 (function (G) {
   'use strict';
 
-  const { ELEM, Sim, Renderer, AudioFX, UI, Scenes, Journey, Lab, LabView, TryIt, Tints, Unlocks } = G;
+  const { ELEM, Sim, Renderer, AudioFX, UI, Scenes, Journey, Lab, LabView, TryIt, Tints, Unlocks, Achieve } = G;
   const { ID, CAT, list } = ELEM;
   const $ = (s) => document.querySelector(s);
 
@@ -79,7 +79,11 @@
   function applySnapshot(sn) {
     if (sn.W !== game.world.W || sn.H !== game.world.H) setWorld(Sim.createWorld(sn.W, sn.H));
     game.world.restore(sn);
+    Unlocks.rebase(); Achieve.rebase(); // what was put back isn't made (or found) anew
   }
+  // a different world in the same window (a scene, a cleared or resized map, a saved world): what
+  // is made in one scene, and the time spent in it, count from nothing
+  function newScene() { Unlocks.newScene(); Achieve.newScene(); }
   function undo() {
     if (!history.undo.length || Journey.active) return;
     history.redo.push(game.world.snapshot());
@@ -100,15 +104,15 @@
   const pointer = {
     x: 0, y: 0, cx: 0, cy: 0, inside: false, down: false, button: 0, lastX: 0, lastY: 0, boltCd: 0,
     panning: false, panX: 0, panY: 0, panMoved: 0,
-    anchor: null, // where a Line or Box drag began
-    shift: false, // Shift is held: a Line or Box being dragged is kept straight (see dragEnd)
+    anchor: null, // where a straight line (a drag with Shift held) or a Box began
+    shift: false, // Shift is held: a Box being dragged is kept square (see dragEnd)
     weapon: 0,    // the disaster this press set off, steered while the button is held (a tornado)
   };
 
   // ───── brush shapes ─────
-  // circle and square paint as you drag; pen draws single cells; spray scatters; line and box
-  // are dragged out and drawn on release; fill pours into everything connected (a paint bucket).
-  const SHAPES = ['circle', 'square', 'pen', 'spray', 'line', 'box', 'fill'];
+  // circle and square paint as you drag and pen draws single cells; with Shift held, any of them is
+  // dragged out into a straight line at any angle and drawn on release. A box is dragged out too.
+  const SHAPES = ['circle', 'square', 'pen', 'box'];
   game.shape = SHAPES.includes(UI.store.get('shape', 'circle')) ? UI.store.get('shape', 'circle') : 'circle';
   const shapeButtons = document.querySelectorAll('[data-shape]');
   function setShape(sh) {
@@ -119,11 +123,13 @@
   for (const b of shapeButtons) b.addEventListener('click', () => { AudioFX.click(); setShape(b.dataset.shape); });
   setShape(game.shape);
   const isMagnet = () => game.selected.kind === 'tool' && game.selected.name === 'magnet';
-  const dragged = () => game.shape === 'line' || game.shape === 'box';
-  const radius = () => (game.shape === 'pen' ? 0 : game.shape === 'spray' ? game.brush + 3 : game.brush);
+  const dragged = () => game.shape === 'box';
+  const radius = () => (game.shape === 'pen' ? 0 : game.brush);
   const magnetReach = () => game.brush + 8; // the dashed ring drawn round the magnet
   const isWeapon = () => game.selected.kind === 'weapon';
-  const weaponSize = () => 0.5 + game.brush / 8; // the brush slider sizes a disaster: 1 at its default
+  const isGround = () => game.selected.kind === 'tool' && game.selected.name === 'ground';
+  // the brush slider sizes a disaster: 1 at its default, and no bigger past 24 (the brush goes to 50)
+  const weaponSize = () => 0.5 + Math.min(24, game.brush) / 8;
 
   const CLOUDY = new Set([ID.CLOUD, ID.RAINCLOUD, ID.STORMCLOUD, ID.SNOWCLOUD, ID.FOG]);
   function densityFor(t) {
@@ -167,9 +173,9 @@
       else if (sel.name === 'cool') use(sel, () => w.heat(x, y, r, -18 * game.speed));
       else if (sel.name === 'smash') {
         const n = use(sel, (max) => w.smash(x, y, r, max));
-        if (n) { AudioFX.pour('powder'); if (!Journey.active) UI.announce(Unlocks.smashed(n)); } // toward the Earthquake
+        if (n) AudioFX.pour('powder');
       }
-      return; // the magnet acts every tick while held (see tickOnce), not along the stroke
+      return; // the magnet acts every tick while held (see tickOnce), and Ground while held (see frame)
     }
     if (sel.kind === 'weapon') return; // a weapon goes off once, on the press
     const t = sel.t;
@@ -193,12 +199,13 @@
       AudioFX.pour('solid');
       return;
     }
-    // shaped strokes lay matter down solid (the spray scatters it by itself); sparse things like
+    // a pen, a box or a straight line lays matter down solid; sparse things like
     // people and seeds keep their own spacing
-    const solid = game.shape !== 'circle' && game.shape !== 'square' && densityFor(t) >= 0.3;
-    const replace = game.replace || game.shape === 'fill';
+    const solid = (pointer.lining || game.shape === 'pen' || game.shape === 'box') && densityFor(t) >= 0.3;
+    const replace = game.replace;
     const n = use(sel, (max) => w.paint(x, y, r, t, solid ? 1 : densityFor(t), replace, max, Tints.tintFor(t), UI.paintColor(t))); // glass and fire, and concrete, in their colour
     if (!n) return;
+    if (!Journey.active) Unlocks.laid(t, n, w.tick); // rubble or ice laid by the brush isn't made
     const c = list[t].cat;
     AudioFX.pour(c === CAT.LIQUID ? 'liquid' : c === CAT.GAS ? 'gas' : c === CAT.POWDER ? 'powder' : 'solid');
   }
@@ -255,23 +262,16 @@
     hand.trail = [];
   }
 
-  // Where a Line or Box being dragged ends. Holding Shift keeps it straight, as in a slides or
-  // drawing app: a Line snaps to the nearest 45° (flat, upright or a true diagonal) and a Box
-  // becomes a square.
+  // Where a straight line or a Box being dragged ends: the cursor, at any angle (no snapping); a Box
+  // with Shift held becomes a square.
   function dragEnd() {
     const a = pointer.anchor, x = pointer.x, y = pointer.y;
-    if (!a || !pointer.shift) return { x, y };
-    const dx = x - a.x, dy = y - a.y;
-    if (game.shape === 'box') {
-      const side = Math.max(Math.abs(dx), Math.abs(dy));
-      return { x: a.x + (dx < 0 ? -side : side), y: a.y + (dy < 0 ? -side : side) };
-    }
-    const step = Math.PI / 4, ang = Math.round(Math.atan2(dy, dx) / step) * step;
-    const ux = Math.cos(ang), uy = Math.sin(ang), along = dx * ux + dy * uy; // the cursor, brought onto that line
-    return { x: Math.round(a.x + ux * along), y: Math.round(a.y + uy * along) };
+    if (!a || !pointer.shift || game.shape !== 'box') return { x, y };
+    const dx = x - a.x, dy = y - a.y, side = Math.max(Math.abs(dx), Math.abs(dy));
+    return { x: a.x + (dx < 0 ? -side : side), y: a.y + (dy < 0 ? -side : side) };
   }
 
-  // A dragged Line is laid along its length; a Box fills its rectangle.
+  // A straight line is laid along its length with the brush's own shape; a Box fills its rectangle.
   function finishShape() {
     const a = pointer.anchor, end = dragEnd();
     pointer.anchor = null;
@@ -283,9 +283,12 @@
       w.setBrush('circle');
       return;
     }
-    const r = game.brush, dist = Math.hypot(end.x - a.x, end.y - a.y);
+    const r = radius(), dist = Math.hypot(end.x - a.x, end.y - a.y);
     const n = Math.max(1, Math.ceil(dist / Math.max(1, r * 0.6)));
+    w.setBrush(game.shape === 'square' ? 'square' : 'circle');
+    pointer.lining = true; // laid solid, like the line it is
     for (let k = 0; k <= n; k++) applyAt(Math.round(a.x + ((end.x - a.x) * k) / n), Math.round(a.y + ((end.y - a.y) * k) / n), erase, r);
+    pointer.lining = false;
   }
 
   // The cursor's world cell changes when the camera moves too, so recompute it from screen coords.
@@ -294,8 +297,59 @@
     pointer.x = p.x; pointer.y = p.y;
   }
 
+  // ───── two fingers: zoom and move the map (touch screens) ─────
+  // One finger paints, as a mouse does. A second finger makes it a gesture, as in a photo or video app:
+  // pinch to zoom, drag to move the map. A stroke the first finger had only just begun is taken back.
+  const touches = new Map(); // pointerId → { x, y }, fingers on the map
+  let pinch = null;          // { d, mx, my } while two are down
+  const PINCH_TAKEBACK = 350; // ms: a first finger down this short a time before the second was the gesture's
+  function pinchNow() {
+    const [a, b] = touches.values();
+    return { d: Math.hypot(a.x - b.x, a.y - b.y), mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2 };
+  }
+  function startPinch() {
+    if (pointer.down) {
+      if (performance.now() - pointer.downAt < PINCH_TAKEBACK && history.undo.length && !Journey.active) {
+        applySnapshot(history.undo.pop()); // what the first finger painted, gone
+        refreshHistory();
+      }
+      if (game.world.gripping) game.world.release(0, 0);
+      if (pointer.weapon) { game.world.steer(pointer.weapon, -1); pointer.weapon = 0; }
+      pointer.down = false; pointer.anchor = null; pointer.pipe = false;
+    }
+    pointer.gesture = true; // until every finger is up, nothing paints
+    pinch = pinchNow();
+  }
+  // handles a finger for the gesture; true if it is the gesture's
+  function touchMove(e) {
+    if (e.pointerType !== 'touch' || !touches.has(e.pointerId)) return false;
+    touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (!pinch || touches.size < 2) return pointer.gesture;
+    const p = pinchNow();
+    renderer.panBy(p.mx - pinch.mx, p.my - pinch.my);
+    if (pinch.d > 8 && p.d > 8) renderer.zoomAt(p.mx, p.my, p.d / pinch.d);
+    pinch = p;
+    pointer.cx = p.mx; pointer.cy = p.my;
+    updatePointer();
+    return true;
+  }
+  function touchUp(e) {
+    if (e.pointerType !== 'touch') return false;
+    touches.delete(e.pointerId);
+    if (touches.size < 2) pinch = null;
+    if (!pointer.gesture) return false;
+    if (!touches.size) pointer.gesture = false;
+    return true;
+  }
+
   canvas.addEventListener('pointerdown', (e) => {
     AudioFX.init();
+    if (e.pointerType === 'touch') {
+      touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (touches.size === 2) { startPinch(); return; }
+      if (pointer.gesture || touches.size > 2) return;
+    }
+    pointer.downAt = performance.now();
     pointer.cx = e.clientX; pointer.cy = e.clientY;
     pointer.shift = e.shiftKey;
     updatePointer();
@@ -334,19 +388,14 @@
       }
       return;
     }
-    if (dragged()) { pointer.anchor = { x: pointer.x, y: pointer.y }; return; }
-    if (game.shape === 'fill') {
-      game.world.setBrush('fill');
-      applyAt(pointer.x, pointer.y, e.button === 2, 0);
-      game.world.setBrush('circle');
-      if (pointer.pipe) game.world.encase(); // a pipe poured with the bucket is walled in at once
-      pointer.down = false; pointer.pipe = false;
-      return;
-    }
-    game.world.setBrush(game.shape === 'square' || game.shape === 'spray' ? game.shape : 'circle');
+    if (isGround()) return; // held, it grounds every tick (see frame)
+    // a Box is dragged out; so is a straight line, with Shift held, from any brush
+    if (dragged() || (e.shiftKey && !isImage())) { pointer.anchor = { x: pointer.x, y: pointer.y }; return; }
+    game.world.setBrush(game.shape === 'square' ? 'square' : 'circle');
     stroke();
   });
   canvas.addEventListener('pointermove', (e) => {
+    if (touchMove(e)) return;
     pointer.cx = e.clientX; pointer.cy = e.clientY;
     pointer.shift = e.shiftKey;
     pointer.inside = true;
@@ -360,6 +409,7 @@
     if ((game.world.gripping || pointer.weapon) && !(e.buttons & 1)) up(e); // the button came up where we didn't see it
   });
   const up = (e) => {
+    if (e && touchUp(e)) return;
     if (pointer.panning) {
       pointer.panning = false;
       canvas.classList.remove('panning');
@@ -392,7 +442,7 @@
 
   const brushInput = $('#brush-size');
   function setBrush(v) {
-    game.brush = Math.max(0, Math.min(24, v));
+    game.brush = Math.max(0, Math.min(50, v));
     brushInput.value = game.brush;
     $('#brush-out').textContent = game.brush;
   }
@@ -405,8 +455,23 @@
     const r = canvas.getBoundingClientRect();
     renderer.zoomAt(r.left + r.width / 2, r.top + r.height / 2, f);
   }
-  $('#btn-zoom-in').addEventListener('click', () => zoomCentre(1.5));
-  $('#btn-zoom-out').addEventListener('click', () => zoomCentre(1 / 1.5));
+  // On a touch screen two fingers zoom the map, so − and + size the brush instead (the middle button
+  // shows the size for a moment, then the zoom again, and still fits the whole map)
+  const touchScreen = matchMedia('(pointer: coarse)').matches;
+  document.documentElement.classList.toggle('touch', touchScreen);
+  let brushShown = 0;
+  function brushStep(d) {
+    setBrush(game.brush + d);
+    btnZoom.textContent = `● ${game.brush}`; lastZoom = '';
+    brushShown = performance.now() + 1200;
+  }
+  $('#btn-zoom-in').addEventListener('click', () => (touchScreen ? brushStep(2) : zoomCentre(1.5)));
+  $('#btn-zoom-out').addEventListener('click', () => (touchScreen ? brushStep(-2) : zoomCentre(1 / 1.5)));
+  if (touchScreen) {
+    $('#btn-zoom-in').title = 'Bigger brush'; $('#btn-zoom-out').title = 'Smaller brush';
+    $('#btn-zoom-in').setAttribute('aria-label', 'Bigger brush'); $('#btn-zoom-out').setAttribute('aria-label', 'Smaller brush');
+    btnZoom.title = 'Show the whole map (pinch with two fingers to zoom, drag with two to move)';
+  }
   btnZoom.addEventListener('click', () => renderer.fitView());
 
   // ───── toolbar toggles ─────
@@ -469,6 +534,7 @@
     game.scene = name;
     build(name)(game.world);
     TryIt.staged(game.world); // what the scene set up doesn't count toward Try it
+    newScene();
   }
   // A scene built from periodic elements opens once every one of them is unlocked.
   const sceneMissing = (name) => (Lab.sceneNeeds(Scenes)[name] || []).filter((t) => !UI.unlocked(t));
@@ -553,28 +619,127 @@
     setWorld(Sim.createWorld(s.W, s.H));
     build(game.scene)(game.world);
     TryIt.staged(game.world);
+    newScene();
     markSize();
     menus.world.hidden = true;
     UI.note(`Map is now ${s.W} × ${s.H}`, 'Scroll to zoom, middle-drag to move around.');
   });
-  $('#btn-clear').addEventListener('click', () => { checkpoint(); game.world.clear(); TryIt.staged(game.world); menus.world.hidden = true; });
-  $('#btn-save').addEventListener('click', () => {
-    const ok = UI.store.set('world', game.world.serialize());
-    menus.world.hidden = true;
-    if (ok) UI.note('World saved', 'Load brings it back, even after you close the tab.');
-    else UI.note('Could not save', 'Browser storage is full or blocked. Clear a little space and try again.');
-  });
-  $('#btn-load').addEventListener('click', () => {
-    menus.world.hidden = true;
-    const s = UI.store.get('world', null);
-    if (!s) { UI.note('No saved world yet', 'Press Save first.'); return; }
+  $('#btn-clear').addEventListener('click', () => { checkpoint(); game.world.clear(); TryIt.staged(game.world); newScene(); menus.world.hidden = true; });
+  // ───── saved worlds: five slots, each with a name, a description and a picture ─────
+  // The world itself is kept under save1…save5, what the slots show under saves.
+  const SLOTS = 5;
+  const slots = () => { const m = UI.store.get('saves', []); return Array.from({ length: SLOTS }, (_, k) => m[k] || null); };
+  // the old single save slot becomes the first of the five
+  {
+    const old = UI.store.get('world', null);
+    if (old && !slots().some(Boolean) && UI.store.set('save1', old)) {
+      UI.store.set('saves', [{ name: 'Saved world', desc: 'From before there were five slots.', at: 0, W: old.W, H: old.H, pic: '' }]);
+      UI.store.del('world');
+    }
+  }
+  // a small picture of the world for its slot
+  function worldPicture() {
+    const src = renderer.cells, c = document.createElement('canvas');
+    c.width = 128; c.height = 80;
+    const x = c.getContext('2d');
+    x.fillStyle = '#0a1013'; x.fillRect(0, 0, c.width, c.height);
+    x.imageSmoothingEnabled = false;
+    x.drawImage(src, 0, 0, c.width, c.height);
+    try { return c.toDataURL('image/jpeg', 0.7); } catch { return ''; }
+  }
+  const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+  const when = (at) => (at ? new Date(at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : 'an earlier version');
+  let saveForm = -1, deleting = -1; // the slot being named, the slot asking "delete?"
+  function renderSlots() {
+    const list = $('#saves-list'), meta = slots();
+    list.innerHTML = '';
+    meta.forEach((m, k) => {
+      const card = el('div', `slot${m ? '' : ' empty'}`);
+      const pic = el('div', 'slot-pic');
+      if (m && m.pic) pic.append(Object.assign(document.createElement('img'), { src: m.pic, alt: '' }));
+      else pic.textContent = k + 1;
+      const body = el('div', 'slot-body');
+      if (saveForm === k) { // name it and say what it is, then save
+        const name = Object.assign(el('input', 'slot-name'), { type: 'text', maxLength: 40, value: m ? m.name : `${(game.scene === 'island' ? 'Island' : UI.sceneName(game.scene)) || 'My'} world` });
+        name.placeholder = 'World name';
+        name.setAttribute('aria-label', 'World name');
+        const desc = Object.assign(el('textarea', 'slot-desc-in'), { rows: 2, maxLength: 160, value: m ? m.desc : '' });
+        desc.placeholder = 'Description (what is in it, what it does)';
+        desc.setAttribute('aria-label', 'Description');
+        const go = el('button', 'pill primary', m ? 'Save over it' : 'Save');
+        const back = el('button', 'pill', 'Cancel');
+        go.type = back.type = 'button';
+        go.addEventListener('click', () => saveSlot(k, name.value.trim() || `World ${k + 1}`, desc.value.trim()));
+        back.addEventListener('click', () => { saveForm = -1; renderSlots(); });
+        name.addEventListener('keydown', (e) => { if (e.key === 'Enter') go.click(); });
+        const btns = el('div', 'slot-btns');
+        btns.append(go, back);
+        body.append(name, desc, btns);
+        card.append(pic, body);
+        list.append(card);
+        requestAnimationFrame(() => { name.focus(); name.select(); });
+        return;
+      }
+      body.append(el('div', 'slot-title', m ? m.name : 'Empty slot'));
+      if (m) body.append(el('div', 'slot-meta', `${when(m.at)} · ${m.W} × ${m.H}`));
+      if (m && m.desc) body.append(el('p', 'slot-desc', m.desc));
+      const btns = el('div', 'slot-btns');
+      const save = el('button', 'pill', m ? 'Save over' : 'Save here');
+      save.addEventListener('click', () => { saveForm = k; deleting = -1; renderSlots(); });
+      btns.append(save);
+      if (m) {
+        const load = el('button', 'pill primary', 'Load');
+        load.addEventListener('click', () => loadSlot(k));
+        const del = el('button', `pill${deleting === k ? ' danger' : ''}`, deleting === k ? 'Delete it?' : 'Delete');
+        del.addEventListener('click', () => {
+          if (deleting !== k) { deleting = k; renderSlots(); return; }
+          const all = slots();
+          all[k] = null;
+          UI.store.set('saves', all);
+          UI.store.del(`save${k + 1}`);
+          deleting = -1;
+          renderSlots();
+        });
+        btns.prepend(load);
+        btns.append(del);
+      }
+      for (const b of btns.children) b.type = 'button';
+      body.append(btns);
+      card.append(pic, body);
+      list.append(card);
+    });
+  }
+  function saveSlot(k, name, desc) {
+    const ok = UI.store.set(`save${k + 1}`, game.world.serialize());
+    if (!ok) { UI.note('Could not save', 'Browser storage is full or blocked. Delete a slot you don’t need and try again.'); return; }
+    const all = slots();
+    all[k] = { name, desc, at: Date.now(), W: game.world.W, H: game.world.H, pic: worldPicture() };
+    if (!UI.store.set('saves', all)) { all[k].pic = ''; UI.store.set('saves', all); } // no room for the picture
+    saveForm = -1;
+    renderSlots();
+    UI.note('World saved', `“${name}”, in slot ${k + 1}.`);
+  }
+  function loadSlot(k) {
+    const s = UI.store.get(`save${k + 1}`, null), m = slots()[k];
+    if (!s) { UI.note('That slot is empty', 'Its world could not be found.'); return; }
     checkpoint();
     if (s.W !== game.world.W || s.H !== game.world.H) setWorld(Sim.createWorld(s.W, s.H));
     game.world.load(s);
     TryIt.own(game.world); // a saved world is your own work
+    newScene();
     syncWeatherUI();
-    UI.note('Saved world loaded', '');
-  });
+    UI.closeModal($('#saves'));
+    UI.note('World loaded', m ? `“${m.name}”` : '');
+  }
+  function openSaves() {
+    menus.world.hidden = true;
+    if (Journey.active) { UI.note('Not during a chapter', 'Leave the chapter first: your own world is waiting for you.'); return; }
+    saveForm = -1; deleting = -1;
+    renderSlots();
+    UI.openModal('#saves');
+  }
+  $('#btn-save').addEventListener('click', openSaves);
+  $('#btn-load').addEventListener('click', openSaves);
 
   // ───── weather ─────
   const WEATHER = {
@@ -625,7 +790,7 @@
   // ───── keyboard ─────
   const held = new Set();
   addEventListener('keydown', (e) => {
-    if (e.key === 'Shift') pointer.shift = true; // straightens a Line or Box mid-drag, mouse still or not
+    if (e.key === 'Shift') pointer.shift = true; // squares a Box mid-drag, mouse still or not
     if (UI.anyModalOpen()) return;
     const k = e.key.toLowerCase();
     if ((e.ctrlKey || e.metaKey) && !e.altKey) {
@@ -654,12 +819,14 @@
     else if (k === 'v') setAir(!game.air);
     else if (k === 'l') setLens(!game.lens);
     else if (k === 'm') setSound(!AudioFX.enabled);
+    else if (k === 'f') toggleFull();
     else if (k === 'e') UI.select({ kind: 'tool', name: 'erase' });
     else if (k === 'h') UI.select({ kind: 'tool', name: 'heat' });
     else if (k === 'c') UI.select({ kind: 'tool', name: 'cool' });
     else if (k === 'g') UI.select({ kind: 'tool', name: 'magnet' });
     else if (k === 'x') UI.select({ kind: 'tool', name: 'smash' });
-    else if (k >= '1' && k <= '7') setShape(SHAPES[+k - 1]);
+    else if (k >= '1' && k <= '4') setShape(SHAPES[+k - 1]);
+    else if (k === '5') UI.select({ kind: 'tool', name: 'ground' });
   });
   addEventListener('keyup', (e) => { held.delete(e.key.toLowerCase()); if (e.key === 'Shift') pointer.shift = false; });
   addEventListener('blur', () => { held.clear(); pointer.shift = false; });
@@ -746,6 +913,9 @@
     // feats in your own world (not in a chapter) toward unlocks, and whatever opens on what you have
     if (!Journey.active) UI.announce(Unlocks.frame(game.world, ev));
     if (game.world.tick % 60 === 0) UI.announce(Unlocks.check());
+    // achievements: the time in this scene, a wiped map, a fed black hole, the secret elements
+    if (!Journey.active) UI.achieved(Achieve.frame(game.world, ev, frameDt));
+    if (game.world.tick % 60 === 0) UI.achieved(Achieve.check());
     game.world.resetEvents();
   }
 
@@ -753,13 +923,17 @@
   const GLOOM = { rain: 0.18, storm: 0.32, snow: 0.1, blizzard: 0.22, fog: 0.08, cloudy: 0.06 };
   let lastZoom = '';
 
+  let frameDt = 0;
   function frame(now) {
     const dt = Math.min(100, now - prev);
     prev = now;
+    frameDt = dt;
     keyboardPan(dt);
-    if (pointer.down && !pointer.anchor && !isMagnet() && !(isWeapon() && pointer.button === 0)) stroke();
+    if (pointer.down && !pointer.anchor && !isMagnet() && !isGround() && !(isWeapon() && pointer.button === 0)) stroke();
     if (game.world.gripping) handTrack(now);
     if (pointer.weapon) game.world.steer(pointer.weapon, pointer.x);
+    // Ground, held down on the map: every current within the brush runs to earth, tick after tick
+    game.world.ground(pointer.down && pointer.button === 0 && isGround() ? { x: pointer.x, y: pointer.y, r: radius() } : null);
     if (!game.paused && !UI.anyModalOpen()) {
       acc += dt * game.speed;
       let n = 0;
@@ -773,7 +947,7 @@
     b.visible = pointer.inside && !pointer.panning;
     const end = dragEnd(); // a Line or Box being dragged shows where it will end (straightened with Shift)
     b.x = end.x; b.y = end.y;
-    b.shape = isMagnet() ? 'magnet' : isWeapon() ? 'weapon' : isImage() ? 'image' : game.shape;
+    b.shape = isMagnet() ? 'magnet' : isWeapon() ? 'weapon' : isImage() ? 'image' : pointer.anchor && game.shape !== 'box' ? 'line' : game.shape;
     b.image = isImage() ? pictureAt() : null;
     const drop = isWeapon() && sel.name === 'hbomb' ? game.world.dropPoint(pointer.x) : null; // where a bomb would land
     b.r = isMagnet() ? game.brush + 8 : drop ? drop.r : isWeapon() ? game.world.weaponReach(sel.name, weaponSize(), game.magnitude) : radius();
@@ -786,7 +960,7 @@
     b.active = pointer.down;
     b.color = sel.kind === 'weapon' ? UI.weaponColor(sel.name)
       : sel.kind === 'tool'
-        ? sel.name === 'heat' ? '#ff7a3d' : sel.name === 'cool' ? '#8fd4ff' : sel.name === 'magnet' ? '#d08cff' : sel.name === 'smash' ? '#e0b070' : '#ece5d3'
+        ? sel.name === 'heat' ? '#ff7a3d' : sel.name === 'cool' ? '#8fd4ff' : sel.name === 'magnet' ? '#d08cff' : sel.name === 'smash' ? '#e0b070' : sel.name === 'ground' ? '#7fd6c8' : '#ece5d3'
         : sel.t === ID.PAINT && UI.paintColor(sel.t) ? `#${UI.paintColor(sel.t).toString(16).padStart(6, '0')}`
           : `rgb(${list[sel.t].rgb[0].join(',')})`;
 
@@ -797,7 +971,7 @@
       disasters: w.disasters, floodLine: UI.floodLine(),
     });
     const z = `${Math.round(renderer.zoom * 100)}%`;
-    if (z !== lastZoom) { btnZoom.textContent = z; lastZoom = z; }
+    if (z !== lastZoom && now > brushShown) { btnZoom.textContent = z; lastZoom = z; }
     updateReadout();
     requestAnimationFrame(frame);
   }
@@ -977,6 +1151,57 @@
   footBtns.addEventListener('click', (e) => { if (compact.matches && e.target.closest('button')) setTray(false); });
   document.addEventListener('pointerdown', (e) => { if (brand.classList.contains('tray-open') && !brand.contains(e.target)) setTray(false); });
   addEventListener('keydown', (e) => { if (e.key === 'Escape' && brand.classList.contains('tray-open')) setTray(false); });
+
+  // ───── full screen, and turning the game sideways on a phone ─────
+  // Inside the sideways page (rotate.html holds this page in a frame turned a quarter round) the
+  // game is a frame: full screen is asked of the page around it.
+  const framed = window.top !== window && new URLSearchParams(location.search).has('rotated');
+  const fullDoc = () => { try { return framed ? window.top.document : document; } catch { return document; } };
+  const btnFull = $('#btn-full'), btnRotate = $('#btn-rotate');
+  btnFull.hidden = !fullDoc().fullscreenEnabled;
+  function toggleFull() {
+    const d = fullDoc();
+    if (!d.fullscreenEnabled) return;
+    if (d.fullscreenElement) d.exitFullscreen().catch(() => {});
+    else d.documentElement.requestFullscreen({ navigationUI: 'hide' }).catch(() => UI.note('Full screen is not allowed here', 'The browser said no.'));
+  }
+  const markFull = () => btnFull.setAttribute('aria-pressed', !!fullDoc().fullscreenElement);
+  fullDoc().addEventListener('fullscreenchange', markFull);
+  btnFull.addEventListener('click', () => { AudioFX.click(); toggleFull(); });
+  // the world, kept for a moment while the page turns (sessionStorage is shared with the frame)
+  const CARRY = 'elementarium.carry';
+  function carryWorld() {
+    try { if (!Journey.active) sessionStorage.setItem(CARRY, JSON.stringify({ world: game.world.serialize(), scene: game.scene })); } catch { /* too big: start afresh */ }
+  }
+  try {
+    const c = JSON.parse(sessionStorage.getItem(CARRY) || 'null');
+    sessionStorage.removeItem(CARRY);
+    if (c && c.world) {
+      if (c.world.W !== game.world.W || c.world.H !== game.world.H) setWorld(Sim.createWorld(c.world.W, c.world.H));
+      game.world.load(c.world);
+      game.scene = c.scene || game.scene;
+      TryIt.own(game.world);
+      syncWeatherUI();
+    }
+  } catch { /* nothing carried */ }
+  // Sideways: where the browser can, full screen held in landscape; elsewhere (an iPhone) the page
+  // turned a quarter round in a frame. In the frame, the button turns it back.
+  if (framed) { btnRotate.title = 'Turn the game back upright'; btnRotate.setAttribute('aria-label', 'Turn back upright'); }
+  btnRotate.addEventListener('click', async () => {
+    AudioFX.click();
+    if (Journey.active) { UI.note('Not during a chapter', 'Turn the game before you begin one.'); return; }
+    if (framed) { carryWorld(); window.top.location.href = 'index.html'; return; }
+    const d = document;
+    if (d.fullscreenEnabled && screen.orientation && screen.orientation.lock) {
+      try {
+        if (!d.fullscreenElement) await d.documentElement.requestFullscreen({ navigationUI: 'hide' });
+        await screen.orientation.lock('landscape');
+        return;
+      } catch { if (d.fullscreenElement) d.exitFullscreen().catch(() => {}); }
+    }
+    carryWorld();
+    location.href = 'rotate.html';
+  });
 
   new ResizeObserver(() => renderer.resize()).observe(stage);
   // keep pop-up menus just above the toolbar, however many rows it wraps onto

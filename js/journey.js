@@ -167,6 +167,7 @@
       if (ch.outro.page) blocks.push({ p: ch.outro.found, cls: 'found' }, { letter: ch.outro.page, sign: ch.outro.sign });
       if (ch.part) blocks.push({ part: ch.part });
       if (next && next.sealed) blocks.push({ p: `Chapter ${next.num}, “${next.title}”, is coming soon.`, cls: 'after' });
+      if (!next) blocks.push({ p: 'The story goes on soon: the moon is still being written.', cls: 'after' });
       const actions = [];
       if (next && !next.sealed) actions.push({ label: `On to chapter ${next.num}`, primary: true, fn: () => intro(next) });
       actions.push({ label: 'Back to the map', primary: !next || next.sealed, fn: () => { leave(); openMap(); } });
@@ -236,7 +237,7 @@
     const over = Story.update(run.ch, game.world, s);
     while (s.say.length) {
       const m = s.say.shift();
-      UI.toast({ eyebrow: m.eyebrow, name: m.name, how: m.how, ms: 5600 });
+      UI.toast({ eyebrow: m.eyebrow, name: m.name, how: m.how, icon: 'journey', ms: 5600 });
     }
     if (s.t % 10 === 0) renderGoals();
     document.body.classList.toggle('cutscene', !!s.cutscene);
@@ -248,9 +249,37 @@
     if (over && !run.ending) {
       run.ending = true;
       renderGoals();
-      // let the moment land before the journal opens
-      setTimeout(() => { if (run.s === s) outro(); }, over.won ? 2200 : 1400);
+      // the story's last chapter for now ends on a dark screen; any other, let the moment land before
+      // the journal opens
+      if (over.won && run.ch.finale) finale(run.ch.finale, () => { if (run.s === s) outro(); });
+      else setTimeout(() => { if (run.s === s) outro(); }, over.won ? 2200 : 1400);
     }
+  }
+
+  // The screen fades to black, a last line comes up, then "Coming soon…"; the journal's page opens
+  // underneath, and the dark fades away off it. A click hurries it along.
+  function finale(f, then) {
+    const box = el('div', 'finale');
+    box.append(el('p', 'finale-line', f.line), el('p', 'finale-soon', f.soon));
+    document.body.append(box);
+    const quick = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const at = quick ? [0, 400, 900, 2600] : [0, 1800, 4600, 8600];
+    const timers = [];
+    let done = false;
+    const end = () => {
+      if (done) return;
+      done = true;
+      timers.forEach(clearTimeout);
+      box.classList.add('show', 'line', 'soon');
+      then();
+      box.classList.add('out');
+      setTimeout(() => box.remove(), 1700);
+    };
+    requestAnimationFrame(() => box.classList.add('show'));
+    timers.push(setTimeout(() => box.classList.add('line'), at[1]));
+    timers.push(setTimeout(() => box.classList.add('soon'), at[2]));
+    timers.push(setTimeout(end, at[3]));
+    box.addEventListener('click', end);
   }
 
   function renderGoals() {
@@ -532,7 +561,7 @@
   }
 
   G.Journey = {
-    init, afterTick, refreshPouch, hint, left, spend, empty,
+    init, afterTick, refreshPouch, hint, left, spend, empty, open: openJourney,
     get active() { return !!run.ch; },
     // the chapter's sky: its own, or what its script has moved it to
     get sky() { return run.s ? run.s.sky || run.ch.sky : null; },
