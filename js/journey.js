@@ -475,6 +475,7 @@
   }
 
   function openJourney() {
+    UI.clearNew('journey');
     if (!G.Unlocks.has('journey')) { // it opens once enough elements are found
       UI.note('The Journey is not open yet', `Find ${G.Unlocks.JOURNEY_AT} elements first: you have ${UI.found()}.`);
       return;
@@ -490,7 +491,6 @@
     new ResizeObserver(() => $('#stage').style.setProperty('--quest-h', `${$('#quest').offsetHeight}px`)).observe($('#quest'));
     $('#btn-journey').addEventListener('click', openJourney);
     $('#btn-letter').addEventListener('click', () => prologue(false));
-    $('#btn-begin-journey').addEventListener('click', () => { UI.closeModal($('#welcome')); openJourney(); });
     $('#q-hint').addEventListener('click', hint);
     // the goals card can fold down to its title bar so it doesn't hide the map
     const minBtn = $('#q-min');
@@ -561,7 +561,7 @@
   }
 
   G.Journey = {
-    init, afterTick, refreshPouch, hint, left, spend, empty, open: openJourney,
+    init, afterTick, refreshPouch, hint, left, spend, empty,
     get active() { return !!run.ch; },
     // the chapter's sky: its own, or what its script has moved it to
     get sky() { return run.s ? run.s.sky || run.ch.sky : null; },

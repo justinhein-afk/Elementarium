@@ -74,9 +74,21 @@ const check = (label, ok, detail) => out.push({ label, ok, detail });
 }
 {
   const w = world(); weather(w, 'clear', 22);
+  w.weather.clearing = 1200; // what choosing Clear from the menu does
   rect(w, 40, 10, 160, 20, ID.RAINCLOUD);
   run(w, 1200);
-  check('Clear weather breaks up clouds', count(w, ID.RAINCLOUD) < 60, `${count(w, ID.RAINCLOUD)} rain-cloud cells left of 1331`);
+  check('Choosing Clear breaks up the clouds', count(w, ID.RAINCLOUD) < 60, `${count(w, ID.RAINCLOUD)} rain-cloud cells left of 1331`);
+}
+{ // the game's default: nothing evaporates by itself, but a cloud you brew lives and grows as a natural one
+  const w = world(160, 100); weather(w, 'clear', 40);
+  rect(w, 0, 80, 159, 99, ID.WATER);
+  run(w, 600);
+  const steam = count(w, ID.STEAM) + count(w, ID.CLOUD);
+  const w2 = world(); weather(w2, 'clear', 22);
+  rect(w2, 40, 10, 160, 20, ID.CLOUD);
+  run(w2, 400);
+  check('Under a clear sky water stays put, and a thick cloud you brew stays and gathers rain', steam === 0 && count(w2, ID.CLOUD) + count(w2, ID.RAINCLOUD) > 600 && count(w2, ID.RAINCLOUD) > 0,
+    `${steam} vapour off warm water; of 1331 cloud cells, ${count(w2, ID.CLOUD)} cloud and ${count(w2, ID.RAINCLOUD)} rain cloud`);
 }
 { // the natural water cycle: warm water evaporates, vapour gathers into cloud up high
   const w = world(160, 100); weather(w, 'natural', 40);

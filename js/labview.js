@@ -169,6 +169,7 @@
       UI.refreshTable();
     } else {
       wait = Date.now() + Lab.RETRY_MS;
+      setTimeout(() => { if (!isOpen()) UI.markNew('lab'); }, Lab.RETRY_MS); // the next sample is ready
     }
     cur = null;
     saveState();
@@ -481,6 +482,7 @@
 
   // ───── opening and closing ─────
   function open() {
+    UI.clearNew('lab');
     if (!UI.store.get('labGuide', false) && tour < 0) tourWanted = true; // the first visit starts with the tour
     if (verdict && verdict.right) verdict = null; // a card already read
     if (cur && Lab.has(cur.target.id)) cur = null; // found in the wild while you were away
@@ -499,7 +501,6 @@
   function init(g) {
     game = g;
     loadState();
-    $('#btn-lab').addEventListener('click', open);
     $('#btn-plab').addEventListener('click', open);
     // the ? runs the tour again (on the bench; with no sample out yet, it waits for the next one)
     $('#lab-help').addEventListener('click', () => {

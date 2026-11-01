@@ -128,6 +128,7 @@
   const magnetReach = () => game.brush + 8; // the dashed ring drawn round the magnet
   const isWeapon = () => game.selected.kind === 'weapon';
   const isGround = () => game.selected.kind === 'tool' && game.selected.name === 'ground';
+  const isShock = () => game.selected.kind === 'tool' && game.selected.name === 'shock';
   // the brush slider sizes a disaster: 1 at its default, and no bigger past 24 (the brush goes to 50)
   const weaponSize = () => 0.5 + Math.min(24, game.brush) / 8;
 
@@ -175,7 +176,7 @@
         const n = use(sel, (max) => w.smash(x, y, r, max));
         if (n) AudioFX.pour('powder');
       }
-      return; // the magnet acts every tick while held (see tickOnce), and Ground while held (see frame)
+      return; // the magnet acts every tick while held (see tickOnce), Ground and Shock while held (see frame)
     }
     if (sel.kind === 'weapon') return; // a weapon goes off once, on the press
     const t = sel.t;
@@ -388,7 +389,7 @@
       }
       return;
     }
-    if (isGround()) return; // held, it grounds every tick (see frame)
+    if (isGround() || isShock()) return; // held, they act every tick (see frame)
     // a Box is dragged out; so is a straight line, with Shift held, from any brush
     if (dragged() || (e.shiftKey && !isImage())) { pointer.anchor = { x: pointer.x, y: pointer.y }; return; }
     game.world.setBrush(game.shape === 'square' ? 'square' : 'circle');
@@ -432,12 +433,20 @@
   canvas.addEventListener('pointerenter', () => { pointer.inside = true; });
   canvas.addEventListener('contextmenu', (e) => e.preventDefault());
   canvas.addEventListener('auxclick', (e) => e.preventDefault());
-  // Wheel zooms the map around the cursor; Ctrl+wheel resizes the brush.
+  // Wheel resizes the brush (a trackpad's small steps add up to one notch); Ctrl+wheel, and a
+  // trackpad's pinch, zooms the map around the cursor.
+  let wheelBrush = 0;
   canvas.addEventListener('wheel', (e) => {
     e.preventDefault();
-    if (e.ctrlKey || e.metaKey) { setBrush(game.brush + (e.deltaY < 0 ? 1 : -1)); return; }
-    renderer.zoomAt(e.clientX, e.clientY, e.deltaY < 0 ? 1.18 : 1 / 1.18);
-    updatePointer();
+    if (e.ctrlKey || e.metaKey) {
+      renderer.zoomAt(e.clientX, e.clientY, e.deltaY < 0 ? 1.18 : 1 / 1.18);
+      updatePointer();
+      return;
+    }
+    wheelBrush += Math.abs(e.deltaY) >= 40 ? Math.sign(e.deltaY) * 40 : e.deltaY;
+    if (Math.abs(wheelBrush) < 40) return;
+    setBrush(game.brush + (wheelBrush < 0 ? 1 : -1));
+    wheelBrush = 0;
   }, { passive: false });
 
   const brushInput = $('#brush-size');
@@ -522,9 +531,9 @@
   function toggleMenu(name) {
     for (const [k, m] of Object.entries(menus)) m.hidden = k === name ? !m.hidden : true;
   }
-  $('#btn-scenes').addEventListener('click', (e) => { e.stopPropagation(); paintScenes(); toggleMenu('scenes'); });
+  $('#btn-scenes').addEventListener('click', (e) => { e.stopPropagation(); UI.clearNew('scenes'); paintScenes(); toggleMenu('scenes'); });
   $('#btn-weather').addEventListener('click', (e) => { e.stopPropagation(); toggleMenu('weather'); });
-  $('#btn-world').addEventListener('click', (e) => { e.stopPropagation(); toggleMenu('world'); });
+  $('#btn-world').addEventListener('click', (e) => { e.stopPropagation(); UI.clearNew('map'); toggleMenu('world'); });
   document.addEventListener('click', (e) => {
     for (const m of Object.values(menus)) if (!m.hidden && !m.contains(e.target)) m.hidden = true;
   });
@@ -574,6 +583,7 @@
       UI.note('This scene is locked', `It needs ${miss.map((t) => list[t].name.toLowerCase()).join(', ')}. Identify them in the Lab first.`);
       return;
     }
+    UI.clearNew(`scene:${b.dataset.scene}`);
     loadScene(b.dataset.scene);
     menus.scenes.hidden = true;
   });
@@ -607,6 +617,7 @@
     if (k) {
       skyPick = k.dataset.sky;
       UI.store.set('sky', skyPick);
+      UI.clearNew(`sky:${skyPick}`);
       markSky();
       return;
     }
@@ -770,6 +781,8 @@
     const b = e.target.closest('[data-weather]');
     if (!b) return;
     const [, temp, wind] = WEATHER[b.dataset.weather];
+    // choosing Clear clears the sky of what is up there now
+    if (b.dataset.weather === 'clear') game.world.weather.clearing = 300;
     game.world.weather.mode = b.dataset.weather;
     game.world.weather.wind = wind;
     game.world.ambient = temp;
@@ -783,6 +796,9 @@
       game.world.weather.mode = saved.mode;
       game.world.weather.wind = saved.wind;
       game.world.ambient = saved.ambient;
+    } else { // every new game starts under a clear sky
+      game.world.weather.mode = 'clear';
+      game.world.ambient = WEATHER.clear[1];
     }
     syncWeatherUI();
   }
@@ -827,6 +843,7 @@
     else if (k === 'x') UI.select({ kind: 'tool', name: 'smash' });
     else if (k >= '1' && k <= '4') setShape(SHAPES[+k - 1]);
     else if (k === '5') UI.select({ kind: 'tool', name: 'ground' });
+    else if (k === '6') UI.select({ kind: 'tool', name: 'shock' });
   });
   addEventListener('keyup', (e) => { held.delete(e.key.toLowerCase()); if (e.key === 'Shift') pointer.shift = false; });
   addEventListener('blur', () => { held.clear(); pointer.shift = false; });
@@ -929,11 +946,13 @@
     prev = now;
     frameDt = dt;
     keyboardPan(dt);
-    if (pointer.down && !pointer.anchor && !isMagnet() && !isGround() && !(isWeapon() && pointer.button === 0)) stroke();
+    if (pointer.down && !pointer.anchor && !isMagnet() && !isGround() && !isShock() && !(isWeapon() && pointer.button === 0)) stroke();
     if (game.world.gripping) handTrack(now);
     if (pointer.weapon) game.world.steer(pointer.weapon, pointer.x);
     // Ground, held down on the map: every current within the brush runs to earth, tick after tick
     game.world.ground(pointer.down && pointer.button === 0 && isGround() ? { x: pointer.x, y: pointer.y, r: radius() } : null);
+    // Shock, held down: electricity under the brush, with no battery
+    game.world.shock(pointer.down && pointer.button === 0 && isShock() ? { x: pointer.x, y: pointer.y, r: radius() } : null);
     if (!game.paused && !UI.anyModalOpen()) {
       acc += dt * game.speed;
       let n = 0;
@@ -960,7 +979,7 @@
     b.active = pointer.down;
     b.color = sel.kind === 'weapon' ? UI.weaponColor(sel.name)
       : sel.kind === 'tool'
-        ? sel.name === 'heat' ? '#ff7a3d' : sel.name === 'cool' ? '#8fd4ff' : sel.name === 'magnet' ? '#d08cff' : sel.name === 'smash' ? '#e0b070' : sel.name === 'ground' ? '#7fd6c8' : '#ece5d3'
+        ? sel.name === 'heat' ? '#ff7a3d' : sel.name === 'cool' ? '#8fd4ff' : sel.name === 'magnet' ? '#d08cff' : sel.name === 'smash' ? '#e0b070' : sel.name === 'ground' ? '#7fd6c8' : sel.name === 'shock' ? '#ffd27a' : '#ece5d3'
         : sel.t === ID.PAINT && UI.paintColor(sel.t) ? `#${UI.paintColor(sel.t).toString(16).padStart(6, '0')}`
           : `rgb(${list[sel.t].rgb[0].join(',')})`;
 
@@ -1139,11 +1158,12 @@
     brand.classList.toggle('tray-open', open);
     more.setAttribute('aria-expanded', open);
     more.firstElementChild.textContent = open ? '›' : '‹';
-    more.title = open ? 'Fold them away' : 'Journey, Lab, Codex, Hint and Help';
+    more.title = open ? 'Fold them away' : 'Journey, Codex, Hint, Help and Info';
   }
   function placeFootButtons() {
     if (compact.matches) tray.append(footBtns); else foot.append(footBtns);
     setTray(false);
+    UI.paintNews();
   }
   compact.addEventListener('change', placeFootButtons);
   placeFootButtons();
@@ -1152,65 +1172,51 @@
   document.addEventListener('pointerdown', (e) => { if (brand.classList.contains('tray-open') && !brand.contains(e.target)) setTray(false); });
   addEventListener('keydown', (e) => { if (e.key === 'Escape' && brand.classList.contains('tray-open')) setTray(false); });
 
-  // ───── full screen, and turning the game sideways on a phone ─────
-  // Inside the sideways page (rotate.html holds this page in a frame turned a quarter round) the
-  // game is a frame: full screen is asked of the page around it.
-  const framed = window.top !== window && new URLSearchParams(location.search).has('rotated');
-  const fullDoc = () => { try { return framed ? window.top.document : document; } catch { return document; } };
-  const btnFull = $('#btn-full'), btnRotate = $('#btn-rotate');
-  btnFull.hidden = !fullDoc().fullscreenEnabled;
+  // ───── full screen ─────
+  const btnFull = $('#btn-full');
+  btnFull.hidden = !document.fullscreenEnabled;
   function toggleFull() {
-    const d = fullDoc();
-    if (!d.fullscreenEnabled) return;
-    if (d.fullscreenElement) d.exitFullscreen().catch(() => {});
-    else d.documentElement.requestFullscreen({ navigationUI: 'hide' }).catch(() => UI.note('Full screen is not allowed here', 'The browser said no.'));
+    if (!document.fullscreenEnabled) return;
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    else document.documentElement.requestFullscreen({ navigationUI: 'hide' }).catch(() => UI.note('Full screen is not allowed here', 'The browser said no.'));
   }
-  const markFull = () => btnFull.setAttribute('aria-pressed', !!fullDoc().fullscreenElement);
-  fullDoc().addEventListener('fullscreenchange', markFull);
+  document.addEventListener('fullscreenchange', () => btnFull.setAttribute('aria-pressed', !!document.fullscreenElement));
   btnFull.addEventListener('click', () => { AudioFX.click(); toggleFull(); });
-  // the world, kept for a moment while the page turns (sessionStorage is shared with the frame)
-  const CARRY = 'elementarium.carry';
-  function carryWorld() {
-    try { if (!Journey.active) sessionStorage.setItem(CARRY, JSON.stringify({ world: game.world.serialize(), scene: game.scene })); } catch { /* too big: start afresh */ }
-  }
-  try {
-    const c = JSON.parse(sessionStorage.getItem(CARRY) || 'null');
-    sessionStorage.removeItem(CARRY);
-    if (c && c.world) {
-      if (c.world.W !== game.world.W || c.world.H !== game.world.H) setWorld(Sim.createWorld(c.world.W, c.world.H));
-      game.world.load(c.world);
-      game.scene = c.scene || game.scene;
-      TryIt.own(game.world);
-      syncWeatherUI();
-    }
-  } catch { /* nothing carried */ }
-  // Sideways: where the browser can, full screen held in landscape; elsewhere (an iPhone) the page
-  // turned a quarter round in a frame. In the frame, the button turns it back.
-  if (framed) { btnRotate.title = 'Turn the game back upright'; btnRotate.setAttribute('aria-label', 'Turn back upright'); }
-  btnRotate.addEventListener('click', async () => {
-    AudioFX.click();
-    if (Journey.active) { UI.note('Not during a chapter', 'Turn the game before you begin one.'); return; }
-    if (framed) { carryWorld(); window.top.location.href = 'index.html'; return; }
-    const d = document;
-    if (d.fullscreenEnabled && screen.orientation && screen.orientation.lock) {
-      try {
-        if (!d.fullscreenElement) await d.documentElement.requestFullscreen({ navigationUI: 'hide' });
-        await screen.orientation.lock('landscape');
-        return;
-      } catch { if (d.fullscreenElement) d.exitFullscreen().catch(() => {}); }
-    }
-    carryWorld();
-    location.href = 'rotate.html';
-  });
 
   new ResizeObserver(() => renderer.resize()).observe(stage);
   // keep pop-up menus just above the toolbar, however many rows it wraps onto
   const toolbar = $('#toolbar');
+  // On a small screen the toolbar is one long row that scrolls under arrows at each end. An arrow is
+  // faint when there is nothing more that way, and shows the yellow dot when something new is there.
+  const tbRow = $('#tb-row'), tbPrev = $('#tb-prev'), tbNext = $('#tb-next');
+  function paintArrows() {
+    const max = tbRow.scrollWidth - tbRow.clientWidth, x = tbRow.scrollLeft;
+    tbPrev.disabled = x <= 1;
+    tbNext.disabled = x >= max - 1;
+    toolbar.classList.toggle('fits', max <= 1);
+    const box = tbRow.getBoundingClientRect();
+    let before = false, after = false;
+    for (const b of tbRow.querySelectorAll('.has-new')) {
+      const r = b.getBoundingClientRect();
+      if (r.width && r.right > box.right + 1) after = true;
+      if (r.width && r.left < box.left - 1) before = true;
+    }
+    tbPrev.classList.toggle('has-new', before);
+    tbNext.classList.toggle('has-new', after);
+  }
+  const tbScroll = (d) => { AudioFX.click(); tbRow.scrollBy({ left: d * tbRow.clientWidth * 0.7, behavior: 'smooth' }); };
+  tbPrev.addEventListener('click', () => tbScroll(-1));
+  tbNext.addEventListener('click', () => tbScroll(1));
+  tbRow.addEventListener('scroll', paintArrows, { passive: true });
+  new ResizeObserver(paintArrows).observe(tbRow);
+  UI.onNews = paintArrows;
+  paintArrows();
   new ResizeObserver(() => {
     stage.style.setProperty('--tb-h', `${toolbar.offsetHeight}px`);
     renderer.setInsetBottom(toolbar.offsetHeight + 22); // the map fits in the space above the toolbar
   }).observe(toolbar);
   requestAnimationFrame(frame);
+  G.FirstRun.init(game);
 
   G.game = game; // handy from the console
 })(globalThis);

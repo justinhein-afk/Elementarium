@@ -207,7 +207,10 @@ seconds held). Plain metal bends. The **Magnetic** switch now sits in the Magnet
 
 **Ground** (`5`, in the brush row) draws current off to earth: hold it over a circuit and nothing
 within the brush carries a pulse on, the pumps, pistons, valves and thrusters in reach lose their
-power, and sparks and lightning there vanish, for as long as you hold it.
+power, and sparks and lightning there vanish, for as long as you hold it. **Shock** (`6`, beside it)
+is electricity under the brush, no battery needed: hold it on a wire, a metal or a machine and the
+current runs through it, machines in reach run, sparks crackle in the open air, and gunpowder and
+other volatile things catch.
 
 **Cows and wolves swim.** In the water a cow or a wolf holds its head up out of it, its body under
 the water line, legs paddling, with ripples round its neck.
@@ -320,9 +323,8 @@ tests together. Every sample can be settled in three tests or fewer.
 
 If the world itself makes a locked element (radon decaying to polonium, uranium splitting into
 barium and krypton, calcium fusing into elements 112 to 118), that element is **found in the wild**
-and unlocks at once (not in sandbox mode). Scenes built from periodic elements (Nuclear plant, City,
-Electric workshop, Magnet lab) open once every element in them is unlocked. Sandbox
-mode still opens everything, and Reset discoveries locks the table again.
+and unlocks at once. Scenes built from periodic elements (Nuclear plant, City,
+Electric workshop, Magnet lab) open once every element in them is unlocked.
 
 ### Try it
 
@@ -351,7 +353,7 @@ right thing), what it leaves behind (a fire in its colour, its sparks, stained g
 decays into) or what it sets off (a blast in its colour, a chain reaction, a fusion). Only
 unlocked elements count, and whatever a scene or a chapter set up in the world is set aside there,
 so the Electric workshop's light bulb or the City's neon earn nothing: the experiment has to be
-your own. Reset discoveries clears the stars too.
+your own.
 
 ### Element Groups
 
@@ -430,11 +432,12 @@ Embers still fly off fires, but have no tile.
 
 Most of the game is earned (`js/unlocks.js`, checked by `tools/unlocktest.js`). Whatever you had
 already done counts; the feats in your own world (never in a chapter) count from when they were
-added; sandbox mode opens everything. Locked things stay out of sight until they open, each with a
-toast.
+added. Locked things stay out of sight until they open, each with a toast.
 
-- **The Journey** opens once 30 elements are found (the header's count), and its first page opens by
-  itself; the **Weapons** tab opens at 50.
+- **The Journey** opens once 30 elements are found (the header's count); the **Weapons** tab opens at
+  50. Nothing opens by itself: whatever has just been earned gets a toast and a **yellow dot** on its
+  button (Journey, Scenes, Map, a tab, the trophy, the Lab), on the ‹ or the toolbar's arrow if it is
+  folded away, and on its row in the menu, until you look.
 - **Machine parts** each open the first time a battery touches its partner (metal for Wire, wood for
   a Switch, fire for a Sensor, water for Pipe, oil for a Pump, steam for a Valve, glass for a Tank,
   stone for a Piston, methane for a Thruster, rubble for Landing legs), arriving like a discovery.
@@ -492,7 +495,7 @@ The trophy button beside Help opens the achievements (`js/achieve.js`, checked b
   every scene, every secret, and all the rest.
 
 What you had already done counts as soon as the game loads. Feats in a scene count only in your own
-world (not in a chapter), and nothing is earned in sandbox mode.
+world (not in a chapter).
 
 ## Weapons
 
@@ -577,7 +580,7 @@ them: the page dims but for the place on the map where it happens and the pouch 
 with the recipe (Ash + Salt → Gunpowder) and a line of advice, and the game waits while it is up.
 It always shows the step you are on: when a step is done a message says so and names the next one,
 and the button counts along (Hint 1/3, 2/3, 3/3). **Leave** asks on a journal page before it takes
-you back to the lab. Open it with **Journey** in the panel (or **Begin the journey** on the welcome card).
+you back to the lab. Open it with **Journey** in the panel.
 
 | Chapter | Place | The problem | Pouch |
 | --- | --- | --- | --- |
@@ -614,10 +617,11 @@ an edit. Saved discoveries and worlds belong to the address, so stick to the one
 | --- | --- |
 | Drag | Paint the selected element |
 | Right-drag | Erase |
-| Scroll | Zoom in and out around the cursor |
+| Scroll | Brush size, 0 to 50 (weapons stop growing past 24) |
+| Ctrl+Scroll, or a trackpad's pinch | Zoom in and out around the cursor |
 | Middle-drag, Alt+drag, `WASD` / arrows | Move around the map |
 | `+` `-` `0` | Zoom in, zoom out, show the whole map |
-| Ctrl+Scroll, `[` `]` | Brush size, 0 to 50 (weapons stop growing past 24) |
+| `[` `]` | Brush size |
 | Ctrl+Z / Ctrl+Shift+Z (or Ctrl+Y) | Undo / redo |
 | Middle-click | Pick up the element under the cursor |
 | `Space` / `.` | Pause / step one tick |
@@ -625,18 +629,18 @@ an edit. Saved discoveries and worlds belong to the address, so stick to the one
 | `V` | Air view: pressure in red and blue, wind as streaks (the readout adds wind and pressure) |
 | `L` | Magnifying lens (3× zoom under the cursor) |
 | `M` | Sound on/off |
-| `F` | Full screen (the ⛶ button at the end of the toolbar) |
+| `F` | Full screen (the ⛶ button beside Pause) |
 | `E` `H` `C` `G` `X` | Erase / Heat / Cool / Magnet / Smash tools |
 | Magnetic switch (in the Magnet's box) | On: the Magnet picks up only what a real magnet would (iron, cobalt, nickel, neodymium, cold gadolinium, liquid oxygen…) and drops what is heated past its Curie point. Off: it carries any loose matter |
 | Magnet: hold and drag | Carry what is inside the ring; while the button is down it keeps pulling in every grain and drop that comes inside. It hangs from the cursor on a spring, so it trails, swings and sloshes; flick as you let go to throw it |
 | `1`–`4` | Brush shape: circle, square, pen, box (drag) |
-| `5` | Ground: hold it over a circuit to draw its current off to earth |
+| `5` `6` | Ground: hold it over a circuit to draw its current off to earth. Shock: hold it on anything for electricity under the brush |
 | Shift+drag | A straight line from where you pressed to where you let go, at any angle (no snapping), drawn with the circle, square or pen brush; on a Box, Shift makes it a square |
 | Touch: two fingers | Pinch to zoom, drag to move the map (a stroke the first finger had only just begun is taken back); on a touch screen the toolbar's − and + size the brush instead |
-| Turn-sideways button (touch screens) | Play in landscape: full screen held sideways where the browser allows it (Android), otherwise the page turned a quarter round (iPhone). In the turned page the button turns it back, and the world comes with you |
+| Toolbar on a small screen | One long row: drag it, or press the arrow at either end, for the rest of the buttons |
 | Weapons tab: click the map | Set off the selected catastrophe there; the brush size sets how big (an earthquake's magnitude is set in the box at the top of the tab). Hold the button to steer a tornado toward the cursor |
 | Drag the divider between the map and the panel | Give the panel more room (wider beside the map, taller under it on narrow screens); double-click resets it |
-| `‹` in the panel's header (phones and tablets) | Slide out Journey, Lab, Codex, Hint and Help, which fold away on screens up to 1,024 px wide. On a phone the toolbar is two compact rows: time, undo and zoom, then the views, Weather, Scenes and Map |
+| `‹` in the panel's header (phones and tablets) | Slide out Journey, Codex, Hint, Achievements, Help and Info, which fold away on screens up to 1,024 px wide |
 
 **Weather** sets the air temperature and wind, and picks the sky: Natural (clouds only form
 from vapour rising off warm water), Clear, Cloudy, Rain, Thunderstorm, Snow, Blizzard, Fog or
@@ -660,8 +664,14 @@ thing it is: a scene, a sky, a weapon (its own icon), an achievement, a colour, 
 **Scenes** offers thirteen starting worlds: Island (every game starts on the plain one, sea, sand and a garden; once every plant and creature has been found it grows into a tropical island with palm beaches, a jungle hill, a coral reef, a hut on stilts and a sea stack), Canyon (rock layers in the Grand Canyon’s real colours, from pale limestone at the rim down through red shales and the Redwall to dark schist, a green river and a rope bridge), Volcano (a dark brown cone with a red-hot mouth holding a lava lake, fed up a pipe from a chamber on the hot world floor: deep magma stays molten until it meets the open air. Fire the Volcano weapon into the middle of the mountain and its magma climbs the pipe and erupts out of the mouth: magma already in its way costs it none of its reach), Forest (dense tall pines and broad oaks, willows over a lily pond, bushes, flowers, a fallen log and mushrooms), Caves (a limestone cavern hung with stalactites under an underground lake, iron, copper and gold ores, a coal seam, an amethyst geode, diamonds round a magma pocket, a lake and an oil pocket), Workshop (jars, blocks and pots of every starter, and a fire in the grate), Village (a limestone church with a spire and rose window, brick, timber and wooden houses, a red barn, cows in a fenced pasture, a well, a pond, crops and a windmill), Nuclear plant (a reactor that runs itself and lights a town), City (skyscrapers whose floors are lit by tubes of helium, neon, argon, krypton and xenon, stained-glass crowns, a spire with a red beacon, neon signs and street lamps), Electric workshop (three benches of working circuits: a light bulb, a carbon arc, a sparkler, a solar panel, lemon and car batteries, a tantalum capacitor firing a xenon flash, a red-green-blue phosphor screen, and switched machines: a lamp, a kettle, a pumped fountain, a piston lift and a fire alarm), Magnet lab (three floors: a separator pulling iron out of falling sand, which metals a magnet takes, bismuth pushed away, an electromagnet crane, neodymium and samarium magnets on heaters, iron dropping out of a fire past its Curie point, chilled gadolinium and filings drawn up in a jar), Waterworks and an empty bench (each but the plain Island is earned: see "Earned, not given"). **Hint** shows how to make or earn something, picked at random; click a locked tile for that element's own answer. The **Codex** lists
 everything found so far, with recipes and the temperatures where each element changes.
 The Codex is sorted into the table's categories, each with how many of it you have found; an
-undiscovered element shows only a Hint button. Every toast has a × to dismiss it. Sandbox mode in
-the Codex unlocks everything at once.
+undiscovered element shows only a Hint button. Every toast has a × to dismiss it.
+
+A new player is walked through their first discovery on the real table and map: the screen dims but
+for the next thing to touch, and each step goes on when it has been done. **Help** (`?`) has the
+controls, and can run that guide again. **Weather** starts Clear: open water doesn't evaporate by
+itself, a cloud you brew from steam lives and grows as a natural one does, and choosing Clear from the
+menu breaks up what is in the sky. **Info** has the About page, privacy policy, terms of service and
+cookie page.
 
 ## How it works
 
@@ -686,7 +696,8 @@ the Codex unlocks everything at once.
 | `js/journey.js` | The journey on screen: map, journal pages, the goals card and the pouch, and running a chapter in its own world |
 | `js/labview.js` | The Lab on screen: the sample, the test tube with its own renderer and loop, the handbook, and the cards |
 | `js/main.js` | Boot, fixed-timestep loop (60 ticks/s), pointer, touch and keyboard input, the saved worlds, full screen |
-| `rotate.html` | The game turned a quarter round in a frame, for a phone that won't turn the page itself |
+| `js/firstrun.js` | The new player's guide: their first discovery, step by step, on the real table and map |
+| `about.html`, `privacy.html`, `terms.html`, `cookies.html`, `css/legal.css` | The About and legal pages, reached from Info in the panel |
 | `favicon.ico`, `icons/`, `manifest.webmanifest` | The icon: in the browser tab, on a phone's home screen, and for installing it as an app |
 
 Each cell's element is a 16-bit number, with room for 1,022 elements (`ELEM.NT` in `elements.js` sets
@@ -844,10 +855,10 @@ for every swatch and a group for every jump link, and that nothing in it comes o
 `unlocktest` checks every unlock: the Journey at 30 finds and the Weapons tab at 50, each weapon's
 quest (water above the line, lava past 3,000°C, a storm's own bolt, rubble and ice made in one scene
 but not laid by the brush, blasts, Nukes beside hydrogen, chapters won), each scene, the skies, the
-battery opening each machine part, sandbox, and the black hole swallowing hydrogen bombs.
+battery opening each machine part, and the black hole swallowing hydrogen bombs.
 `achievetest` checks the achievements: milestones from finds and stars, hours in one scene, a black
 hole fed five bombs and burst by a sixth wiping the map, clearing by hand not counting, a secret made
-in the world but not one a scene set out, the big ones listed last, and nothing in sandbox mode.
+in the world but not one a scene set out, and the big ones listed last.
 `casttest` melts each of the 12 castable metals the way its hint says and checks it sets solid and is
 discovered as it does; that magnesium in open air and tungsten in air don't cast; that powder that
 never melted stays powder; that a block stands in mid-air, melts back into liquid metal and sets again;

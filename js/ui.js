@@ -405,6 +405,7 @@
     heat: ['Heat', 'Heats what is under the brush. Hold it to melt stone.'],
     cool: ['Cool', 'Chills what is under the brush, down to absolute zero.'],
     magnet: ['Magnet', 'Hold to carry loose matter and people. Flick to throw. Switch Magnetic on and it picks up only magnetic metals, as a real magnet would.'],
+    shock: ['Shock', 'Electricity under the brush, no battery needed. Hold it on a wire, a metal or a machine and the current runs through it, and machines in reach run. In the open air sparks fly, and gunpowder and other volatile things catch.'],
     ground: ['Ground', 'Hold it over a circuit: every current within the brush runs to earth. Wires go dead, sparks and lightning vanish, and pumps, pistons, valves and thrusters in reach stop while you hold it.'],
     smash: ['Smash', 'Breaks what is brittle under the brush: stone and brick to rubble, glass to shards, ice to snow, wood to splinters. Smash rubble or shards again for sand. A cast metal block breaks back into its grains, the denser the slower; diamond grinds to dust slowest of all. Plain metal bends.'],
   };
@@ -600,6 +601,7 @@
       note('Not earned yet', `${G.Unlocks.line('weapon', sel.name)}.`);
       return;
     }
+    if (sel.kind === 'weapon') clearNew(`weapon:${sel.name}`);
     if (sel.kind === 'element') {
       if (!unlocked(sel.t)) {
         const d = list[sel.t];
@@ -729,6 +731,7 @@ ${tried ? '★ Done' : 'Try it'}: ${TryIt.text(d.id)}` : ''}`
   function showTab(which) {
     if (!TABS[which] || (which === 'weapons' && !G.Unlocks.has('weapons'))) which = 'alchemy';
     closePop();
+    if (which === 'weapons') clearNew('weapons');
     for (const [k, panel] of Object.entries(TABS)) {
       $(`#tab-${k}`).setAttribute('aria-selected', k === which);
       $(panel).hidden = k !== which;
@@ -822,18 +825,23 @@ ${tried ? '★ Done' : 'Try it'}: ${TryIt.text(d.id)}` : ''}`
     canyon: 'Canyon', volcano: 'Volcano', forest: 'Forest', caves: 'Caves', workshop: 'Workshop', village: 'Village',
     machines: 'Waterworks', electrics: 'Electric workshop', magnets: 'Magnet lab', reactor: 'Nuclear plant', city: 'City', empty: 'Empty bench',
   };
-  // newly opened things, one toast each, a moment apart. A machine part arrives like a discovery,
-  // at once, from where the battery touched; the Journey opens its first page by itself.
+  // newly opened things, one toast each, a moment apart, and a yellow dot on where to find them. A
+  // machine part arrives like a discovery, at once, from where the battery touched.
   function announce(opened) {
     if (!opened || !opened.length) return;
     paintUnlocks();
     let k = 0;
     for (const [kind, name, x, y] of opened) {
       if (kind === 'part') { partFound(ELEM.byKey[name], x, y); continue; }
+      if (kind === 'journey') markNew('journey');
+      if (kind === 'weapons') markNew('weapons');
+      if (kind === 'scene') markNew('scenes', `scene:${name}`);
+      if (kind === 'sky') markNew('map', `sky:${name}`);
+      if (kind === 'weapon') markNew('weapons', `weapon:${name}`);
       setTimeout(() => {
         AudioFX.unlock();
-        if (kind === 'journey') { journeyArrives(); return; }
         const say = {
+          journey: ['Unlocked', 'The Apprentice’s Journey', 'Your master has gone, and left you a letter. Open it with the Journey button.', 'journey'],
           weapons: ['Unlocked', 'Weapons', 'A tab of disasters. Each one is earned: with the Weapons tab open, Hint says how.', 'weapons'],
           scene: ['New scene', SCENE_NAMES[name], 'Open it from Scenes.', 'scene'],
           sky: ['New sky', name === 'dusk' ? 'Dusk' : 'Night', 'Choose it from Map → Sky.', name === 'dusk' ? 'dusk' : 'night'],
@@ -855,12 +863,41 @@ ${tried ? '★ Done' : 'Try it'}: ${TryIt.text(d.id)}` : ''}`
     if (x != null) flyToTile(d.id, x, y);
     refreshTable();
   }
-  // 30 elements found: the Journey's first page opens (once nothing else is open)
-  function journeyArrives() {
-    if (G.Journey.active) return;
-    if (anyModalOpen()) { setTimeout(journeyArrives, 800); return; }
-    paintUnlocks();
-    G.Journey.open();
+  // ───── the yellow dot: something new is waiting behind this button ─────
+  // A key for each place a dot can show: a button, or a row in a menu. Opening it clears the dot.
+  const NEWS_AT = {
+    journey: '#btn-journey', scenes: '#btn-scenes', map: '#btn-world', weapons: '#tab-weapons',
+    trophy: '#btn-achieve', lab: '#tab-periodic, #btn-plab',
+  };
+  const news = new Set();
+  const newsTarget = (k) => {
+    const [kind, name] = k.split(':');
+    if (kind === 'scene') return `[data-scene="${name}"]`;
+    if (kind === 'sky') return `[data-sky="${name}"]`;
+    return NEWS_AT[k] || '';
+  };
+  function paintNews() {
+    document.querySelectorAll('.has-new').forEach((b) => { if (b.id !== 'tb-prev' && b.id !== 'tb-next') b.classList.remove('has-new'); });
+    for (const k of news) {
+      if (k.startsWith('weapon:')) { const b = weaponButtons[k.slice(7)]; if (b) b.classList.add('has-new'); continue; }
+      const sel = newsTarget(k);
+      if (sel) document.querySelectorAll(sel).forEach((b) => b.classList.add('has-new'));
+    }
+    // a phone keeps Journey, the trophy and the rest in a tray behind ‹: the dot shows there too
+    const more = $('#btn-more'), tray = $('#brand-tray');
+    if (more && tray) more.classList.toggle('has-new', !!tray.querySelector('.has-new'));
+    if (G.UI.onNews) G.UI.onNews();
+  }
+  function markNew(...keys) {
+    if (game.sandbox) return;
+    for (const k of keys) news.add(k);
+    store.set('news', [...news]);
+    paintNews();
+  }
+  function clearNew(k) {
+    if (!news.delete(k)) return;
+    store.set('news', [...news]);
+    paintNews();
   }
   // Locked things stay out of sight: the Weapons tab and each weapon, the Journey's buttons
   function paintUnlocks() {
@@ -876,7 +913,7 @@ ${tried ? '★ Done' : 'Try it'}: ${TryIt.text(d.id)}` : ''}`
       more.hidden = !shut;
       more.textContent = shut === U.weapons.length ? `${shut} to earn.` : `${shut} more to earn.`;
     }
-    for (const sel of ['#btn-journey', '#btn-begin-journey']) { const b = $(sel); if (b) b.hidden = !U.has('journey'); }
+    $('#btn-journey').hidden = !U.has('journey');
   }
 
   // ───── hints: a box with the answer in it ─────
@@ -1024,6 +1061,7 @@ ${tried ? '★ Done' : 'Try it'}: ${TryIt.text(d.id)}` : ''}`
     if (groupsOpen()) { // the last star: the book opens
       setTimeout(() => {
         AudioFX.unlock();
+        markNew('lab');
         toast({ eyebrow: 'Unlocked', name: 'Element Groups', icon: 'book', how: 'Every element has its star. Open the book beside the Lab button on the Periodic table tab.', ms: 9000 });
       }, 1800);
     }
@@ -1050,6 +1088,7 @@ ${tried ? '★ Done' : 'Try it'}: ${TryIt.text(d.id)}` : ''}`
   function achieved(ids) {
     if (!ids || !ids.length) return;
     paintAchieveButton();
+    markNew('trophy');
     ids.forEach((id, k) => setTimeout(() => {
       const a = G.Achieve.get(id);
       AudioFX.unlock();
@@ -1092,6 +1131,7 @@ ${tried ? '★ Done' : 'Try it'}: ${TryIt.text(d.id)}` : ''}`
     }
   }
   function openAchievements() {
+    clearNew('trophy');
     AudioFX.click();
     renderAchievements();
     openModal('#achieve');
@@ -1133,6 +1173,7 @@ ${tried ? '★ Done' : 'Try it'}: ${TryIt.text(d.id)}` : ''}`
     game.renderer.ring(x, y, d.colors[0]);
     AudioFX.discovery();
     toast({ eyebrow: 'Found in the wild', name: `${d.name}, element ${d.z}`, how: `Your world made it, so it joins your table. ${G.LabView.discoveredLine(d)}.`, t, ms: 7000 });
+    markNew('lab');
     refreshTable();
   }
 
@@ -1186,7 +1227,6 @@ ${tried ? '★ Done' : 'Try it'}: ${TryIt.text(d.id)}` : ''}`
     }
     if (codexSel == null) codexSel = game.selected.kind === 'element' ? game.selected.t : ID.WATER;
     renderCodexDetail();
-    $('#sandbox').checked = game.sandbox;
     openModal('#codex');
   }
 
@@ -1368,7 +1408,6 @@ ${tried ? '★ Done' : 'Try it'}: ${TryIt.text(d.id)}` : ''}`
   function closeModal(m) {
     m.hidden = true;
     closePop();
-    if (m.id === 'welcome') store.set('welcomed', true);
     if (lastFocus) lastFocus.focus();
   }
   const anyModalOpen = () => !!document.querySelector('.modal:not([hidden])');
@@ -1398,7 +1437,9 @@ ${tried ? '★ Done' : 'Try it'}: ${TryIt.text(d.id)}` : ''}`
       chapters: () => G.Story.chapters.filter((c) => !c.sealed).map((c) => c.id),
       won: (cid) => ((store.get('journey', {}).stars || {})[cid] || 0) > 0,
     });
-    game.sandbox = store.get('sandbox', false);
+    game.sandbox = false;
+    store.del('sandbox');
+    for (const k of store.get('news', [])) news.add(k);
     game.magnitude = store.get('magnitude', 7);
     game.machine = Object.assign({ dir: 0, mode: 1, set: 100, sticky: false }, store.get('machine', {}));
     buildMachineBox();
@@ -1442,42 +1483,15 @@ ${tried ? '★ Done' : 'Try it'}: ${TryIt.text(d.id)}` : ''}`
     $('#btn-achieve').addEventListener('click', openAchievements);
     paintAchieveButton();
     $('#btn-help').addEventListener('click', () => openModal('#welcome'));
-    $('#sandbox').addEventListener('change', (e) => {
-      game.sandbox = e.target.checked;
-      store.set('sandbox', game.sandbox);
-      syncWorldDisc(game.world);
-      refreshTable();
-      paintUnlocks();
-      if (G.UI.onUnlock) G.UI.onUnlock();
-      openCodex();
-    });
-    $('#btn-reset').addEventListener('click', () => {
-      if (!confirm('Forget every discovery and start the table over? The periodic table locks again, back to hydrogen and helium, and its Try it stars are cleared. Your saved world is kept.')) return;
-      known.fill(0);
-      fresh.clear();
-      for (const d of ELEM.starters) known[d.id] = 1;
-      saveKnown();
-      Lab.reset();
-      TryIt.reset();
-      Tints.reset();
-      G.Unlocks.reset();
-      G.Unlocks.check();
-      G.LabView.reset();
-      syncWorldDisc(game.world);
-      if (game.selected.kind === 'element' && !unlocked(game.selected.t)) game.selected = { kind: 'element', t: ID.SAND };
-      refreshTable();
-      paintUnlocks();
-      if (G.UI.onUnlock) G.UI.onUnlock();
-      openCodex();
-    });
-
+    $('#btn-info').addEventListener('click', () => openModal('#info'));
+    $('#btn-replay-guide').addEventListener('click', () => { closeModal($('#welcome')); G.FirstRun.start(); });
     document.querySelectorAll('.modal').forEach((m) => {
       // a sticky modal (a journal page) waits for one of its own buttons
       m.addEventListener('click', (e) => { if ((e.target === m && !m.dataset.sticky) || e.target.closest('[data-close]')) closeModal(m); });
       m.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !m.dataset.sticky) closeModal(m); });
     });
-    if (!store.get('welcomed', false)) openModal('#welcome');
     document.body.append(filePick);
+    paintNews();
   }
 
   G.UI = {
@@ -1490,7 +1504,10 @@ ${tried ? '★ Done' : 'Try it'}: ${TryIt.text(d.id)}` : ''}`
     swatch: (t, w, h) => cloneCanvas(swatchFor(t, w, h)),
     toolName: (name) => TOOL_INFO[name][0],
     weaponColor: (name) => WEAPON_INFO[name][3],
-    announce, achieved, paintUnlocks, sceneHint, closePop, sceneName: (n) => SCENE_NAMES[n], weaponName: (n) => WEAPON_INFO[n][0],
+    announce, achieved, paintUnlocks, sceneHint, closePop, markNew, clearNew, paintNews, onNews: null,
+    tile: (key) => tiles.get(ELEM.byKey[key].id),
+    known: (key) => !!known[ELEM.byKey[key].id],
+    showAlchemy: () => { setSearch(''); showTab('alchemy'); }, sceneName: (n) => SCENE_NAMES[n], weaponName: (n) => WEAPON_INFO[n][0],
     found: () => totalKnown(),
     // the tsunami's line, while its hint is up (a row of the map, or null)
     floodLine: () => (floodShown && pop ? Math.round(game.world.H * G.Unlocks.FLOOD_ROW) : null),

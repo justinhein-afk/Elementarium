@@ -238,6 +238,48 @@ const live = (w, i, n, machine) => { let k = 0; run(w, n, (ww) => { if (machine 
   check('Pushing up, it raises a column of cadmium, which drops back when the power goes', top === 14 && top2 === 30, `top of the cadmium y=${top} raised, y=${top2} after`);
 }
 
+// ── Shock and Ground, the two tools that act on current while they are held ──
+{
+  const w = world(80, 30);
+  rect(w, 13, 11, 50, 11, ID.WIRE); // no battery anywhere
+  rect(w, 51, 10, 53, 12, ID.PUMP);
+  const pump = w.idx(52, 11);
+  const on = (n) => { let c = 0; for (let k = 0; k < n; k++) { w.step(); w.resetEvents(); if (w.sap[pump] > 0) c++; } return c; };
+  const dead = on(120);
+  w.shock({ x: 30, y: 11, r: 3 });
+  on(120);
+  const shocked = on(120);
+  w.shock(null);
+  on(120);
+  const letGo = on(120);
+  check('Shock runs electricity with no battery while it is held', dead === 0 && shocked > 90 && letGo === 0, `pump powered ${dead} of 120 dead, ${shocked} of 120 shocked, ${letGo} of 120 let go`);
+  w.shock({ x: 52, y: 11, r: 2 });
+  on(20);
+  const direct = on(60);
+  w.shock(null);
+  on(120);
+  check('Held on a machine, Shock powers it directly', direct > 50, `pump powered ${direct} of 60`);
+  rect(w, 10, 10, 12, 12, ID.BATTERY); // a battery on the wire, for Ground
+  on(120);
+  const free = on(120);
+  w.ground({ x: 32, y: 11, r: 3 });
+  on(90); // pulses already past it run on to the pump
+  const grounded = on(120);
+  w.ground(null);
+  on(120);
+  const back = on(120);
+  check('Ground draws current off while it is held', free > 90 && grounded === 0 && back > 90, `pump powered ${free} of 120 free, ${grounded} grounded, ${back} let go`);
+}
+{ // in the open: sparks in the air, and gunpowder catches
+  const w = world(60, 40);
+  rect(w, 20, 30, 40, 34, ID.GUNPOWDER);
+  let sparks = 0, lit = false;
+  w.shock({ x: 30, y: 26, r: 6 });
+  for (let k = 0; k < 120; k++) { w.step(); w.resetEvents(); sparks = Math.max(sparks, w.counts[ID.SPARK]); if (w.counts[ID.GUNPOWDER] < 100) lit = true; }
+  w.shock(null);
+  check('Shock fills the air with sparks, and sets gunpowder off', sparks > 0 && lit, `up to ${sparks} sparks; gunpowder left ${w.counts[ID.GUNPOWDER]} of 105`);
+}
+
 let fail = 0;
 for (const r of out) {
   if (!r.ok) fail++;

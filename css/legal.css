@@ -1,0 +1,22 @@
+/* Elementarium — the about and legal pages. Self-contained: no outside fonts, no scripts. */
+:root { color-scheme: dark; }
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: #0a1516; color: #c9c3b2;
+  font: 17px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+.page { max-width: 720px; margin: 0 auto; padding: 32px 20px 48px; }
+.top { display: flex; align-items: center; gap: 12px; margin-bottom: 28px; }
+.top img { width: 44px; height: 44px; border-radius: 10px; }
+.top a { color: #d6a84f; font: 22px/1 Georgia, "Times New Roman", serif; text-decoration: none; }
+h1 { margin: 0 0 4px; font: 34px/1.15 Georgia, "Times New Roman", serif; color: #ece5d3; }
+.updated { margin: 0 0 28px; font-size: 14px; color: #8f8a7b; }
+h2 { margin: 32px 0 8px; font: 22px/1.25 Georgia, "Times New Roman", serif; color: #d6a84f; }
+p, ul { margin: 0 0 14px; }
+ul { padding-left: 22px; }
+li { margin-bottom: 6px; }
+a { color: #7fd6c8; }
+a:hover { color: #d6a84f; }
+strong { color: #ece5d3; }
+nav.foot { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 40px; padding-top: 18px; border-top: 1px solid #24403f; font-size: 15px; }
+@media (max-width: 520px) { body { font-size: 16px; } h1 { font-size: 28px; } .page { padding: 20px 16px 36px; } }

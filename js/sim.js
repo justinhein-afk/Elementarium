@@ -754,6 +754,11 @@
       });
     }
 
+    // The Shock tool, while it is held: electricity itself, as the Spark element paints it. What
+    // conducts takes the current, machines in reach run, sparks crackle in the air and powder catches.
+    let shk = null; // { x, y, r } while held
+    function shock(o) { shk = o; }
+
     function energize(n) {
       if (empLeft > 0) return; // a solar storm: nothing can drive a current
       if (charge[n] === 0) {
@@ -3096,6 +3101,7 @@
     function weatherTick() {
       const wind = weather.wind;
       if (wind && rnd() < Math.abs(wind) * 0.08) windPass(wind > 0 ? 1 : -1);
+      if (weather.clearing) weather.clearing--;
       const mode = weather.mode;
       const want = COVER[mode] || 0;
       if (want > 0 && (tick & 3) === 0) {
@@ -3130,7 +3136,9 @@
         if (type[j] === EMPTY && cy(j) < H * 0.5) { swap(i, j); i = j; }
       }
       const mode = weather.mode;
-      const natural = mode === 'natural';
+      // Clear: no weather of its own, but a cloud you brew from steam lives as a natural one does.
+      // Only for a while after you choose it (weather.clearing) does it clear the sky.
+      const natural = mode === 'natural' || (mode === 'clear' && !weather.clearing);
       if (!natural && t !== cloudFor(mode) && rnd() < (mode === 'clear' || mode === 'heatwave' ? 0.01 : 0.002)) {
         transform(i, EMPTY); return; // breaks up: it isn't this weather's kind of cloud
       }
@@ -3709,7 +3717,7 @@
           const u = i - SW;
           if (type[u] === t && temp[i] > temp[u] + 6 && rnd() < 0.3) { swap(i, u); return; }
           // evaporation from an open surface, faster in warm air (sea water leaves its salt behind)
-          if (type[u] === EMPTY && ambient > 0 && rnd() < ambient * 0.000015) {
+          if (type[u] === EMPTY && ambient > 0 && weather.mode !== 'clear' && rnd() < ambient * 0.000015) {
             if (t === SALTWATER) { transform(i, SALT); transform(u, STEAM); temp[u] = 100; }
             else { transform(i, STEAM); temp[i] = 100; }
             return;
@@ -4057,6 +4065,7 @@
       if ((tick & 15) === 0) rootPass();
       if (counts[THRUSTER]) ships();
       if (gnd) groundPass();
+      if (shk) sparkPaint(shk.x, shk.y, shk.r, 0.04 * Math.min(1, 6 / Math.max(1, shk.r))); // thinner with a big brush
       const ltr = tick & 1;
       for (let y = H; y >= 1; y--) {
         const row = y * SW;
@@ -5637,11 +5646,11 @@
       });
     }
 
-    function sparkPaint(x0, y0, r) {
+    function sparkPaint(x0, y0, r, air = 0.04) {
       forCircle(x0, y0, r, (i) => {
         const t = type[i];
         if (P_CONDUCT[t]) { if (charge[i] === 0) charge[i] = CH_NEW; }
-        else if (t === EMPTY) { if (rnd() < 0.04) place(i, SPARK); }
+        else if (t === EMPTY) { if (rnd() < air) place(i, SPARK); }
         else zap(i, t);
       });
     }
@@ -5764,7 +5773,7 @@
       disc, counts, events,
       get tick() { return tick; },
       idx, step, clear, place, transform, paint, erase, smash, flip, machine, beginStroke, encase, heat, sparkPaint, spawnBolt, explode, blastPaint, tintPaint, placeImage, livenTrees,
-      cell, resetEvents, serialize, load, rnd, ignite, snapshot, restore, weather, rules, setBrush, grab, holdTo, release, ground,
+      cell, resetEvents, serialize, load, rnd, ignite, snapshot, restore, weather, rules, setBrush, grab, holdTo, release, ground, shock,
       get holding() { return hand.on ? hand.n : 0; },
       get gripping() { return hand.on; },
       launch, steer, weaponReach, quakeInfo, dropPoint, volcanoReach, disasters,
