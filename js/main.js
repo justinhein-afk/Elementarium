@@ -129,6 +129,13 @@
   const isWeapon = () => game.selected.kind === 'weapon';
   const isGround = () => game.selected.kind === 'tool' && game.selected.name === 'ground';
   const isShock = () => game.selected.kind === 'tool' && game.selected.name === 'shock';
+  // Where Ground or Shock reaches while held: what the brush shows, the whole Box while one is dragged.
+  function heldReach() {
+    const a = pointer.anchor;
+    if (!a) return { x: pointer.x, y: pointer.y, r: radius(), square: game.shape === 'square' };
+    const end = dragEnd();
+    return { x: end.x, y: end.y, r: Math.max(Math.abs(end.x - a.x), Math.abs(end.y - a.y)) / 2, box: [a.x, a.y, end.x, end.y] };
+  }
   // the brush slider sizes a disaster: 1 at its default, and no bigger past 24 (the brush goes to 50)
   const weaponSize = () => 0.5 + Math.min(24, game.brush) / 8;
 
@@ -276,7 +283,7 @@
   function finishShape() {
     const a = pointer.anchor, end = dragEnd();
     pointer.anchor = null;
-    if (!a) return;
+    if (!a || isGround() || isShock()) return; // they acted on the Box while it was held
     const erase = pointer.button === 2, w = game.world;
     if (game.shape === 'box') {
       w.setBrush('box', a.x, a.y, end.x, end.y);
@@ -389,7 +396,10 @@
       }
       return;
     }
-    if (isGround() || isShock()) return; // held, they act every tick (see frame)
+    if (isGround() || isShock()) { // held, they act every tick (see frame), on a Box as it is dragged out
+      if (dragged() && e.button === 0) pointer.anchor = { x: pointer.x, y: pointer.y };
+      return;
+    }
     // a Box is dragged out; so is a straight line, with Shift held, from any brush
     if (dragged() || (e.shiftKey && !isImage())) { pointer.anchor = { x: pointer.x, y: pointer.y }; return; }
     game.world.setBrush(game.shape === 'square' ? 'square' : 'circle');
@@ -950,9 +960,9 @@
     if (game.world.gripping) handTrack(now);
     if (pointer.weapon) game.world.steer(pointer.weapon, pointer.x);
     // Ground, held down on the map: every current within the brush runs to earth, tick after tick
-    game.world.ground(pointer.down && pointer.button === 0 && isGround() ? { x: pointer.x, y: pointer.y, r: radius() } : null);
+    game.world.ground(pointer.down && pointer.button === 0 && isGround() ? heldReach() : null);
     // Shock, held down: electricity under the brush, with no battery
-    game.world.shock(pointer.down && pointer.button === 0 && isShock() ? { x: pointer.x, y: pointer.y, r: radius() } : null);
+    game.world.shock(pointer.down && pointer.button === 0 && isShock() ? heldReach() : null);
     if (!game.paused && !UI.anyModalOpen()) {
       acc += dt * game.speed;
       let n = 0;

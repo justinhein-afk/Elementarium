@@ -210,7 +210,8 @@ within the brush carries a pulse on, the pumps, pistons, valves and thrusters in
 power, and sparks and lightning there vanish, for as long as you hold it. **Shock** (`6`, beside it)
 is electricity under the brush, no battery needed: hold it on a wire, a metal or a machine and the
 current runs through it, machines in reach run, sparks crackle in the open air, and gunpowder and
-other volatile things catch.
+other volatile things catch. Both reach what the brush shows: with the Box, drag out a rectangle and
+they act on all of it for as long as you hold.
 
 **Cows and wolves swim.** In the water a cow or a wolf holds its head up out of it, its body under
 the water line, legs paddling, with ripples round its neck.

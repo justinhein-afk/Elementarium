@@ -741,22 +741,42 @@
     // ───── electricity ─────
     // The Ground tool, while it is held: every current within its reach runs to earth. No conductor in
     // it carries a pulse on, the machines in it lose their power, and sparks and lightning vanish.
-    let gnd = null; // { x, y, r, r2 } while held
-    function ground(o) { gnd = o ? { x: o.x, y: o.y, r: o.r, r2: (o.r + 0.5) * (o.r + 0.5) } : null; }
-    const grounded = (i) => { const dx = cx(i) - gnd.x, dy = cy(i) - gnd.y; return dx * dx + dy * dy <= gnd.r2; };
+    // Its reach, and Shock's, is what the brush shows: { x, y, r } a circle, with square: true a square,
+    // with box: [x0, y0, x1, y1] a dragged rectangle (where r only says how big it is).
+    let gnd = null; // that reach, with r2 or the rectangle's bounds, while held
+    function ground(o) {
+      if (!o) { gnd = null; return; }
+      const b = o.box;
+      gnd = b ? { ...o, x0: Math.min(b[0], b[2]), x1: Math.max(b[0], b[2]), y0: Math.min(b[1], b[3]), y1: Math.max(b[1], b[3]) }
+        : { ...o, r2: (o.r + 0.5) * (o.r + 0.5) };
+    }
+    const grounded = (i) => {
+      const x = cx(i), y = cy(i);
+      if (gnd.box) return x >= gnd.x0 && x <= gnd.x1 && y >= gnd.y0 && y <= gnd.y1;
+      const dx = x - gnd.x, dy = y - gnd.y;
+      return gnd.square ? Math.abs(dx) <= gnd.r && Math.abs(dy) <= gnd.r : dx * dx + dy * dy <= gnd.r2;
+    };
+    // Runs fn with the brush set to a held tool's reach, then puts back what the last stroke left.
+    function forHeld(o, fn) {
+      const { shape, x0, y0, x1, y1 } = brush;
+      if (o.box) setBrush('box', o.box[0], o.box[1], o.box[2], o.box[3]);
+      else setBrush(o.square ? 'square' : 'circle');
+      fn();
+      brush.shape = shape; brush.x0 = x0; brush.y0 = y0; brush.x1 = x1; brush.y1 = y1;
+    }
     function groundPass() {
-      forCircle(gnd.x, gnd.y, gnd.r, (i) => {
+      forHeld(gnd, () => forCircle(gnd.x, gnd.y, gnd.r, (i) => {
         const t = type[i];
         if (charge[i] && rnd() < 0.15) flashRx(i, SPARK); // a flicker where current is drawn off
         charge[i] = 0;
         if (P_CONSUMER[t]) sap[i] = 0;
         else if (t === SPARK || t === LIGHTNING) place(i, EMPTY);
-      });
+      }));
     }
 
     // The Shock tool, while it is held: electricity itself, as the Spark element paints it. What
     // conducts takes the current, machines in reach run, sparks crackle in the air and powder catches.
-    let shk = null; // { x, y, r } while held
+    let shk = null; // its reach (see ground) while held
     function shock(o) { shk = o; }
 
     function energize(n) {
@@ -4065,7 +4085,7 @@
       if ((tick & 15) === 0) rootPass();
       if (counts[THRUSTER]) ships();
       if (gnd) groundPass();
-      if (shk) sparkPaint(shk.x, shk.y, shk.r, 0.04 * Math.min(1, 6 / Math.max(1, shk.r))); // thinner with a big brush
+      if (shk) forHeld(shk, () => sparkPaint(shk.x, shk.y, shk.r, 0.04 * Math.min(1, 6 / Math.max(1, shk.r)))); // thinner with a big brush
       const ltr = tick & 1;
       for (let y = H; y >= 1; y--) {
         const row = y * SW;

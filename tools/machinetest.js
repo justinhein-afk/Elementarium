@@ -279,6 +279,41 @@ const live = (w, i, n, machine) => { let k = 0; run(w, n, (ww) => { if (machine 
   w.shock(null);
   check('Shock fills the air with sparks, and sets gunpowder off', sparks > 0 && lit, `up to ${sparks} sparks; gunpowder left ${w.counts[ID.GUNPOWDER]} of 105`);
 }
+{ // the brush they are held with: a Box is its whole rectangle, however it was dragged, and a square has corners
+  const w = world(80, 30);
+  const lone = (x, y) => set(w, x, y, ID.METAL);
+  const near = lone(20, 10), far = lone(60, 20), outside = lone(70, 10), corner = lone(44, 25);
+  const held = (o) => { w.charge.fill(0); w.shock(o); run(w, 1); const c = [near, far, outside, corner].map((i) => w.charge[i] > 0); w.shock(null); run(w, 12); return c; };
+  const dragged = held({ x: 15, y: 5, r: 25, box: [65, 22, 15, 5] }); // dragged up and left, ending at the top left
+  check('Shock with a Box reaches its whole rectangle and stops at its edge', dragged[0] && dragged[1] && !dragged[2], `near corner ${dragged[0]}, far corner ${dragged[1]}, outside ${dragged[2]}`);
+  const round = held({ x: 40, y: 21, r: 5 }), square = held({ x: 40, y: 21, r: 5, square: true });
+  check('Shock with a square brush reaches its corners, a circle does not', !round[3] && square[3], `corner cell: circle ${round[3]}, square ${square[3]}`);
+
+  const g = world(80, 30);
+  rect(g, 10, 10, 12, 12, ID.BATTERY);
+  rect(g, 13, 11, 50, 11, ID.WIRE);
+  rect(g, 51, 10, 53, 12, ID.PUMP);
+  const pump = g.idx(52, 11);
+  const on = (n) => { let c = 0; for (let k = 0; k < n; k++) { g.step(); g.resetEvents(); if (g.sap[pump] > 0) c++; } return c; };
+  on(120);
+  g.ground({ x: 70, y: 25, r: 20, box: [30, 8, 34, 14] }); // the cursor far off the wire: only the Box is on it
+  on(90);
+  const cut = on(120);
+  g.ground({ x: 30, y: 25, r: 3, box: [20, 20, 40, 25] }); // a Box that misses the wire
+  on(120);
+  const missed = on(120);
+  g.ground(null);
+  check('Ground with a Box draws current off inside it, and only there', cut === 0 && missed > 90, `pump powered ${cut} of 120 with the wire in the Box, ${missed} with it outside`);
+
+  const p = world(40, 30);
+  p.setBrush('circle');
+  p.shock({ x: 5, y: 5, r: 10, box: [2, 2, 30, 20] });
+  p.step();
+  p.shock(null);
+  p.resetEvents();
+  const painted = p.paint(30, 25, 1, ID.SAND, 1, true, Infinity);
+  check('A Box held by Shock leaves the painting brush as it was', painted <= 9, `a small stroke afterward laid ${painted} cells`);
+}
 
 let fail = 0;
 for (const r of out) {
