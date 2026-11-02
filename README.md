@@ -728,7 +728,7 @@ cookie page.
 | `js/main.js` | Boot, fixed-timestep loop (60 ticks/s), pointer, touch and keyboard input, the saved worlds, full screen |
 | `js/firstrun.js` | The new player's guide: their first discovery, step by step, on the real table and map |
 | `about.html`, `privacy.html`, `terms.html`, `cookies.html`, `css/legal.css` | The About and legal pages, reached from Info in the panel |
-| `favicon.ico`, `icons/`, `manifest.webmanifest` | The icon: in the browser tab, on a phone's home screen, and for installing it as an app |
+| `favicon.ico`, `icons/`, `manifest.webmanifest` | The icon: in the browser tab, on a phone's home screen, and for installing it as an app; `icons/logo.webp` is the name at the top of the panel |
 
 Each cell's element is a 16-bit number, with room for 1,022 elements (`ELEM.NT` in `elements.js` sets
 the limit; the last two numbers are the map's invisible border and the mark for rainbow fire). Saves

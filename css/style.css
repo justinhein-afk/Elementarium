@@ -203,6 +203,9 @@ body.resizing.rows, body.resizing.rows * { cursor: row-resize !important; }
   margin: 0; font: 34px/1 var(--f-display); letter-spacing: 0.01em; color: var(--brass);
   text-shadow: 0 0 18px rgba(214, 168, 79, 0.25);
 }
+/* the logo stands in for the name, as wide as the name was at each size, with the same soft glow */
+.brand h1 .logo { display: block; height: 0.83em; width: auto; filter: drop-shadow(0 0 12px rgba(214, 168, 79, 0.22)); }
+.brand.min h1 .logo { filter: none; }
 .progress { margin-top: 10px; }
 .progress-text { font-size: 13px; color: var(--bone-dim); }
 .progress-text span { font-family: var(--f-mono); color: var(--bone); }
