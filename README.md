@@ -599,6 +599,34 @@ you back to the lab. Open it with **Journey** in the panel.
 Discoveries made during a chapter count toward the table, and leaving a chapter hands the lab
 back exactly as it was (world, selection and undo history).
 
+## Your progress
+
+Everything the game remembers (discoveries, the Journey, the Lab, Try it stars, achievements,
+unlocks, settings and the five saved worlds) is kept in the browser's local storage, under keys
+that start `elementarium.v1.`. There are no accounts, so it stays on the player's device and
+survives every update to the game: saves list elements by name, and older save formats still load.
+
+**Info › Your progress** (`js/backup.js`, checked by `tools/backuptest.js`) makes a backup of
+all of it:
+
+- **Download a backup** writes one file, `elementarium-backup-YYYY-MM-DD.json`. The world on
+  screen is in it only if it is saved in a slot.
+- **Restore a backup…** checks the file first and refuses anything that isn't a backup, or that
+  comes from a newer version of the game. It then sets the backup and this browser side by side
+  (elements found, Journey chapters, achievements, saved worlds), and only **Replace and restart**
+  swaps it in whole. If the browser hasn't room, nothing changes. The game then reloads, so every
+  part of it reads the restored progress.
+
+The game also asks the browser to keep its storage rather than clear it when the device runs short
+of space (`navigator.storage.persist()`). Chrome, Edge and Safari decide for themselves without
+asking; Firefox asks the player. So the game asks only once there is progress to lose, from a click
+or a key press, and at most once a week. The Info window says whether the browser has agreed.
+Safari clears a site's storage after a week without a visit unless the game is on the Home Screen,
+which is what the backup is for.
+
+The backup file is also the way into accounts, if the game ever gets them: signing up can upload it
+as the account's first save, so nobody's journey starts over.
+
 ## Play
 
 Open `index.html` in a browser. No build step and no server needed (fonts load from
@@ -688,6 +716,7 @@ cookie page.
 | `js/groups.js` | Element Groups (no DOM): every element sorted by what it does, built from the element data |
 | `js/unlocks.js` | What is earned (no DOM): the Journey, the Weapons tab, each weapon, scene, sky and machine part, and the feats in your own world that open them |
 | `js/achieve.js` | Achievements (no DOM): milestones, time in a scene, destruction, the secret elements and the big ones |
+| `js/backup.js` | Your progress as a file (no DOM): making a backup, checking and restoring one, and asking the browser to keep the storage |
 | `js/sim.js` | The cellular automaton (typed arrays, no DOM): movement and momentum, the air field, heat diffusion, combustion, electricity, lightning, explosions, life, contact reactions |
 | `js/render.js` | Writes cells to an `ImageData`, plus a light buffer blurred into two bloom layers, and the thermal and air views |
 | `js/audio.js` | All sound synthesised with WebAudio, driven by per-frame simulation events |
@@ -772,6 +801,7 @@ node tools/machinetest.js
 node tools/shiptest.js
 node tools/unlocktest.js
 node tools/achievetest.js
+node tools/backuptest.js
 ```
 
 `simtest` runs the simulation headless and checks that every discovery is reachable from the
@@ -860,6 +890,11 @@ battery opening each machine part, and the black hole swallowing hydrogen bombs.
 `achievetest` checks the achievements: milestones from finds and stars, hours in one scene, a black
 hole fed five bombs and burst by a sixth wiping the map, clearing by hand not counting, a secret made
 in the world but not one a scene set out, and the big ones listed last.
+`backuptest` checks the progress backup: it holds every stored key but the device's own, a real
+saved world comes back cell for cell, a file that isn't a backup (or is empty, unreadable, far too
+big, or from a newer game) is refused, a restore replaces the whole store and changes nothing when
+the browser hasn't room, and the browser is asked to keep the storage only once there is progress,
+and at most once a week.
 `casttest` melts each of the 12 castable metals the way its hint says and checks it sets solid and is
 discovered as it does; that magnesium in open air and tungsten in air don't cast; that powder that
 never melted stays powder; that a block stands in mid-air, melts back into liquid metal and sets again;

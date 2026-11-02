@@ -26,10 +26,18 @@
   for (const d of list) if (d.castOf !== undefined) SYM[d.key] = list[d.castOf].sym; // a solid metal shows its metal's symbol
 
   const STORE = 'elementarium.v1.';
+  let locked = false; // a backup was just restored: nothing still in memory may write over it before the reload
   const store = {
     get(k, d) { try { const v = localStorage.getItem(STORE + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
-    set(k, v) { try { localStorage.setItem(STORE + k, JSON.stringify(v)); return true; } catch { return false; } },
-    del(k) { try { localStorage.removeItem(STORE + k); } catch { /* storage unavailable */ } },
+    set(k, v) { if (locked) return false; try { localStorage.setItem(STORE + k, JSON.stringify(v)); return true; } catch { return false; } },
+    del(k) { if (locked) return; try { localStorage.removeItem(STORE + k); } catch { /* storage unavailable */ } },
+    // every key the game has stored (without the prefix), for a backup
+    keys() {
+      const out = [];
+      try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k && k.startsWith(STORE)) out.push(k.slice(STORE.length)); } } catch { /* storage unavailable */ }
+      return out;
+    },
+    lock() { locked = true; },
   };
 
   const $ = (s) => document.querySelector(s);
@@ -1509,6 +1517,9 @@ ${tried ? '★ Done' : 'Try it'}: ${TryIt.text(d.id)}` : ''}`
     known: (key) => !!known[ELEM.byKey[key].id],
     showAlchemy: () => { setSearch(''); showTab('alchemy'); }, sceneName: (n) => SCENE_NAMES[n], weaponName: (n) => WEAPON_INFO[n][0],
     found: () => totalKnown(),
+    // what Found would say for a saved list of found keys (a backup's), starters included
+    countFound: (keys) => { const s = new Set(keys); return tableOrder.filter((d) => !d.special && (d.starter || s.has(d.key))).length; },
+    tableTotal,
     // the tsunami's line, while its hint is up (a row of the map, or null)
     floodLine: () => (floodShown && pop ? Math.round(game.world.H * G.Unlocks.FLOOD_ROW) : null),
     onUnlock: null,

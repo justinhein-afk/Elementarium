@@ -762,6 +762,113 @@
   $('#btn-save').addEventListener('click', openSaves);
   $('#btn-load').addEventListener('click', openSaves);
 
+  // ───── your progress as a file (Info › Your progress) ─────
+  // Download a backup of everything the game keeps in this browser, or restore one: the file is
+  // checked, the two are set side by side, and only a second click replaces what is here. The game
+  // then restarts, so every part of it reads the restored progress afresh.
+  const { Backup } = G;
+  const chapterIds = G.Story.chapters.filter((c) => !c.sealed).map((c) => c.id);
+  const tally = (data) => Backup.summary(data, { found: UI.countFound, chapters: chapterIds });
+  const keepLine = $('#backup-keep'), restoreAsk = $('#restore-ask'), restoreFile = $('#restore-file');
+  function paintKeep() {
+    const kept = Backup.state() === 'kept';
+    keepLine.classList.toggle('kept', kept);
+    keepLine.textContent = kept
+      ? 'This browser has agreed to keep the game’s data, even when the device runs short of space.'
+      : 'Browsers can clear a site’s data to free up space, and Safari clears it after a week without a visit unless the game is on your Home Screen. A backup now and then keeps your progress safe.';
+  }
+  paintKeep();
+  // Ask the browser to keep the game's storage, from the first click or key press once there is
+  // progress to lose (Firefox asks the player, and only from inside one; the others just decide)
+  Backup.check().then((s) => {
+    paintKeep();
+    if (s !== 'may-clear') return;
+    const ask = () => {
+      if (navigator.userActivation && !navigator.userActivation.isActive) return; // a touch counts once it lifts
+      if (!Backup.hasProgress(UI.store)) return;
+      for (const ev of ['pointerdown', 'pointerup', 'keydown']) removeEventListener(ev, ask, true);
+      const asked = Backup.keep(UI.store);
+      if (asked) asked.then(paintKeep);
+    };
+    for (const ev of ['pointerdown', 'pointerup', 'keydown']) addEventListener(ev, ask, true);
+  });
+  $('#btn-info').addEventListener('click', () => { restoreAsk.hidden = true; paintKeep(); });
+
+  $('#btn-backup').addEventListener('click', () => {
+    const b = Backup.make(UI.store), name = Backup.fileName(b.at);
+    let url;
+    try { url = URL.createObjectURL(new Blob([JSON.stringify(b)], { type: 'application/json' })); } catch {
+      UI.note('Could not make a backup', 'This browser wouldn’t make the file.');
+      return;
+    }
+    const a = Object.assign(document.createElement('a'), { href: url, download: name });
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60e3);
+    UI.note('Backup made', `${name}: keep it somewhere safe.`);
+  });
+
+  $('#btn-restore').addEventListener('click', () => { restoreAsk.hidden = true; restoreFile.click(); });
+  restoreFile.addEventListener('change', async () => {
+    const f = restoreFile.files && restoreFile.files[0];
+    restoreFile.value = '';
+    if (!f) return;
+    let text = null;
+    if (f.size <= Backup.BIGGEST) { try { text = await f.text(); } catch { /* unreadable: read() says so */ } }
+    const r = Backup.read(text);
+    if (r.ok) askRestore(r.backup); else restoreRefused(r.why);
+  });
+  function restoreButtons(...btns) {
+    const row = el('div', 'slot-btns');
+    for (const b of btns) { b.type = 'button'; row.append(b); }
+    return row;
+  }
+  function restoreRefused(why) {
+    restoreAsk.innerHTML = '';
+    restoreAsk.classList.add('bad');
+    const ok = el('button', 'pill', 'OK');
+    ok.addEventListener('click', () => { restoreAsk.hidden = true; });
+    restoreAsk.append(el('b', '', 'Nothing was changed'), el('p', '', why), restoreButtons(ok));
+    restoreAsk.hidden = false;
+    ok.focus();
+  }
+  function askRestore(b) {
+    restoreAsk.innerHTML = '';
+    restoreAsk.classList.remove('bad');
+    const then = tally(b.data), now = tally(Backup.make(UI.store).data);
+    const table = el('table'), head = el('thead'), body = el('tbody'), hr = el('tr');
+    for (const t of ['', 'Backup', 'Here now']) hr.append(el('th', '', t));
+    head.append(hr);
+    for (const [label, k, of] of [['Elements found', 'found', UI.tableTotal], ['Journey chapters', 'chapters', chapterIds.length], ['Achievements', 'achievements', Achieve.total], ['Saved worlds', 'worlds', 0]]) {
+      const tr = el('tr');
+      tr.append(el('th', '', label), el('td', '', of ? `${then[k]} of ${of}` : then[k]), el('td', '', of ? `${now[k]} of ${of}` : now[k]));
+      body.append(tr);
+    }
+    table.append(head, body);
+    const go = el('button', 'pill danger', 'Replace and restart'), back = el('button', 'pill', 'Cancel');
+    back.addEventListener('click', () => { restoreAsk.hidden = true; });
+    go.addEventListener('click', () => {
+      if (!Backup.restore(UI.store, b)) { restoreRefused('This browser hasn’t room for that backup.'); return; }
+      UI.store.lock(); // nothing still in memory may write the old progress back before the reload
+      try { sessionStorage.setItem('elementarium.restored', String(b.at)); } catch { /* the note is only a courtesy */ }
+      location.reload();
+    });
+    restoreAsk.append(
+      el('b', '', b.at ? `Restore the backup made ${when(b.at)}?` : 'Restore this backup?'),
+      table,
+      el('p', '', 'It replaces everything this browser holds now, including the saved worlds, and the game restarts to load it. The world on screen goes too, unless it is saved in a slot.'),
+      restoreButtons(go, back),
+    );
+    restoreAsk.hidden = false;
+    back.focus();
+  }
+  {
+    let at = null;
+    try { at = sessionStorage.getItem('elementarium.restored'); sessionStorage.removeItem('elementarium.restored'); } catch { /* no session storage */ }
+    if (at !== null) UI.note('Backup restored', +at ? `Your progress as it was ${when(+at)}.` : 'Your progress is back.');
+  }
+
   // ───── weather ─────
   const WEATHER = {
     natural: ['Natural', 20, 0], clear: ['Clear', 22, 0], cloudy: ['Cloudy', 16, 0.5], rain: ['Rain', 12, 1],

@@ -984,6 +984,24 @@ body.cutscene #pouch { opacity: 0.35; pointer-events: none; transition: opacity 
 }
 .info-links a:hover { border-color: var(--brass); color: var(--brass); }
 .welcome-btns.one { grid-template-columns: 1fr; }
+/* the Info window's progress backup: download, restore (asking first), and whether the browser keeps it */
+.backup { margin: 0 0 16px; padding-top: 14px; border-top: 1px solid rgba(78, 154, 136, 0.2); }
+.backup h3 { margin: 0 0 6px; font: 24px/1.1 var(--f-display); color: var(--bone); }
+.backup .lede { margin-bottom: 10px; }
+.backup-keep { margin: 10px 0 0; font-size: 13px; line-height: 1.4; color: var(--bone-faint); }
+.backup-keep.kept { color: #9fe3cf; }
+.restore-ask { margin-top: 10px; padding: 12px; border-radius: 8px; background: rgba(14, 28, 28, 0.6); border: 1px solid rgba(240, 120, 90, 0.35); display: grid; gap: 8px; }
+.restore-ask[hidden] { display: none; }
+.restore-ask.bad { border-color: rgba(78, 154, 136, 0.3); }
+.restore-ask b { color: var(--bone); font: 600 15px/1.3 var(--f-ui); }
+.restore-ask p { margin: 0; font-size: 13.5px; line-height: 1.4; color: var(--bone-dim); }
+.restore-ask table { border-collapse: collapse; font-size: 13px; color: var(--bone-dim); width: 100%; }
+.restore-ask th, .restore-ask td { padding: 3px 6px 3px 0; text-align: left; font-weight: 500; }
+.restore-ask thead th { color: var(--bone-faint); font: 600 11px/1.2 var(--f-ui); letter-spacing: 0.1em; text-transform: uppercase; }
+.restore-ask td { font-family: var(--f-mono); color: var(--bone); }
+.restore-ask .slot-btns .pill.danger { background: rgba(240, 120, 90, 0.12); }
+.saves-note { margin: -10px 22px 18px; font-size: 13px; color: var(--bone-faint); }
+.saves-note b { color: var(--bone-dim); font-weight: 600; }
 
 /* the new player's guide: the first step is a welcome in the middle of the screen */
 .tour-tip.welcome { width: min(400px, calc(100vw - 24px)); padding: 20px 22px 16px; text-align: center; justify-items: center; }
