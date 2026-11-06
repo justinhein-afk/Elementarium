@@ -136,8 +136,19 @@
     const end = dragEnd();
     return { x: end.x, y: end.y, r: Math.max(Math.abs(end.x - a.x), Math.abs(end.y - a.y)) / 2, box: [a.x, a.y, end.x, end.y] };
   }
-  // the brush slider sizes a disaster: 1 at its default, and no bigger past 24 (the brush goes to 50)
-  const weaponSize = () => 0.5 + Math.min(24, game.brush) / 8;
+  // Spread each disaster's existing footprint over the full slider, including those
+  // whose reach hits its own cap before the old size limit of 3.5.
+  function weaponSize() {
+    let max = 3.5;
+    switch (game.selected.name) {
+      case 'tsunami': max = 3; break;
+      case 'storm': case 'acidrain': max = Math.min(max, game.world.W / 60); break;
+      case 'freeze': max = 110 / 46; break;
+      case 'nuke': max = 44 / 17; break;
+      case 'blackhole': max = 90 / 36; break;
+    }
+    return 0.5 + (Math.max(0.5, max) - 0.5) * game.brush / 50;
+  }
 
   const CLOUDY = new Set([ID.CLOUD, ID.RAINCLOUD, ID.STORMCLOUD, ID.SNOWCLOUD, ID.FOG]);
   function densityFor(t) {

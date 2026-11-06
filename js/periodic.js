@@ -119,7 +119,7 @@
     [89, 'Ac', 'Actinium', 'an', 1050, 3198, 10.07, '#c8d0dc', { heat: 0.03, rad: 0.01, glow: [0.5, '#7ab0ff'], decay: [2e-5, 'Th'] }],
     [90, 'Th', 'Thorium', 'an', 1750, 4788, 11.72, '#9a9aa0', { rad: 0.0005 }],
     [91, 'Pa', 'Protactinium', 'an', 1572, 4000, 15.37, '#b0b0b4', { rad: 0.003, decay: [1e-6, 'Ac', 'a'] }],
-    [92, 'U', 'Uranium', 'an', 1132.2, 4131, 19.1, '#6c7166', { heat: 0.0005, rad: 0.001, nem: 2e-5, fis: 0.08, glass: ['#c8f040', 'yellow-green that glows under radiation'] }],
+    [92, 'U', 'Uranium', 'an', 1132.2, 4131, 19.1, '#70945e', { heat: 0.0005, rad: 0.001, nem: 2e-5, fis: 0.08, glass: ['#c8f040', 'yellow-green that glows under radiation'] }],
     [93, 'Np', 'Neptunium', 'an', 644, 3902, 20.45, '#8a8e90', { heat: 0.005, rad: 0.003, nem: 1e-5, fis: 0.07 }],
     [94, 'Pu', 'Plutonium', 'an', 639.4, 3228, 19.816, '#7a6e6a', { heat: 0.01, rad: 0.003, nem: 1e-4, fis: 0.15 }],
     [95, 'Am', 'Americium', 'an', 1176, 2011, 12, '#b8b0a8', { heat: 0.02, rad: 0.005, fis: 0.06, decay: [1e-6, 'Np', 'a'] }],
